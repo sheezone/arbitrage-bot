@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand
 
 from bot.config import load_config
 from bot.core.monitor import run_monitor_loop
@@ -44,6 +45,8 @@ async def main() -> None:
             state=state,
         )
     )
+
+    await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
 
     try:
         await dp.start_polling(bot)
