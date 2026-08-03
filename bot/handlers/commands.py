@@ -28,13 +28,21 @@ router = Router()
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
-GAME_LABELS = {"cs2": "CS2", "dota2": "Dota 2", "lol": "LoL", "tennis": "Теннис"}
+GAME_LABELS = {
+    "cs2": "CS2",
+    "dota2": "Dota 2",
+    "lol": "LoL",
+    "valorant": "Valorant",
+    "tennis": "Теннис",
+    "basketball": "Баскетбол",
+}
 
 CATEGORIES: dict[str, list[str]] = {
-    "esports": ["cs2", "dota2", "lol"],
+    "esports": ["cs2", "dota2", "lol", "valorant"],
     "tennis": ["tennis"],
+    "sports": ["basketball"],
 }
-CATEGORY_LABELS = {"esports": "🎮 Киберспорт", "tennis": "🎾 Теннис"}
+CATEGORY_LABELS = {"esports": "🎮 Киберспорт", "tennis": "🎾 Теннис", "sports": "🏀 Спорт"}
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_SEARCH = "nav:search"

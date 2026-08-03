@@ -50,6 +50,17 @@ def test_parse_esports_respects_wanted_games_filter():
     assert quotes == []
 
 
+def test_parse_basketball_event():
+    html = _event_html("7", "Basketball/Clubs.+International/EuroLeague", "Team A", "Team B", "1.65", "2.20")
+    quotes = parse_category_page(html, "basketball", ["basketball"])
+    assert len(quotes) == 2
+    assert quotes[0].game == "basketball"
+    assert quotes[0].outcome_name == "Team A"
+    assert quotes[0].odds == 1.65
+    assert quotes[1].outcome_name == "Team B"
+    assert quotes[1].odds == 2.20
+
+
 def test_parse_skips_event_missing_price_cells():
     html = """
     <div class="bg coupon-row" data-event-eventid="6" data-event-path="Tennis/Foo">

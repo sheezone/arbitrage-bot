@@ -13,6 +13,14 @@ Esports events additionally encode which specific title in the first segment of
 `data-event-path` (e.g. "Dota+2", "Counter-Strike+2", "LoL"), so one fetch of the combined
 e-Sports category page covers cs2/dota2/lol at once; tennis is its own category page.
 
+Basketball (added 2026-08-04) is also its own category page and, like tennis, is a single
+game per page (no per-title split needed) -- confirmed its match-winner market is the same
+`RESULT_2WAY` shape as tennis/esports. Hockey and football deliberately have NO entry: both
+only expose a 3-way `RESULT` market (draw possible) plus `DOUBLE_CHANCE` on this site, never
+a clean 2-way winner market, so they don't fit this provider's 2-way-only pipeline. Valorant
+also has no entry: not observed as a segment on the live e-Sports page at time of writing
+(only Dota 2/CS2/LoL were present), so there's nothing confirmed to map yet.
+
 Known gap: match start time isn't extracted (only a same-day "HH:MM" with no date is
 shown in the markup), so every quote here gets an empty start_time_utc. bot/core/reconcile.py
 buckets by time to avoid false cross-source merges -- without it, Marathon quotes only rely
@@ -36,6 +44,7 @@ BOOKMAKER = "marathon"
 CATEGORY_URLS = {
     "tennis": "https://www.marathonbet.ru/su/betting/Tennis",
     "esports": "https://www.marathonbet.ru/su/betting/e-Sports+-+1895085",
+    "basketball": "https://www.marathonbet.ru/su/betting/Basketball",
 }
 
 ESPORTS_PATH_SEGMENT_TO_GAME = {
@@ -55,6 +64,8 @@ class MarathonProvider(OddsProvider):
             categories.add("tennis")
         if any(g in games for g in ("cs2", "dota2", "lol")):
             categories.add("esports")
+        if "basketball" in games:
+            categories.add("basketball")
 
         quotes: list[SourceQuote] = []
         for category in categories:
@@ -73,8 +84,8 @@ def parse_category_page(html: str, category: str, wanted_games: list[str]) -> li
 
     for event in soup.find_all("div", attrs={"data-event-eventid": True}):
         path = event.get("data-event-path", "")
-        if category == "tennis":
-            game = "tennis"
+        if category in ("tennis", "basketball"):
+            game = category
         else:
             parts = unquote_plus(path).split("/")
             segment = parts[1] if len(parts) > 1 else ""
