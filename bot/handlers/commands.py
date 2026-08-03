@@ -5,7 +5,7 @@ answers (bankroll/threshold amounts) get deleted the instant they're read so the
 stays down to one live message."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -25,6 +25,8 @@ from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
 
 router = Router()
+
+MOSCOW_TZ = timezone(timedelta(hours=3))
 
 GAME_LABELS = {"cs2": "CS2", "dota2": "Dota 2", "lol": "LoL", "tennis": "Теннис"}
 
@@ -117,7 +119,7 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
         text = "🔍 <b>ПОИСК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
         return text, _back_keyboard([_btn("🔄 Обновить", NAV_SEARCH)])
 
-    checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=timezone.utc).strftime("%H:%M:%S UTC")
+    checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
     matches = [
         m for m in latest_state.matches if m.game in user.watched_games and m.arb.profit_pct >= user.min_profit_pct
     ]
