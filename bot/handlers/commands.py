@@ -6,6 +6,7 @@ stays down to one live message."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -13,6 +14,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -27,6 +29,7 @@ from bot.handlers.states import Settings
 router = Router()
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
+BANNER_PATH = Path(__file__).resolve().parent.parent / "assets" / "banner.png"
 
 GAME_LABELS = {
     "cs2": "CS2",
@@ -149,27 +152,44 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     return "\n".join(lines), _back_keyboard([_btn("🔄 Обновить", NAV_SEARCH)])
 
 
-async def _render(bot: Bot, repo: Repository, chat_id: int, message_id: int | None, text: str, keyboard) -> None:
+async def _render(
+    bot: Bot, repo: Repository, chat_id: int, message_id: int | None, text: str, keyboard, *, photo: bool = False
+) -> None:
     """Edit the tracked menu message in place; only send a new one if editing is
-    impossible (first run, or the old message is gone/too old to edit)."""
+    impossible (first run, message type mismatch between photo/text, or the old
+    message is gone/too old to edit)."""
     if message_id:
         try:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode="HTML"
-            )
+            if photo:
+                await bot.edit_message_caption(
+                    chat_id=chat_id, message_id=message_id, caption=text, reply_markup=keyboard, parse_mode="HTML"
+                )
+            else:
+                await bot.edit_message_text(
+                    chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode="HTML"
+                )
             return
         except TelegramBadRequest as e:
             if "message is not modified" in str(e):
                 return
+            try:
+                await bot.delete_message(chat_id, message_id)
+            except Exception:
+                pass
 
-    sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+    if photo:
+        sent = await bot.send_photo(
+            chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
+        )
+    else:
+        sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
     repo.set_menu_message_id(chat_id, sent.message_id)
 
 
 async def _render_dashboard(bot: Bot, repo: Repository, chat_id: int) -> None:
     user = repo.get_user(chat_id)
     text, keyboard = _dashboard_view(user)
-    await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard)
+    await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard, photo=True)
 
 
 def register_handlers(repo: Repository, latest_state: LatestState) -> Router:
@@ -196,7 +216,9 @@ def register_handlers(repo: Repository, latest_state: LatestState) -> Router:
             repo.set_menu_message_id(message.chat.id, None)
 
         text, keyboard = _dashboard_view(user)
-        sent = await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+        sent = await message.answer_photo(
+            FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
+        )
         repo.set_menu_message_id(message.chat.id, sent.message_id)
 
     @router.callback_query(F.data == NAV_DASHBOARD)
