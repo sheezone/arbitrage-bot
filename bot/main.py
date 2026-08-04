@@ -11,6 +11,7 @@ from bot.core.monitor import run_monitor_loop
 from bot.core.state import LatestState
 from bot.db.repository import Repository
 from bot.handlers.commands import register_handlers
+from bot.providers.baltbet import BaltbetProvider
 from bot.providers.fonbet import FonbetProvider
 from bot.providers.marathon import MarathonProvider
 from bot.providers.oddspapi import OddsPapiProvider
@@ -32,6 +33,7 @@ async def main() -> None:
         FonbetProvider(),
         PariProvider(),
         MarathonProvider(),
+        BaltbetProvider(),
     ]
 
     monitor_task = asyncio.create_task(
