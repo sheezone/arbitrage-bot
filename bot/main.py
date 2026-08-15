@@ -27,7 +27,7 @@ async def main() -> None:
     bot = Bot(token=config.bot_token)
     dp = Dispatcher()
     state = LatestState()
-    dp.include_router(register_handlers(repo, state))
+    dp.include_router(register_handlers(repo, state, yookassa_provider_token=config.yookassa_provider_token))
 
     sources = [
         OddsPapiProvider(api_key=config.odds_api_key, base_url=config.odds_api_base_url),

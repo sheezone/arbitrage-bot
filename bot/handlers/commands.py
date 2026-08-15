@@ -17,10 +17,13 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    LabeledPrice,
     Message,
+    PreCheckoutQuery,
     ReplyKeyboardRemove,
 )
 
+from bot.core import billing
 from bot.core.arbitrage import calc_stakes
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
@@ -55,6 +58,7 @@ NAV_GAMES = "nav:games"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
 NAV_HELP = "nav:help"
 NAV_CANCEL = "nav:cancel"
+NAV_SUBSCRIPTION = "nav:subscription"
 
 View = tuple[str, InlineKeyboardMarkup]
 
@@ -64,14 +68,32 @@ def _btn(text: str, data: str) -> InlineKeyboardButton:
 
 
 def _dashboard_view(user: UserSettings) -> View:
+    now = datetime.now(timezone.utc)
+    if not billing.has_access(user, now):
+        text = (
+            "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "⏳ Пробный период закончился.\n"
+            "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках."
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[_btn("💳 Подписка", NAV_SUBSCRIPTION)]])
+        return text, keyboard
+
     status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
     pause_label = "⏸️ Пауза" if user.is_active else "▶️ Возобновить"
     games = ", ".join(CATEGORY_LABELS[c] for c, gs in CATEGORIES.items() if set(gs) & set(user.watched_games))
+    left = billing.days_left(user, now)
+    access_line = (
+        f"⏳ Пробный период: осталось {left} дн."
+        if billing.on_trial(user, now)
+        else f"💳 Подписка активна: осталось {left} дн."
+    )
 
     text = (
         "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Статус: {status}\n"
+        f"{access_line}\n"
         f"💰 Банкролл: <b>{user.bankroll:.2f}</b>\n"
         f"📊 Порог прибыли: <b>{user.min_profit_pct:.2f}%</b>\n"
         f"🕹️ Отслеживаются: {games or '—'}\n\n"
@@ -82,7 +104,7 @@ def _dashboard_view(user: UserSettings) -> View:
             [_btn("🔍 Искать сейчас", NAV_SEARCH)],
             [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
             [_btn("🕹️ Игры", NAV_GAMES), _btn(pause_label, NAV_TOGGLE_ACTIVE)],
-            [_btn("ℹ️ Помощь", NAV_HELP)],
+            [_btn("💳 Подписка", NAV_SUBSCRIPTION), _btn("ℹ️ Помощь", NAV_HELP)],
         ]
     )
     return text, keyboard
@@ -115,6 +137,22 @@ def _games_view(user: UserSettings) -> View:
         rows.append([_btn(f"{mark} {CATEGORY_LABELS[category]}", f"cat_toggle:{category}")])
     rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
     text = "🕹️ <b>ВЫБОР КАТЕГОРИЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nОтметьте, что отслеживать:"
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _subscription_view(user: UserSettings, yookassa_enabled: bool) -> View:
+    now = datetime.now(timezone.utc)
+    left = billing.days_left(user, now)
+    status = f"Осталось дней доступа: <b>{left}</b>" if left > 0 else "Доступ истёк"
+
+    text = f"💳 <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
+    rows = []
+    for plan in billing.PLANS:
+        row = [_btn(f"{plan.label} — {plan.price_stars} ⭐", f"sub:{plan.id}:stars")]
+        if yookassa_enabled:
+            row.append(_btn(f"{plan.label} — {plan.price_rub}₽", f"sub:{plan.id}:rub"))
+        rows.append(row)
+    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -192,7 +230,7 @@ async def _render_dashboard(bot: Bot, repo: Repository, chat_id: int) -> None:
     await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard, photo=True)
 
 
-def register_handlers(repo: Repository, latest_state: LatestState) -> Router:
+def register_handlers(repo: Repository, latest_state: LatestState, yookassa_provider_token: str = "") -> Router:
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -238,6 +276,59 @@ def register_handlers(repo: Repository, latest_state: LatestState) -> Router:
         text, keyboard = _help_view()
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
+
+    @router.callback_query(F.data == NAV_SUBSCRIPTION)
+    async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _subscription_view(user, bool(yookassa_provider_token))
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("sub:"))
+    async def on_sub_pay(callback: CallbackQuery, bot: Bot) -> None:
+        _, plan_id, method = callback.data.split(":", 2)
+        plan = billing.PLANS_BY_ID.get(plan_id)
+        if plan is None:
+            await callback.answer()
+            return
+
+        if method == "stars":
+            currency, provider_token, amount = "XTR", "", plan.price_stars
+        else:
+            if not yookassa_provider_token:
+                await callback.answer("Оплата картой пока не подключена", show_alert=True)
+                return
+            currency, provider_token, amount = "RUB", yookassa_provider_token, plan.price_rub * 100
+
+        await bot.send_invoice(
+            chat_id=callback.message.chat.id,
+            title=f"Подписка на {plan.label}",
+            description="Доступ к уведомлениям о вилках Арбитражного бота",
+            payload=plan.id,
+            provider_token=provider_token,
+            currency=currency,
+            prices=[LabeledPrice(label=plan.label, amount=amount)],
+        )
+        await callback.answer()
+
+    @router.pre_checkout_query()
+    async def on_pre_checkout(query: PreCheckoutQuery) -> None:
+        await query.answer(ok=True)
+
+    @router.message(F.successful_payment)
+    async def on_successful_payment(message: Message, bot: Bot) -> None:
+        payment = message.successful_payment
+        plan = billing.PLANS_BY_ID.get(payment.invoice_payload)
+        if plan is None:
+            return
+        provider = "stars" if payment.currency == "XTR" else "yookassa"
+        amount = float(payment.total_amount) if provider == "stars" else payment.total_amount / 100
+        repo.extend_subscription(message.chat.id, plan.days)
+        repo.record_payment(
+            message.chat.id, plan.id, provider, amount, payment.currency, payment.telegram_payment_charge_id
+        )
+        await message.answer(f"✅ Подписка продлена на {plan.label}. Спасибо!")
+        await _render_dashboard(bot, repo, message.chat.id)
 
     @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
     async def on_nav_toggle_active(callback: CallbackQuery, bot: Bot) -> None:

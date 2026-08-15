@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
@@ -17,6 +17,8 @@ class UserSettings:
     watched_games: list[str]
     is_active: bool
     menu_message_id: int | None
+    trial_started_at: str
+    subscription_expires_at: str | None
 
 
 class Repository:
@@ -33,11 +35,44 @@ class Repository:
         columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(users)")}
         if "menu_message_id" not in columns:
             self._conn.execute("ALTER TABLE users ADD COLUMN menu_message_id INTEGER")
+        if "trial_started_at" not in columns:
+            self._conn.execute("ALTER TABLE users ADD COLUMN trial_started_at TEXT")
+            # Backfill existing rows so upgrading to this feature grants them a fresh
+            # trial from today rather than leaving trial_started_at NULL forever.
+            self._conn.execute(
+                "UPDATE users SET trial_started_at = ? WHERE trial_started_at IS NULL",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+        if "subscription_expires_at" not in columns:
+            self._conn.execute("ALTER TABLE users ADD COLUMN subscription_expires_at TEXT")
 
     def upsert_user(self, chat_id: int) -> None:
         self._conn.execute(
-            "INSERT INTO users (chat_id) VALUES (?) ON CONFLICT(chat_id) DO NOTHING",
-            (chat_id,),
+            "INSERT INTO users (chat_id, trial_started_at) VALUES (?, ?) ON CONFLICT(chat_id) DO NOTHING",
+            (chat_id, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def extend_subscription(self, chat_id: int, days: int) -> None:
+        user = self.get_user(chat_id)
+        now = datetime.now(timezone.utc)
+        current = _parse_iso(user.subscription_expires_at) if user and user.subscription_expires_at else None
+        base = max(now, current) if current else now
+        new_expiry = base + timedelta(days=days)
+        self._conn.execute(
+            "UPDATE users SET subscription_expires_at = ? WHERE chat_id = ?",
+            (new_expiry.isoformat(), chat_id),
+        )
+        self._conn.commit()
+
+    def record_payment(
+        self, chat_id: int, plan_id: str, provider: str, amount: float, currency: str, telegram_charge_id: str
+    ) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO payments "
+            "(chat_id, plan_id, provider, amount, currency, telegram_charge_id, paid_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (chat_id, plan_id, provider, amount, currency, telegram_charge_id, datetime.now(timezone.utc).isoformat()),
         )
         self._conn.commit()
 
@@ -107,4 +142,10 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         watched_games=row["watched_games"].split(","),
         is_active=bool(row["is_active"]),
         menu_message_id=row["menu_message_id"],
+        trial_started_at=row["trial_started_at"],
+        subscription_expires_at=row["subscription_expires_at"],
     )
+
+
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value)

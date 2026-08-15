@@ -4,9 +4,11 @@ import asyncio
 import hashlib
 import logging
 import time
+from datetime import datetime, timezone
 
 from aiogram import Bot
 
+from bot.core import billing
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.reconcile import group_quotes, to_arbitrage_input
 from bot.core.state import LatestState, MatchSnapshot
@@ -92,7 +94,10 @@ async def _notify_group(
     if repo.has_seen_opportunity(match_id, bh):
         return
 
+    now = datetime.now(timezone.utc)
     for user in repo.get_active_users():
+        if not billing.has_access(user, now):
+            continue
         if arb.profit_pct < user.min_profit_pct:
             continue
         if game not in user.watched_games:

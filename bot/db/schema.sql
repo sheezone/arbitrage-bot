@@ -4,7 +4,9 @@ CREATE TABLE IF NOT EXISTS users (
     min_profit_pct REAL NOT NULL DEFAULT 1.0,
     watched_games TEXT NOT NULL DEFAULT 'cs2,dota2,lol,tennis',
     is_active INTEGER NOT NULL DEFAULT 1,
-    menu_message_id INTEGER
+    menu_message_id INTEGER,
+    trial_started_at TEXT,
+    subscription_expires_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS seen_opportunities (
@@ -12,4 +14,15 @@ CREATE TABLE IF NOT EXISTS seen_opportunities (
     bookmakers_hash TEXT NOT NULL,
     notified_at TEXT NOT NULL,
     PRIMARY KEY (fixture_id, bookmakers_hash)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    chat_id INTEGER NOT NULL,
+    plan_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    amount REAL NOT NULL,
+    currency TEXT NOT NULL,
+    telegram_charge_id TEXT NOT NULL,
+    paid_at TEXT NOT NULL,
+    PRIMARY KEY (telegram_charge_id)
 );
