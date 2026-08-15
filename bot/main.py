@@ -16,6 +16,7 @@ from bot.providers.fonbet import FonbetProvider
 from bot.providers.marathon import MarathonProvider
 from bot.providers.oddspapi import OddsPapiProvider
 from bot.providers.pari import PariProvider
+from bot.providers.the_odds_api import TheOddsApiProvider
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -34,6 +35,7 @@ async def main() -> None:
         PariProvider(),
         MarathonProvider(),
         BaltbetProvider(),
+        TheOddsApiProvider(api_key=config.the_odds_api_key),
     ]
 
     monitor_task = asyncio.create_task(

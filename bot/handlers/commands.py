@@ -45,7 +45,7 @@ CATEGORIES: dict[str, list[str]] = {
     "tennis": ["tennis"],
     "sports": ["basketball"],
 }
-CATEGORY_LABELS = {"esports": "🎮 Киберспорт", "tennis": "🎾 Теннис", "sports": "🏀 Спорт"}
+CATEGORY_LABELS = {"esports": "🎮 Киберспорт", "tennis": "🎾 Теннис", "sports": "🏀 Баскетбол"}
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_SEARCH = "nav:search"
