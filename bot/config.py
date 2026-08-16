@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
+from bot.providers.surebet import DEFAULT_TEST_TOKEN as SUREBET_DEFAULT_TEST_TOKEN
+
 load_dotenv()
 
 
@@ -14,6 +16,7 @@ class Config:
     odds_api_key: str
     odds_api_base_url: str
     the_odds_api_key: str
+    surebet_api_token: str
     yookassa_provider_token: str
     poll_interval_seconds: int
     default_min_profit_pct: float
@@ -33,6 +36,7 @@ def load_config() -> Config:
         odds_api_key=os.environ.get("ODDS_API_KEY", ""),
         odds_api_base_url=os.environ.get("ODDS_API_BASE_URL", "https://api.oddspapi.io"),
         the_odds_api_key=os.environ.get("THE_ODDS_API_KEY", ""),
+        surebet_api_token=os.environ.get("SUREBET_API_TOKEN", SUREBET_DEFAULT_TEST_TOKEN),
         yookassa_provider_token=os.environ.get("YOOKASSA_PROVIDER_TOKEN", ""),
         poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "150")),
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),

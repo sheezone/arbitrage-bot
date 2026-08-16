@@ -16,6 +16,7 @@ from bot.providers.fonbet import FonbetProvider
 from bot.providers.marathon import MarathonProvider
 from bot.providers.oddspapi import OddsPapiProvider
 from bot.providers.pari import PariProvider
+from bot.providers.surebet import SurebetFinder
 from bot.providers.the_odds_api import TheOddsApiProvider
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -37,6 +38,7 @@ async def main() -> None:
         BaltbetProvider(),
         TheOddsApiProvider(api_key=config.the_odds_api_key),
     ]
+    surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
 
     monitor_task = asyncio.create_task(
         run_monitor_loop(
@@ -47,6 +49,7 @@ async def main() -> None:
             poll_interval_seconds=config.poll_interval_seconds,
             default_min_profit_pct=config.default_min_profit_pct,
             state=state,
+            surebet_finder=surebet_finder,
         )
     )
 
@@ -58,6 +61,7 @@ async def main() -> None:
         monitor_task.cancel()
         for source in sources:
             await source.close()
+        await surebet_finder.close()
         repo.close()
         await bot.session.close()
 

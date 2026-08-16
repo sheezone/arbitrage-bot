@@ -15,6 +15,7 @@ from bot.core.state import LatestState, MatchSnapshot
 from bot.db.repository import Repository
 from bot.providers.base import OddsProvider
 from bot.providers.models import SourceQuote
+from bot.providers.surebet import SurebetFinder
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,7 @@ async def run_monitor_loop(
     poll_interval_seconds: int,
     default_min_profit_pct: float,
     state: LatestState,
+    surebet_finder: SurebetFinder | None = None,
 ) -> None:
     empty_streaks: dict[str, int] = {}
     while True:
@@ -147,6 +149,20 @@ async def run_monitor_loop(
                 await _notify_group(game, team_a, team_b, arb, group[0].start_time_utc, repo, bot)
             except Exception:
                 logger.exception("Failed to notify match group")
+
+        if surebet_finder is not None:
+            try:
+                surebet_matches = await surebet_finder.find(games)
+            except Exception:
+                logger.exception("SureBet finder failed")
+                surebet_matches = []
+
+            for game, team_a, team_b, start_time_utc, arb in surebet_matches:
+                found.append(MatchSnapshot(game, team_a, team_b, arb))
+                try:
+                    await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot)
+                except Exception:
+                    logger.exception("Failed to notify SureBet match")
 
         state.matches = found
         state.updated_at = time.time()
