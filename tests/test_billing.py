@@ -25,10 +25,10 @@ def _user(trial_started_ago_days: float, subscription_expires_in_days: float | N
 
 
 def test_trial_active_grants_access():
-    user = _user(trial_started_ago_days=1)
+    user = _user(trial_started_ago_days=TRIAL_DAYS * 0.5)
     assert has_access(user, NOW)
     assert on_trial(user, NOW)
-    assert days_left(user, NOW) == TRIAL_DAYS - 1
+    assert 1 <= days_left(user, NOW) <= TRIAL_DAYS
 
 
 def test_trial_expired_without_subscription_denies_access():
@@ -48,7 +48,7 @@ def test_active_subscription_after_trial_grants_access():
 def test_expired_subscription_but_still_on_trial_reports_trial():
     # A plan bought during the trial that has since lapsed shouldn't shadow a trial
     # that's genuinely still running.
-    user = _user(trial_started_ago_days=1, subscription_expires_in_days=-5)
+    user = _user(trial_started_ago_days=TRIAL_DAYS * 0.5, subscription_expires_in_days=-5)
     assert has_access(user, NOW)
     assert on_trial(user, NOW)
 

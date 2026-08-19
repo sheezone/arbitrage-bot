@@ -234,6 +234,7 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
+        is_new_user = repo.get_user(message.chat.id) is None
         repo.upsert_user(message.chat.id)
         user = repo.get_user(message.chat.id)
 
@@ -243,6 +244,19 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
             await cleanup.delete()
         except Exception:
             pass
+
+        if is_new_user:
+            # A one-off exception to the single-message UI: a permanent welcome note
+            # explaining the trial/subscription policy, sent once per user, left in the
+            # chat as a standing reference rather than folded into the dashboard panel.
+            await message.answer(
+                "👋 <b>Добро пожаловать в Арбитражный бот!</b>\n\n"
+                f"Бот работает в тестовом режиме {billing.TRIAL_DAYS} дн. — полный "
+                "бесплатный доступ ко всем функциям. После этого понадобится оформить "
+                "подписку (кнопка «💳 Подписка» на главном экране), чтобы продолжать "
+                "получать уведомления о найденных вилках.",
+                parse_mode="HTML",
+            )
 
         # /start always plants a fresh message at the bottom of the chat rather than
         # editing a possibly-scrolled-away-from old one.

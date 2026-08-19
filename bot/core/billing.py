@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from bot.db.repository import UserSettings
 
-TRIAL_DAYS = 3
+TRIAL_DAYS = 1
 
 
 @dataclass(frozen=True)
