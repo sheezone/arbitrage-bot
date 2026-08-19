@@ -88,7 +88,14 @@ def _evaluate_group(group: list[SourceQuote]) -> tuple[str, str, str, ArbitrageR
 
 
 async def _notify_group(
-    game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str, repo: Repository, bot: Bot
+    game: str,
+    team_a: str,
+    team_b: str,
+    arb: ArbitrageResult,
+    start_time_utc: str,
+    repo: Repository,
+    bot: Bot,
+    admin_chat_ids: frozenset[int] = frozenset(),
 ) -> None:
     match_id = f"{game}:{team_a}:{team_b}:{start_time_utc}"
     bh = _bookmakers_hash(arb.best_odds)
@@ -97,7 +104,7 @@ async def _notify_group(
 
     now = datetime.now(timezone.utc)
     for user in repo.get_active_users():
-        if not billing.has_access(user, now):
+        if not billing.has_access(user, now, admin_chat_ids):
             continue
         if arb.profit_pct < user.min_profit_pct:
             continue
@@ -127,6 +134,7 @@ async def run_monitor_loop(
     default_min_profit_pct: float,
     state: LatestState,
     surebet_finder: SurebetFinder | None = None,
+    admin_chat_ids: frozenset[int] = frozenset(),
 ) -> None:
     empty_streaks: dict[str, int] = {}
     while True:
@@ -146,7 +154,7 @@ async def run_monitor_loop(
             game, team_a, team_b, arb = result
             found.append(MatchSnapshot(game, team_a, team_b, arb))
             try:
-                await _notify_group(game, team_a, team_b, arb, group[0].start_time_utc, repo, bot)
+                await _notify_group(game, team_a, team_b, arb, group[0].start_time_utc, repo, bot, admin_chat_ids)
             except Exception:
                 logger.exception("Failed to notify match group")
 
@@ -160,7 +168,7 @@ async def run_monitor_loop(
             for game, team_a, team_b, start_time_utc, arb in surebet_matches:
                 found.append(MatchSnapshot(game, team_a, team_b, arb))
                 try:
-                    await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot)
+                    await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids)
                 except Exception:
                     logger.exception("Failed to notify SureBet match")
 

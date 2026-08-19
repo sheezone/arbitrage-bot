@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from bot.core.billing import PLANS, TRIAL_DAYS, days_left, has_access, on_trial
+from bot.core.billing import PLANS, TRIAL_DAYS, days_left, has_access, is_admin, on_trial
 from bot.db.repository import UserSettings
 
 NOW = datetime.now(timezone.utc)
@@ -57,6 +57,21 @@ def test_expired_subscription_and_trial_denies_access():
     user = _user(trial_started_ago_days=TRIAL_DAYS + 1, subscription_expires_in_days=-1)
     assert not has_access(user, NOW)
     assert days_left(user, NOW) == 0
+
+
+def test_admin_bypasses_expired_trial_and_subscription():
+    user = _user(trial_started_ago_days=TRIAL_DAYS + 100, subscription_expires_in_days=-100)
+    admin_ids = frozenset({user.chat_id})
+    assert not has_access(user, NOW)  # sanity check: genuinely expired without the bypass
+    assert is_admin(user, admin_ids)
+    assert has_access(user, NOW, admin_ids)
+
+
+def test_admin_bypass_does_not_leak_to_other_chat_ids():
+    user = _user(trial_started_ago_days=TRIAL_DAYS + 100)
+    admin_ids = frozenset({user.chat_id + 1})  # some other chat_id is the admin, not this one
+    assert not is_admin(user, admin_ids)
+    assert not has_access(user, NOW, admin_ids)
 
 
 def test_all_plans_have_positive_days_and_prices():

@@ -46,7 +46,13 @@ def _access_end(user: UserSettings) -> datetime:
     return trial_end
 
 
-def has_access(user: UserSettings, now: datetime) -> bool:
+def is_admin(user: UserSettings, admin_chat_ids: frozenset[int]) -> bool:
+    return user.chat_id in admin_chat_ids
+
+
+def has_access(user: UserSettings, now: datetime, admin_chat_ids: frozenset[int] = frozenset()) -> bool:
+    if is_admin(user, admin_chat_ids):
+        return True
     return now < _access_end(user)
 
 

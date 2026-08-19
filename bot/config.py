@@ -18,6 +18,7 @@ class Config:
     the_odds_api_key: str
     surebet_api_token: str
     yookassa_provider_token: str
+    admin_chat_ids: frozenset[int]
     poll_interval_seconds: int
     default_min_profit_pct: float
     db_path: str
@@ -38,6 +39,9 @@ def load_config() -> Config:
         the_odds_api_key=os.environ.get("THE_ODDS_API_KEY", ""),
         surebet_api_token=os.environ.get("SUREBET_API_TOKEN", SUREBET_DEFAULT_TEST_TOKEN),
         yookassa_provider_token=os.environ.get("YOOKASSA_PROVIDER_TOKEN", ""),
+        admin_chat_ids=frozenset(
+            int(x) for x in os.environ.get("ADMIN_CHAT_IDS", "").split(",") if x.strip()
+        ),
         poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "150")),
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),
         db_path=os.environ.get("DB_PATH", "arbitrage_bot.sqlite3"),

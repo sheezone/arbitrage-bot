@@ -67,9 +67,9 @@ def _btn(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
-def _dashboard_view(user: UserSettings) -> View:
+def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
-    if not billing.has_access(user, now):
+    if not billing.has_access(user, now, admin_chat_ids):
         text = (
             "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -82,12 +82,15 @@ def _dashboard_view(user: UserSettings) -> View:
     status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
     pause_label = "⏸️ Пауза" if user.is_active else "▶️ Возобновить"
     games = ", ".join(CATEGORY_LABELS[c] for c, gs in CATEGORIES.items() if set(gs) & set(user.watched_games))
-    left = billing.days_left(user, now)
-    access_line = (
-        f"⏳ Пробный период: осталось {left} дн."
-        if billing.on_trial(user, now)
-        else f"💳 Подписка активна: осталось {left} дн."
-    )
+    if billing.is_admin(user, admin_chat_ids):
+        access_line = "♾️ Безлимитный доступ (админ)"
+    else:
+        left = billing.days_left(user, now)
+        access_line = (
+            f"⏳ Пробный период: осталось {left} дн."
+            if billing.on_trial(user, now)
+            else f"💳 Подписка активна: осталось {left} дн."
+        )
 
     text = (
         "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
@@ -140,10 +143,13 @@ def _games_view(user: UserSettings) -> View:
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _subscription_view(user: UserSettings, yookassa_enabled: bool) -> View:
+def _subscription_view(user: UserSettings, yookassa_enabled: bool, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
-    left = billing.days_left(user, now)
-    status = f"Осталось дней доступа: <b>{left}</b>" if left > 0 else "Доступ истёк"
+    if billing.is_admin(user, admin_chat_ids):
+        status = "♾️ Безлимитный доступ (админ)"
+    else:
+        left = billing.days_left(user, now)
+        status = f"Осталось дней доступа: <b>{left}</b>" if left > 0 else "Доступ истёк"
 
     text = f"💳 <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
     rows = []
@@ -224,13 +230,20 @@ async def _render(
     repo.set_menu_message_id(chat_id, sent.message_id)
 
 
-async def _render_dashboard(bot: Bot, repo: Repository, chat_id: int) -> None:
+async def _render_dashboard(
+    bot: Bot, repo: Repository, chat_id: int, admin_chat_ids: frozenset[int] = frozenset()
+) -> None:
     user = repo.get_user(chat_id)
-    text, keyboard = _dashboard_view(user)
+    text, keyboard = _dashboard_view(user, admin_chat_ids)
     await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard, photo=True)
 
 
-def register_handlers(repo: Repository, latest_state: LatestState, yookassa_provider_token: str = "") -> Router:
+def register_handlers(
+    repo: Repository,
+    latest_state: LatestState,
+    yookassa_provider_token: str = "",
+    admin_chat_ids: frozenset[int] = frozenset(),
+) -> Router:
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -267,7 +280,7 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
                 pass
             repo.set_menu_message_id(message.chat.id, None)
 
-        text, keyboard = _dashboard_view(user)
+        text, keyboard = _dashboard_view(user, admin_chat_ids)
         sent = await message.answer_photo(
             FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
@@ -276,13 +289,13 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
     @router.callback_query(F.data == NAV_DASHBOARD)
     async def on_nav_dashboard(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
-        await _render_dashboard(bot, repo, callback.message.chat.id)
+        await _render_dashboard(bot, repo, callback.message.chat.id, admin_chat_ids)
         await callback.answer()
 
     @router.callback_query(F.data == NAV_CANCEL)
     async def on_nav_cancel(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
-        await _render_dashboard(bot, repo, callback.message.chat.id)
+        await _render_dashboard(bot, repo, callback.message.chat.id, admin_chat_ids)
         await callback.answer("Отменено")
 
     @router.callback_query(F.data == NAV_HELP)
@@ -294,7 +307,7 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
     @router.callback_query(F.data == NAV_SUBSCRIPTION)
     async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _subscription_view(user, bool(yookassa_provider_token))
+        text, keyboard = _subscription_view(user, bool(yookassa_provider_token), admin_chat_ids)
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
@@ -342,13 +355,13 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
             message.chat.id, plan.id, provider, amount, payment.currency, payment.telegram_payment_charge_id
         )
         await message.answer(f"✅ Подписка продлена на {plan.label}. Спасибо!")
-        await _render_dashboard(bot, repo, message.chat.id)
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
     @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
     async def on_nav_toggle_active(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         repo.set_active(callback.message.chat.id, not user.is_active)
-        await _render_dashboard(bot, repo, callback.message.chat.id)
+        await _render_dashboard(bot, repo, callback.message.chat.id, admin_chat_ids)
         await callback.answer("Пауза" if user.is_active else "Возобновлено")
 
     @router.callback_query(F.data == NAV_SEARCH)
@@ -413,7 +426,7 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
 
         repo.set_bankroll(message.chat.id, amount)
         await state.clear()
-        await _render_dashboard(bot, repo, message.chat.id)
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
     @router.callback_query(F.data == NAV_THRESHOLD)
     async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -444,6 +457,6 @@ def register_handlers(repo: Repository, latest_state: LatestState, yookassa_prov
 
         repo.set_min_profit_pct(message.chat.id, pct)
         await state.clear()
-        await _render_dashboard(bot, repo, message.chat.id)
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
     return router
