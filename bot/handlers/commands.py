@@ -115,24 +115,22 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
     status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
     games = ", ".join(CATEGORY_LABELS[c] for c, gs in CATEGORIES.items() if set(gs) & set(user.watched_games))
     if billing.is_admin(user, admin_chat_ids):
-        access_line = "♾️ Безлимитный доступ (админ)"
+        access_line = "♾️ Безлимитный доступ"
     else:
         left = billing.days_left(user, now)
         access_line = (
-            f"⏳ Пробный период: осталось {left} дн."
+            f"⏳ Пробный период · осталось {left} дн."
             if billing.on_trial(user, now)
-            else f"💳 Подписка активна: осталось {left} дн."
+            else f"💳 Подписка активна · осталось {left} дн."
         )
 
     text = (
-        "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Статус: {status}\n"
-        f"{access_line}\n"
-        f"💰 Банкролл: <b>{user.bankroll:.2f}</b>\n"
-        f"📊 Порог прибыли: <b>{user.min_profit_pct:.2f}%</b>\n"
-        f"🕹️ Отслеживаются: {games or '—'}\n\n"
-        "Действия — кнопками снизу ⬇️"
+        "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n\n"
+        f"{status}  ·  {access_line}\n\n"
+        f"💰 Банкролл  <b>{user.bankroll:.2f}</b>\n"
+        f"📊 Порог прибыли  <b>{user.min_profit_pct:.2f}%</b>\n"
+        f"🕹️ Спорт  {games or '—'}\n\n"
+        "⬇️ Управление — кнопками снизу"
     )
     return text, None
 
