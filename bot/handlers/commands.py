@@ -2,10 +2,15 @@
 (`_render`) rather than a growing feed of separate messages. /start is the only command
 that (re)creates that message; every button press after that edits it, and free-text
 answers (bankroll/threshold amounts) get deleted the instant they're read so the chat
-stays down to one live message."""
+stays down to one live message.
+
+Two intentional exceptions: a one-time welcome note for new users (see `is_new_user`
+below), and the small line that attaches the persistent bottom reply keyboard on every
+/start -- a `ReplyKeyboardMarkup` can't share a message with the dashboard's inline
+keyboard, and deleting that carrier message right after sending it (the usual trick)
+was confirmed live to silently break the keyboard update on at least one mobile client."""
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -72,10 +77,13 @@ HELP_BUTTON_TEXT = "ℹ️ Помощь"
 
 MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
-        [KeyboardButton(text=BANKROLL_BUTTON_TEXT), KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
-        [KeyboardButton(text=GAMES_BUTTON_TEXT), KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT)],
+        [KeyboardButton(text=SEARCH_BUTTON_TEXT)],
+        [KeyboardButton(text=BANKROLL_BUTTON_TEXT)],
+        [KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
+        [KeyboardButton(text=GAMES_BUTTON_TEXT)],
+        [KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT)],
         [KeyboardButton(text=HELP_BUTTON_TEXT)],
+        [KeyboardButton(text=MENU_BUTTON_TEXT)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -307,17 +315,12 @@ def register_handlers(
         repo.upsert_user(message.chat.id)
         user = repo.get_user(message.chat.id)
 
-        # Attach the persistent bottom-of-chat menu button. Telegram keeps a reply
-        # keyboard visible independent of the message that carried it, so this can be
-        # a throwaway message deleted right after -- but deleting it *immediately*
-        # races the client's keyboard-update rendering on some clients (confirmed live:
-        # the new keyboard silently failed to appear), hence the short delay.
-        cleanup = await message.answer("⏳", reply_markup=MAIN_MENU_KEYBOARD)
-        await asyncio.sleep(0.5)
-        try:
-            await cleanup.delete()
-        except Exception:
-            pass
+        # Attach the persistent bottom-of-chat menu button. A delete-right-after
+        # throwaway message was tried first (Telegram is supposed to keep the reply
+        # keyboard regardless), but confirmed live on a mobile client: the new keyboard
+        # silently failed to apply when the carrier message was deleted, with or without
+        # a delay -- so it's left in place instead.
+        await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
 
         if is_new_user:
             # A one-off exception to the single-message UI: a permanent welcome note
