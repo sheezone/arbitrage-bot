@@ -72,18 +72,18 @@ SEARCH_BUTTON_TEXT = "🔍 Искать сейчас"
 BANKROLL_BUTTON_TEXT = "💰 Банкролл"
 THRESHOLD_BUTTON_TEXT = "📊 Порог прибыли"
 GAMES_BUTTON_TEXT = "🕹️ Игры"
+PAUSE_BUTTON_TEXT = "⏸️ Пауза / ▶️ Продолжить"
 SUBSCRIPTION_BUTTON_TEXT = "💳 Подписка"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
 
+# The dashboard message itself carries no inline keyboard (see _dashboard_view) --
+# every action lives here instead, so this is the only navigation surface for it.
 MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text=SEARCH_BUTTON_TEXT)],
-        [KeyboardButton(text=BANKROLL_BUTTON_TEXT)],
-        [KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
-        [KeyboardButton(text=GAMES_BUTTON_TEXT)],
-        [KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT)],
-        [KeyboardButton(text=HELP_BUTTON_TEXT)],
-        [KeyboardButton(text=MENU_BUTTON_TEXT)],
+        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
+        [KeyboardButton(text=BANKROLL_BUTTON_TEXT), KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
+        [KeyboardButton(text=GAMES_BUTTON_TEXT), KeyboardButton(text=PAUSE_BUTTON_TEXT)],
+        [KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT), KeyboardButton(text=HELP_BUTTON_TEXT)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -91,15 +91,9 @@ MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_SEARCH = "nav:search"
-NAV_BANKROLL = "nav:bankroll"
-NAV_THRESHOLD = "nav:threshold"
-NAV_GAMES = "nav:games"
-NAV_TOGGLE_ACTIVE = "nav:toggle_active"
-NAV_HELP = "nav:help"
 NAV_CANCEL = "nav:cancel"
-NAV_SUBSCRIPTION = "nav:subscription"
 
-View = tuple[str, InlineKeyboardMarkup]
+View = tuple[str, InlineKeyboardMarkup | None]
 
 
 def _btn(text: str, data: str) -> InlineKeyboardButton:
@@ -113,13 +107,12 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
             "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
             "⏳ Пробный период закончился.\n"
-            "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках."
+            "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках "
+            f"(кнопка «{SUBSCRIPTION_BUTTON_TEXT}» снизу)."
         )
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[_btn("💳 Подписка", NAV_SUBSCRIPTION)]])
-        return text, keyboard
+        return text, None
 
     status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
-    pause_label = "⏸️ Пауза" if user.is_active else "▶️ Возобновить"
     games = ", ".join(CATEGORY_LABELS[c] for c, gs in CATEGORIES.items() if set(gs) & set(user.watched_games))
     if billing.is_admin(user, admin_chat_ids):
         access_line = "♾️ Безлимитный доступ (админ)"
@@ -139,17 +132,9 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
         f"💰 Банкролл: <b>{user.bankroll:.2f}</b>\n"
         f"📊 Порог прибыли: <b>{user.min_profit_pct:.2f}%</b>\n"
         f"🕹️ Отслеживаются: {games or '—'}\n\n"
-        "Выберите действие ⬇️"
+        "Действия — кнопками снизу ⬇️"
     )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [_btn("🔍 Искать сейчас", NAV_SEARCH)],
-            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
-            [_btn("🕹️ Игры", NAV_GAMES), _btn(pause_label, NAV_TOGGLE_ACTIVE)],
-            [_btn("💳 Подписка", NAV_SUBSCRIPTION), _btn("ℹ️ Помощь", NAV_HELP)],
-        ]
-    )
-    return text, keyboard
+    return text, None
 
 
 def _back_keyboard(extra: list[InlineKeyboardButton] | None = None) -> InlineKeyboardMarkup:
@@ -378,6 +363,14 @@ def register_handlers(
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
         await _dismiss(message)
 
+    @router.message(F.text == PAUSE_BUTTON_TEXT)
+    async def on_pause_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        user = repo.get_user(message.chat.id)
+        repo.set_active(message.chat.id, not user.is_active)
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
+        await _dismiss(message)
+
     @router.message(F.text == SUBSCRIPTION_BUTTON_TEXT)
     async def on_subscription_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -421,19 +414,6 @@ def register_handlers(
         await state.clear()
         await _render_dashboard(bot, repo, callback.message.chat.id, admin_chat_ids)
         await callback.answer("Отменено")
-
-    @router.callback_query(F.data == NAV_HELP)
-    async def on_nav_help(callback: CallbackQuery, bot: Bot) -> None:
-        text, keyboard = _help_view()
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
-
-    @router.callback_query(F.data == NAV_SUBSCRIPTION)
-    async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
-        user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _subscription_view(user, bool(yookassa_provider_token), admin_chat_ids)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
 
     @router.callback_query(F.data.startswith("sub:"))
     async def on_sub_pay(callback: CallbackQuery, bot: Bot) -> None:
@@ -481,24 +461,10 @@ def register_handlers(
         await message.answer(f"✅ Подписка продлена на {plan.label}. Спасибо!")
         await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
-    @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
-    async def on_nav_toggle_active(callback: CallbackQuery, bot: Bot) -> None:
-        user = repo.get_user(callback.message.chat.id)
-        repo.set_active(callback.message.chat.id, not user.is_active)
-        await _render_dashboard(bot, repo, callback.message.chat.id, admin_chat_ids)
-        await callback.answer("Пауза" if user.is_active else "Возобновлено")
-
     @router.callback_query(F.data == NAV_SEARCH)
     async def on_nav_search(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _search_view(user, latest_state)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
-
-    @router.callback_query(F.data == NAV_GAMES)
-    async def on_nav_games(callback: CallbackQuery, bot: Bot) -> None:
-        user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _games_view(user)
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
@@ -518,13 +484,6 @@ def register_handlers(
         repo.set_watched_games(callback.message.chat.id, sorted(selected))
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _games_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
-
-    @router.callback_query(F.data == NAV_BANKROLL)
-    async def on_nav_bankroll(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-        await state.set_state(Settings.waiting_bankroll)
-        text, keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100")
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
@@ -551,13 +510,6 @@ def register_handlers(
         repo.set_bankroll(message.chat.id, amount)
         await state.clear()
         await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
-
-    @router.callback_query(F.data == NAV_THRESHOLD)
-    async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-        await state.set_state(Settings.waiting_threshold)
-        text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
 
     @router.message(Settings.waiting_threshold)
     async def on_threshold_value(message: Message, state: FSMContext, bot: Bot) -> None:
