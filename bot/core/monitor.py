@@ -20,14 +20,27 @@ from bot.providers.surebet import SurebetFinder
 logger = logging.getLogger(__name__)
 
 
+GAME_EMOJI = {
+    "cs2": "🔫",
+    "dota2": "🎮",
+    "lol": "🎮",
+    "valorant": "🎮",
+    "tennis": "🎾",
+    "basketball": "🏀",
+    "football": "⚽",
+    "hockey": "🏒",
+}
+
+
 def _bookmakers_hash(best_odds: list[OutcomeOdds]) -> str:
     parts = sorted(f"{o.outcome_name}:{o.bookmaker}:{o.odds}" for o in best_odds)
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
 def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult) -> str:
+    emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"\U0001F4B0 Найдена вилка ({game.upper()}): {team_a} vs {team_b}",
+        f"\U0001F4B0 {emoji} Найдена вилка ({game.upper()}): {team_a} vs {team_b}",
         f"Прибыль: {arb.profit_pct:.2f}%",
         "",
     ]
@@ -37,8 +50,9 @@ def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult) -
 
 
 def _format_showcase_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str) -> str:
+    emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"\U0001F4B0 Вилка ({game.upper()}): {team_a} vs {team_b}",
+        f"\U0001F4B0 {emoji} Вилка ({game.upper()}): {team_a} vs {team_b}",
         f"Прибыль: {arb.profit_pct:.2f}%",
         "",
         "Букмекеры и коэффициенты — в боте по подписке.",
