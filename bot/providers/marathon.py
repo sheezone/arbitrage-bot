@@ -15,20 +15,22 @@ e-Sports category page covers cs2/dota2/lol at once; tennis is its own category 
 
 Basketball (added 2026-08-04) is also its own category page and, like tennis, is a single
 game per page (no per-title split needed) -- confirmed its match-winner market is the same
-`RESULT_2WAY` shape as tennis/esports. Hockey deliberately has NO entry: it only exposes a
-3-way `RESULT` market (draw possible) plus `DOUBLE_CHANCE` on this site, never a clean 2-way
-winner market, so it doesn't fit this provider's 2-way-only pipeline. Valorant also has no
-entry: not observed as a segment on the live e-Sports page at time of writing (only Dota 2/
-CS2/LoL were present), so there's nothing confirmed to map yet.
+`RESULT_2WAY` shape as tennis/esports. Valorant has no entry: not observed as a segment on
+the live e-Sports page at time of writing (only Dota 2/CS2/LoL were present), so there's
+nothing confirmed to map yet.
 
-Football (added 2026-08-20) IS wired up, but via the `TOTAL` market (match goals total,
-Over/Under a line) rather than `RESULT`/`RESULT_2WAY` -- a goal total is exactly two-way
-regardless of whether the match itself can draw. Each `<td data-market-type="TOTAL">` cell
-nests a `<span data-selection-key="<eventId>@Total_Goals0.Over_2.5">` (or `Under_...`) --
-confirmed live this is literally labelled "Total_Goals", not corners/cards/bookings, and
-`Total_Goals0` (vs `Total_Goals1`/`Total_Goals2` for individual-team totals, not used here)
-is the match total. The line itself isn't in the JSON payload (`data-sel`), only in this
-selection key, so it's extracted from there via regex.
+Football and hockey (added 2026-08-20) ARE wired up, but via the `TOTAL` market (match
+goals/pucks total, Over/Under a line) rather than `RESULT`/`RESULT_2WAY` -- a score total
+is exactly two-way regardless of whether the match itself can draw (both sports' `RESULT`
+market is 3-way here, DOUBLE_CHANCE on top, never a clean 2-way winner -- that's still not
+usable). Each `<td data-market-type="TOTAL">` cell nests a
+`<span data-selection-key="<eventId>@Total_Goals0.Over_2.5">` (or `Under_...`) for BOTH
+sports -- confirmed live this is literally labelled "Total_Goals" even on the hockey page,
+not corners/cards/penalty-minutes, and `Total_Goals0` (vs `Total_Goals1`/`Total_Goals2` for
+individual-team totals, not used here) is the match total. The line itself isn't in the
+JSON payload (`data-sel`), only in this selection key, so it's extracted from there via
+regex. The hockey category page lives at a different URL slug ("Ice+Hockey", not "Hockey" --
+that path 301-redirects).
 
 Known gap: match start time isn't extracted (only a same-day "HH:MM" with no date is
 shown in the markup), so every quote here gets an empty start_time_utc. bot/core/reconcile.py
@@ -56,8 +58,10 @@ CATEGORY_URLS = {
     "esports": "https://www.marathonbet.ru/su/betting/e-Sports+-+1895085",
     "basketball": "https://www.marathonbet.ru/su/betting/Basketball",
     "football": "https://www.marathonbet.ru/su/betting/Football",
+    "hockey": "https://www.marathonbet.ru/su/betting/Ice+Hockey",
 }
 
+TOTALS_GAMES = frozenset({"football", "hockey"})
 TOTAL_GOALS_KEY_RE = re.compile(r"Total_Goals0\.(Over|Under)_([\d.]+)")
 PLAUSIBLE_TOTAL_LINE_RANGE = (0.5, 8.5)  # real match goal totals; guards against mismatched markets
 
@@ -82,6 +86,8 @@ class MarathonProvider(OddsProvider):
             categories.add("basketball")
         if "football" in games:
             categories.add("football")
+        if "hockey" in games:
+            categories.add("hockey")
 
         quotes: list[SourceQuote] = []
         for category in categories:
@@ -100,7 +106,7 @@ def parse_category_page(html: str, category: str, wanted_games: list[str]) -> li
 
     for event in soup.find_all("div", attrs={"data-event-eventid": True}):
         path = event.get("data-event-path", "")
-        if category in ("tennis", "basketball", "football"):
+        if category in ("tennis", "basketball", "football", "hockey"):
             game = category
         else:
             parts = unquote_plus(path).split("/")
@@ -118,8 +124,8 @@ def parse_category_page(html: str, category: str, wanted_games: list[str]) -> li
         except (KeyError, ValueError, json.JSONDecodeError):
             continue
 
-        if game == "football":
-            quotes.extend(_parse_football_totals(event, team_a, team_b))
+        if game in TOTALS_GAMES:
+            quotes.extend(_parse_totals_market(game, event, team_a, team_b))
             continue
 
         price_tds = event.find_all("td", attrs={"data-market-type": "RESULT_2WAY"})
@@ -138,9 +144,9 @@ def parse_category_page(html: str, category: str, wanted_games: list[str]) -> li
     return quotes
 
 
-def _parse_football_totals(event, team_a: str, team_b: str) -> list[SourceQuote]:
-    """Extract the match Total goals (Over/Under) market -- see module docstring for why
-    this, not RESULT_2WAY, is what makes football fit the 2-way-only pipeline."""
+def _parse_totals_market(game: str, event, team_a: str, team_b: str) -> list[SourceQuote]:
+    """Extract the match Total goals/pucks (Over/Under) market -- see module docstring for
+    why this, not RESULT_2WAY, is what makes football/hockey fit the 2-way-only pipeline."""
     parsed: list[tuple[str, float, float]] = []  # (direction, line, price)
     for td in event.find_all("td", attrs={"data-market-type": "TOTAL"}):
         span = td.find("span", attrs={"data-selection-key": True})
@@ -170,6 +176,6 @@ def _parse_football_totals(event, team_a: str, team_b: str) -> list[SourceQuote]
 
     market = f"total_{line_over}"
     return [
-        SourceQuote("football", team_a, team_b, "", BOOKMAKER, f"Тотал больше {line_over}", price_over, market),
-        SourceQuote("football", team_a, team_b, "", BOOKMAKER, f"Тотал меньше {line_over}", price_under, market),
+        SourceQuote(game, team_a, team_b, "", BOOKMAKER, f"Тотал больше {line_over}", price_over, market),
+        SourceQuote(game, team_a, team_b, "", BOOKMAKER, f"Тотал меньше {line_over}", price_under, market),
     ]

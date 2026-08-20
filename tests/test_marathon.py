@@ -101,6 +101,27 @@ def test_parse_football_uses_total_goals_market():
     assert all(q.game == "football" for q in quotes)
 
 
+def test_parse_hockey_uses_total_goals_market():
+    html = f"""
+    <div class="bg coupon-row" data-event-eventid="12" data-event-path="Ice+Hockey/Some+League">
+      <table class="coupon-row-item"><tbody><tr>
+        <td class="hidden" data-mutable-id="eventJsonInfo"
+            data-json='{{"teamNames": ["CSKA", "SKA"]}}'></td>
+        <td data-market-type="TOTAL" data-sel='{{"epr": "1.85"}}'>
+          <span data-selection-key="12@Total_Goals0.Under_5.5">1.85</span>
+        </td>
+        <td data-market-type="TOTAL" data-sel='{{"epr": "1.95"}}'>
+          <span data-selection-key="12@Total_Goals0.Over_5.5">1.95</span>
+        </td>
+      </tr></tbody></table>
+    </div>
+    """
+    quotes = parse_category_page(html, "hockey", ["hockey"])
+    assert len(quotes) == 2
+    assert {q.market for q in quotes} == {"total_5.5"}
+    assert all(q.game == "hockey" for q in quotes)
+
+
 def test_parse_football_ignores_individual_team_total():
     html = f"""
     <div class="bg coupon-row" data-event-eventid="11" data-event-path="Football/Some+League">

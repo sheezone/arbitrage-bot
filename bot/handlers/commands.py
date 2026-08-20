@@ -42,6 +42,7 @@ GAME_LABELS = {
     "tennis": "Теннис",
     "basketball": "Баскетбол",
     "football": "Футбол (тотал голов)",
+    "hockey": "Хоккей (тотал шайб)",
 }
 
 CATEGORIES: dict[str, list[str]] = {
@@ -49,12 +50,14 @@ CATEGORIES: dict[str, list[str]] = {
     "tennis": ["tennis"],
     "sports": ["basketball"],
     "football": ["football"],
+    "hockey": ["hockey"],
 }
 CATEGORY_LABELS = {
     "esports": "🎮 Киберспорт",
     "tennis": "🎾 Теннис",
     "sports": "🏀 Баскетбол",
     "football": "⚽ Футбол",
+    "hockey": "🏒 Хоккей",
 }
 
 NAV_DASHBOARD = "nav:dashboard"

@@ -48,18 +48,21 @@ GAME_TO_SPORT_ID = {
     "tennis": "Tennis",
     "basketball": "Basketball",
     "football": "Football",
+    "hockey": "Hockey",
 }
 SPORT_ID_TO_GAME = {v: k for k, v in GAME_TO_SPORT_ID.items()}
 
 BOOKMAKERS = ["melbet", "winline", "zenit", "betcity", "bingoboom"]
 
-# Football (added 2026-08-20) is the first sport here whose match-winner market has a real
-# third outcome (a draw). Checked live: this API's own matching is normally careful to pair
-# a plain "team to win" prong with a complementary Double Chance prong that covers the other
-# two results (e.g. win1 + _x2), never plain win1+win2 alone -- but SHOULD it ever return
-# exactly that (both prongs pure single-team-win kinds), the draw scenario would make both
-# legs lose at once, so it's rejected explicitly rather than trusted to never happen.
+# Football and hockey (added 2026-08-20) are the sports here whose match-winner market has
+# a real third outcome (both allow a draw in regulation time). Checked live: this API's own
+# matching is normally careful to pair a plain "team to win" prong with a complementary
+# Double Chance prong that covers the other two results (e.g. win1 + _x2), never plain
+# win1+win2 alone -- but SHOULD it ever return exactly that (both prongs pure single-team-
+# win kinds), the draw scenario would make both legs lose at once, so it's rejected
+# explicitly rather than trusted to never happen.
 _PURE_WIN_KINDS = frozenset({"win1", "win2", "1", "2", "winOnly1", "winOnly2"})
+_DRAW_POSSIBLE_GAMES = frozenset({"football", "hockey"})
 
 MIN_INTERVAL_SECONDS = 65  # test tier is rate-limited to ~1 request/minute
 
@@ -119,7 +122,7 @@ def parse_records(data: dict) -> list[SurebetMatch]:
             continue
         team_a, team_b = teams
 
-        if game == "football":
+        if game in _DRAW_POSSIBLE_GAMES:
             prong_kinds = {(p.get("type") or {}).get("type") for p in prongs}
             if prong_kinds <= _PURE_WIN_KINDS:
                 continue  # both legs are pure team-win bets -- a draw would lose both at once

@@ -19,30 +19,22 @@ the game. That parent also hosts a virtual/esports simulation mixed in under the
 parentId (NBA 2K -> sportCategoryId 119), which must be excluded explicitly or virtual
 matches would pollute real fixtures.
 
-Hockey deliberately has NO entry, for the same reason as football used to: checked live,
-its default win market always prices a draw (regulation time can tie) -- 161/200 sampled
-live hockey events carried DRAW_FACTOR. No distinct 2-way "Draw No Bet"/"incl. overtime"
-market could be identified with confidence -- neither visually on fon.bet's own match page
-nor statistically (checked ~3000 live matches against every plausible factor-id pair for a
-match to the theoretical no-vig DNB price; nothing landed close enough to trust with real
-money). Events carrying DRAW_FACTOR are correctly skipped by the win-market logic below
-rather than guessed at, so pointing hockey at this parser just yields zero quotes -- safe,
-but not useful, which is why it isn't wired up from bot/config.py.
-
-Football (added 2026-08-20) is wired up instead via a completely different market: Total
-goals in the match (factor 930 = Over, factor 931 = Under), NOT the 1X2 win market -- a
-game's total goal count is exactly two-way (over or under the line), so a draw in the
-underlying match is irrelevant to it. Confirmed live: factor pair 930/931 is present on
-1442/1481 sampled football matches (97%), always carries matching `pt` (the line, e.g.
-"2.5") on both sides, and the site's own selection key for the equivalent Marathon market
-literally reads "Total_Goals0.Over_2.5"/"...Under_2.5" (see marathon.py). A small fraction
-(~3%) of matches carry implausible lines (e.g. 16.5, 23.5) -- these turned out to be
-non-match "outright"/specials entries reusing the same factor slot for an unrelated total,
-not goals (confirmed: their `events` entries have team1/team2 == None). Filtered out via
-PLAUSIBLE_TOTAL_LINE_RANGE rather than trusted blindly, consistent with this codebase's
-"skip rather than guess" policy elsewhere. Like basketball, football is matched via
-game_to_parent_sport (parentId=1) rather than sportCategoryId, and shares one virtual/
-esports exclusion list with basketball's NBA 2K (category 118 = "FC 26" virtual football).
+Football and hockey (added 2026-08-20) are wired up via a completely different market:
+Total goals/pucks in the match (factor 930 = Over, factor 931 = Under), NOT the 1X2 win
+market -- a game's total score is exactly two-way (over or under the line), so a draw in
+the underlying match (both allow one in regulation time) is irrelevant to it. Confirmed
+live: factor pair 930/931 is present on 1442/1481 sampled football matches (97%) and
+84/84 sampled hockey matches (100%), always carries matching `pt` (the line, e.g. "2.5")
+on both sides, and the site's own selection key for the equivalent Marathon market
+literally reads "Total_Goals0.Over_2.5"/"...Under_2.5" for both sports (see marathon.py).
+A small fraction of matches carry implausible lines (e.g. 16.5, 23.5, 31.5) -- these
+turned out to be non-match "outright"/specials entries reusing the same factor slot for
+an unrelated total, not goals (confirmed: their `events` entries have team1/team2 ==
+None). Filtered out via PLAUSIBLE_TOTAL_LINE_RANGE rather than trusted blindly, consistent
+with this codebase's "skip rather than guess" policy elsewhere. Like basketball, both are
+matched via game_to_parent_sport (football parentId=1, hockey parentId=2) rather than
+sportCategoryId, and share one virtual/esports exclusion list with basketball's NBA 2K
+(category 118 = "FC 26" virtual football, 165 = "NHL 26" virtual hockey).
 
 Response shape (GET .../events/listBase?lang=ru&scopeMarket=<n>):
 - sports: flat list of {id, kind: "sport"|"segment", parentId, sportCategoryId, name}.

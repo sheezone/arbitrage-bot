@@ -101,6 +101,35 @@ def test_football_uses_total_goals_market_not_win_market():
     assert all(q.game == "football" for q in quotes)
 
 
+def test_hockey_uses_total_goals_market_not_win_market():
+    raw = _raw(
+        sports=[{"id": 500, "kind": "segment", "parentId": 2, "sportCategoryId": None, "name": "KHL"}],
+        events=[{"id": 7, "sportId": 500, "team1": "CSKA", "team2": "SKA", "place": "line", "startTime": 0}],
+        custom_factors=[
+            {
+                "e": 7,
+                "factors": [
+                    {"f": 921, "v": 2.0},
+                    {"f": 922, "v": 3.5},  # draw exists in the win market -- irrelevant to totals
+                    {"f": 923, "v": 3.8},
+                    {"f": 930, "v": 1.85, "pt": "5.5"},
+                    {"f": 931, "v": 1.95, "pt": "5.5"},
+                ],
+            }
+        ],
+    )
+    quotes = parse_line_dump(
+        raw,
+        {},
+        bookmaker="fonbet",
+        game_to_parent_sport={"hockey": 2},
+        totals_games=frozenset({"hockey"}),
+    )
+    assert len(quotes) == 2
+    assert {q.market for q in quotes} == {"total_5.5"}
+    assert all(q.game == "hockey" for q in quotes)
+
+
 def test_football_rejects_implausible_total_line():
     raw = _raw(
         sports=[{"id": 400, "kind": "segment", "parentId": 1, "sportCategoryId": None, "name": "Weird special"}],

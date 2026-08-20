@@ -126,6 +126,36 @@ def test_football_accepts_win_plus_double_chance_since_it_covers_the_draw():
     assert results[0][0] == "football"
 
 
+def test_hockey_rejects_pure_win1_win2_pair_since_a_draw_would_lose_both():
+    data = {
+        "records": [
+            _record(
+                "Hockey",
+                ["CSKA", "SKA"],
+                {"value": 1.8, "type": {"type": "win1"}},
+                {"value": 4.5, "type": {"type": "win2"}},
+            )
+        ]
+    }
+    assert parse_records(data) == []
+
+
+def test_hockey_totals_market_works():
+    data = {
+        "records": [
+            _record(
+                "Hockey",
+                ["CSKA", "SKA"],
+                {"value": 2.1, "type": {"type": "over", "condition": "5.5", "period": "regularTime"}},
+                {"value": 2.2, "type": {"type": "under", "condition": "5.5", "period": "regularTime"}},
+            )
+        ]
+    }
+    results = parse_records(data)
+    assert len(results) == 1
+    assert results[0][0] == "hockey"
+
+
 def test_football_totals_market_still_works():
     data = {
         "records": [
