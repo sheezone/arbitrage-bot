@@ -4,13 +4,15 @@ that (re)creates that message; every button press after that edits it, and free-
 answers (bankroll/threshold amounts) get deleted the instant they're read so the chat
 stays down to one live message.
 
-Two intentional exceptions: a one-time welcome note for new users (see `is_new_user`
-below), and the small line that attaches the persistent bottom reply keyboard on every
-/start -- a `ReplyKeyboardMarkup` can't share a message with the dashboard's inline
-keyboard, and deleting that carrier message right after sending it (the usual trick)
-was confirmed live to silently break the keyboard update on at least one mobile client."""
+One intentional exception: a one-time welcome note for new users (see `is_new_user`
+below). Separately, every /start re-sends the throwaway line that (re)attaches the
+persistent bottom reply keyboard -- a `ReplyKeyboardMarkup` can't share a message with
+the dashboard's inline keyboard, and it has to be re-sent (not just once ever) so anyone
+whose client cached an older button layout picks up the current one; a short delay before
+deleting it avoids racing the client's keyboard-update rendering."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -298,15 +300,19 @@ def register_handlers(
         repo.upsert_user(message.chat.id)
         user = repo.get_user(message.chat.id)
 
-        if is_new_user:
-            # Attach the persistent bottom-of-chat menu button -- only ever needs doing
-            # once, since Telegram keeps a reply keyboard attached to the chat regardless
-            # of what happens to the message that carried it (confirmed live: deleting
-            # that carrier message, even with a delay, broke the update on a mobile
-            # client, so it's sent once and left as a permanent line rather than resent
-            # -- and deleted -- on every /start).
-            await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
+        # Re-attach the persistent bottom menu on every /start, not just for new users --
+        # otherwise anyone whose client cached an older keyboard layout (e.g. before a
+        # button was added) never sees the update. A short delay before deleting the
+        # carrier message avoids racing the client's keyboard-update rendering (deleting
+        # it instantly was confirmed live to sometimes drop the update).
+        cleanup = await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
+        await asyncio.sleep(0.6)
+        try:
+            await cleanup.delete()
+        except Exception:
+            pass
 
+        if is_new_user:
             # A one-off exception to the single-message UI: a permanent welcome note
             # explaining the trial/subscription policy, sent once per user, left in the
             # chat as a standing reference rather than folded into the dashboard panel.
