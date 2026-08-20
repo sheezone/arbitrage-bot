@@ -17,10 +17,11 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
     LabeledPrice,
     Message,
     PreCheckoutQuery,
-    ReplyKeyboardRemove,
+    ReplyKeyboardMarkup,
 )
 
 from bot.core import billing
@@ -59,6 +60,11 @@ CATEGORY_LABELS = {
     "football": "⚽ Футбол",
     "hockey": "🏒 Хоккей",
 }
+
+MENU_BUTTON_TEXT = "☰ Меню"
+MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text=MENU_BUTTON_TEXT)]], resize_keyboard=True, is_persistent=True
+)
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_SEARCH = "nav:search"
@@ -286,8 +292,10 @@ def register_handlers(
         repo.upsert_user(message.chat.id)
         user = repo.get_user(message.chat.id)
 
-        # Drop any leftover custom reply-keyboard from an older version of this bot.
-        cleanup = await message.answer("⏳", reply_markup=ReplyKeyboardRemove())
+        # Attach the persistent bottom-of-chat menu button. Telegram keeps a reply
+        # keyboard visible independent of the message that carried it, so this can be
+        # a throwaway message deleted right after -- the keyboard itself stays.
+        cleanup = await message.answer("⏳", reply_markup=MAIN_MENU_KEYBOARD)
         try:
             await cleanup.delete()
         except Exception:
@@ -320,6 +328,15 @@ def register_handlers(
             FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
         repo.set_menu_message_id(message.chat.id, sent.message_id)
+
+    @router.message(F.text == MENU_BUTTON_TEXT)
+    async def on_menu_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
+        try:
+            await message.delete()
+        except Exception:
+            pass
 
     @router.callback_query(F.data == NAV_DASHBOARD)
     async def on_nav_dashboard(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
