@@ -150,7 +150,7 @@ async def _notify_group(
             message += f"  {outcome_name}: {stake:.2f}\n"
 
         try:
-            await bot.send_message(user.chat_id, message)
+            await bot.send_message(user.chat_id, message, protect_content=True)
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
 
