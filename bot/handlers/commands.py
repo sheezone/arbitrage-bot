@@ -298,14 +298,15 @@ def register_handlers(
         repo.upsert_user(message.chat.id)
         user = repo.get_user(message.chat.id)
 
-        # Attach the persistent bottom-of-chat menu button. A delete-right-after
-        # throwaway message was tried first (Telegram is supposed to keep the reply
-        # keyboard regardless), but confirmed live on a mobile client: the new keyboard
-        # silently failed to apply when the carrier message was deleted, with or without
-        # a delay -- so it's left in place instead.
-        await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
-
         if is_new_user:
+            # Attach the persistent bottom-of-chat menu button -- only ever needs doing
+            # once, since Telegram keeps a reply keyboard attached to the chat regardless
+            # of what happens to the message that carried it (confirmed live: deleting
+            # that carrier message, even with a delay, broke the update on a mobile
+            # client, so it's sent once and left as a permanent line rather than resent
+            # -- and deleted -- on every /start).
+            await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
+
             # A one-off exception to the single-message UI: a permanent welcome note
             # explaining the trial/subscription policy, sent once per user, left in the
             # chat as a standing reference rather than folded into the dashboard panel.
@@ -332,6 +333,11 @@ def register_handlers(
             FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
         repo.set_menu_message_id(message.chat.id, sent.message_id)
+
+        try:
+            await message.delete()
+        except Exception:
+            pass
 
     async def _dismiss(message: Message) -> None:
         try:
