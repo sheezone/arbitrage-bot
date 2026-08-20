@@ -4,15 +4,15 @@ that (re)creates that message; every button press after that edits it, and free-
 answers (bankroll/threshold amounts) get deleted the instant they're read so the chat
 stays down to one live message.
 
-One intentional exception: a one-time welcome note for new users (see `is_new_user`
-below). Separately, every /start re-sends the throwaway line that (re)attaches the
-persistent bottom reply keyboard -- a `ReplyKeyboardMarkup` can't share a message with
-the dashboard's inline keyboard, and it has to be re-sent (not just once ever) so anyone
-whose client cached an older button layout picks up the current one; a short delay before
-deleting it avoids racing the client's keyboard-update rendering."""
+Two intentional exceptions: a one-time welcome note for new users (see `is_new_user`
+below), and the small permanent line every /start sends to (re)attach the persistent
+bottom reply keyboard -- a `ReplyKeyboardMarkup` can't share a message with the
+dashboard's inline keyboard, has to be re-sent (not just once ever) so anyone whose
+client cached an older button layout picks up the current one, and is never deleted:
+confirmed live that deleting that carrier message -- immediately or after a delay --
+makes the keyboard itself disappear on at least one client."""
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -302,15 +302,11 @@ def register_handlers(
 
         # Re-attach the persistent bottom menu on every /start, not just for new users --
         # otherwise anyone whose client cached an older keyboard layout (e.g. before a
-        # button was added) never sees the update. A short delay before deleting the
-        # carrier message avoids racing the client's keyboard-update rendering (deleting
-        # it instantly was confirmed live to sometimes drop the update).
-        cleanup = await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
-        await asyncio.sleep(0.6)
-        try:
-            await cleanup.delete()
-        except Exception:
-            pass
+        # button was added) never sees the update. This carrier message is deliberately
+        # NOT deleted: confirmed live that deleting it -- immediately or after a delay --
+        # makes the reply keyboard itself disappear on at least one client, contrary to
+        # the usual "keyboard survives its carrier message" behavior.
+        await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
 
         if is_new_user:
             # A one-off exception to the single-message UI: a permanent welcome note
