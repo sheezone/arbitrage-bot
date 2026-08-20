@@ -86,7 +86,7 @@ def test_skips_unknown_sport_id():
     data = {
         "records": [
             _record(
-                "Football",
+                "Rugby",
                 ["A", "B"],
                 {"value": 1.5, "type": {"type": "winOnly1"}},
                 {"value": 3.0, "type": {"type": "winOnly2"}},
@@ -94,3 +94,49 @@ def test_skips_unknown_sport_id():
         ]
     }
     assert parse_records(data) == []
+
+
+def test_football_rejects_pure_win1_win2_pair_since_a_draw_would_lose_both():
+    data = {
+        "records": [
+            _record(
+                "Football",
+                ["Arsenal", "Chelsea"],
+                {"value": 1.8, "type": {"type": "win1"}},
+                {"value": 4.5, "type": {"type": "win2"}},
+            )
+        ]
+    }
+    assert parse_records(data) == []
+
+
+def test_football_accepts_win_plus_double_chance_since_it_covers_the_draw():
+    data = {
+        "records": [
+            _record(
+                "Football",
+                ["Arsenal", "Chelsea"],
+                {"value": 2.3, "type": {"type": "win1"}},
+                {"value": 1.8, "type": {"type": "_x2"}},
+            )
+        ]
+    }
+    results = parse_records(data)
+    assert len(results) == 1
+    assert results[0][0] == "football"
+
+
+def test_football_totals_market_still_works():
+    data = {
+        "records": [
+            _record(
+                "Football",
+                ["Arsenal", "Chelsea"],
+                {"value": 2.1, "type": {"type": "over", "condition": "2.5", "period": "regularTime"}},
+                {"value": 2.2, "type": {"type": "under", "condition": "2.5", "period": "regularTime"}},
+            )
+        ]
+    }
+    results = parse_records(data)
+    assert len(results) == 1
+    assert results[0][0] == "football"

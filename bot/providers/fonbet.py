@@ -21,12 +21,15 @@ GAME_TO_SPORT_CATEGORY: dict[str, list[int]] = {
     "tennis": [9, 10, 11, 17, 18, 32, 207, 210],
 }
 
-# Basketball is a whole top-level "sport" node rather than a sportCategoryId within a
-# shared parent -- see the module docstring in _line_platform.py.
+# Basketball and football are whole top-level "sport" nodes rather than a sportCategoryId
+# within a shared parent -- see the module docstring in _line_platform.py. Football is
+# matched to the Total goals market (no draw possible), not the 1X2 win market.
 GAME_TO_PARENT_SPORT: dict[str, int] = {
     "basketball": 3,
+    "football": 1,
 }
-EXCLUDE_CATEGORY_IDS = frozenset({119})  # NBA 2K virtual esports simulation
+EXCLUDE_CATEGORY_IDS = frozenset({119, 118})  # NBA 2K / FC 26 virtual simulations
+TOTALS_GAMES = frozenset({"football"})
 
 
 class FonbetProvider(OddsProvider):
@@ -41,7 +44,12 @@ class FonbetProvider(OddsProvider):
         wanted = {g: GAME_TO_SPORT_CATEGORY[g] for g in games if g in GAME_TO_SPORT_CATEGORY}
         wanted_parents = {g: GAME_TO_PARENT_SPORT[g] for g in games if g in GAME_TO_PARENT_SPORT}
         return parse_line_dump(
-            raw, wanted, bookmaker="fonbet", game_to_parent_sport=wanted_parents, exclude_category_ids=EXCLUDE_CATEGORY_IDS
+            raw,
+            wanted,
+            bookmaker="fonbet",
+            game_to_parent_sport=wanted_parents,
+            exclude_category_ids=EXCLUDE_CATEGORY_IDS,
+            totals_games=TOTALS_GAMES,
         )
 
     async def close(self) -> None:

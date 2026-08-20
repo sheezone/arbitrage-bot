@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from bot.core.reconcile import group_quotes, normalize_team, to_arbitrage_input
+from bot.core.reconcile import group_quotes, normalize_team, split_by_market, to_arbitrage_input
 from bot.providers.models import SourceQuote
 
 
@@ -72,3 +72,31 @@ def test_to_arbitrage_input_ignores_unmatched_outcome_name():
     team_a, team_b, odds_by_outcome = to_arbitrage_input(group)
     assert len(odds_by_outcome[team_a]) == 1
     assert len(odds_by_outcome[team_b]) == 0
+
+
+def test_split_by_market_separates_different_lines():
+    start = "2026-07-30T08:00:00.000Z"
+    group = [
+        SourceQuote("football", "Arsenal", "Chelsea", start, "fonbet", "Тотал больше 2.5", 1.9, "total_2.5"),
+        SourceQuote("football", "Arsenal", "Chelsea", start, "fonbet", "Тотал меньше 2.5", 1.95, "total_2.5"),
+        SourceQuote("football", "Arsenal", "Chelsea", start, "marathon", "Тотал больше 3.5", 2.3, "total_3.5"),
+        SourceQuote("football", "Arsenal", "Chelsea", start, "marathon", "Тотал меньше 3.5", 1.6, "total_3.5"),
+    ]
+    by_market = split_by_market(group)
+    assert set(by_market.keys()) == {"total_2.5", "total_3.5"}
+    assert len(by_market["total_2.5"]) == 2
+    assert len(by_market["total_3.5"]) == 2
+
+
+def test_to_arbitrage_input_groups_non_winner_market_by_literal_outcome_name():
+    start = "2026-07-30T08:00:00.000Z"
+    group = [
+        SourceQuote("football", "Arsenal", "Chelsea", start, "fonbet", "Тотал больше 2.5", 1.9, "total_2.5"),
+        SourceQuote("football", "Arsenal", "Chelsea", start, "marathon", "Тотал меньше 2.5", 2.1, "total_2.5"),
+    ]
+    team_a, team_b, odds_by_outcome = to_arbitrage_input(group)
+    assert team_a == "Arsenal"
+    assert team_b == "Chelsea"
+    assert set(odds_by_outcome.keys()) == {"Тотал больше 2.5", "Тотал меньше 2.5"}
+    assert odds_by_outcome["Тотал больше 2.5"][0].bookmaker == "fonbet"
+    assert odds_by_outcome["Тотал меньше 2.5"][0].bookmaker == "marathon"

@@ -19,16 +19,30 @@ the game. That parent also hosts a virtual/esports simulation mixed in under the
 parentId (NBA 2K -> sportCategoryId 119), which must be excluded explicitly or virtual
 matches would pollute real fixtures.
 
-Football and hockey deliberately have NO entry, for the same reason: checked live, both
-sports' default win market always prices a draw (regulation time can tie) -- 161/200
-sampled live hockey events carried DRAW_FACTOR, same as football. No distinct 2-way
-"Draw No Bet"/"incl. overtime" market could be identified with confidence for either --
-neither visually on fon.bet's own match page nor statistically (checked ~3000 live
-football matches against every plausible factor-id pair for a match to the theoretical
-no-vig DNB price; nothing landed close enough to trust with real money). Events carrying
-DRAW_FACTOR are correctly skipped by the logic below rather than guessed at, so pointing
-either sport at this parser just yields zero quotes -- safe, but not useful, which is why
-neither is wired up from bot/config.py.
+Hockey deliberately has NO entry, for the same reason as football used to: checked live,
+its default win market always prices a draw (regulation time can tie) -- 161/200 sampled
+live hockey events carried DRAW_FACTOR. No distinct 2-way "Draw No Bet"/"incl. overtime"
+market could be identified with confidence -- neither visually on fon.bet's own match page
+nor statistically (checked ~3000 live matches against every plausible factor-id pair for a
+match to the theoretical no-vig DNB price; nothing landed close enough to trust with real
+money). Events carrying DRAW_FACTOR are correctly skipped by the win-market logic below
+rather than guessed at, so pointing hockey at this parser just yields zero quotes -- safe,
+but not useful, which is why it isn't wired up from bot/config.py.
+
+Football (added 2026-08-20) is wired up instead via a completely different market: Total
+goals in the match (factor 930 = Over, factor 931 = Under), NOT the 1X2 win market -- a
+game's total goal count is exactly two-way (over or under the line), so a draw in the
+underlying match is irrelevant to it. Confirmed live: factor pair 930/931 is present on
+1442/1481 sampled football matches (97%), always carries matching `pt` (the line, e.g.
+"2.5") on both sides, and the site's own selection key for the equivalent Marathon market
+literally reads "Total_Goals0.Over_2.5"/"...Under_2.5" (see marathon.py). A small fraction
+(~3%) of matches carry implausible lines (e.g. 16.5, 23.5) -- these turned out to be
+non-match "outright"/specials entries reusing the same factor slot for an unrelated total,
+not goals (confirmed: their `events` entries have team1/team2 == None). Filtered out via
+PLAUSIBLE_TOTAL_LINE_RANGE rather than trusted blindly, consistent with this codebase's
+"skip rather than guess" policy elsewhere. Like basketball, football is matched via
+game_to_parent_sport (parentId=1) rather than sportCategoryId, and shares one virtual/
+esports exclusion list with basketball's NBA 2K (category 118 = "FC 26" virtual football).
 
 Response shape (GET .../events/listBase?lang=ru&scopeMarket=<n>):
 - sports: flat list of {id, kind: "sport"|"segment", parentId, sportCategoryId, name}.
@@ -60,6 +74,10 @@ from bot.providers.models import SourceQuote
 TEAM1_WIN_FACTOR = 921
 DRAW_FACTOR = 922
 TEAM2_WIN_FACTOR = 923
+TOTAL_OVER_FACTOR = 930
+TOTAL_UNDER_FACTOR = 931
+PLAUSIBLE_TOTAL_LINE_RANGE = (0.5, 8.5)  # real match goal totals; guards against mismatched specials/outrights
+RELEVANT_FACTOR_IDS = (TEAM1_WIN_FACTOR, DRAW_FACTOR, TEAM2_WIN_FACTOR, TOTAL_OVER_FACTOR, TOTAL_UNDER_FACTOR)
 
 
 def parse_line_dump(
@@ -68,6 +86,7 @@ def parse_line_dump(
     bookmaker: str,
     game_to_parent_sport: dict[str, int] | None = None,
     exclude_category_ids: frozenset[int] = frozenset(),
+    totals_games: frozenset[str] = frozenset(),
 ) -> list[SourceQuote]:
     category_to_game = {cat: game for game, cats in game_to_categories.items() for cat in cats}
     parent_id_to_game = {parent_id: game for game, parent_id in (game_to_parent_sport or {}).items()}
@@ -82,16 +101,12 @@ def parse_line_dump(
         elif cat_id not in exclude_category_ids and s.get("parentId") in parent_id_to_game:
             segment_to_game[s["id"]] = parent_id_to_game[s["parentId"]]
 
-    factors_by_event: dict[int, dict[int, float]] = {}
+    factors_by_event: dict[int, dict[int, dict]] = {}
     for cf in raw.get("customFactors", []):
         event_id = cf.get("e")
         if event_id is None:
             continue
-        factors_by_event[event_id] = {
-            f["f"]: f["v"]
-            for f in cf.get("factors", [])
-            if f.get("f") in (TEAM1_WIN_FACTOR, DRAW_FACTOR, TEAM2_WIN_FACTOR)
-        }
+        factors_by_event[event_id] = {f["f"]: f for f in cf.get("factors", []) if f.get("f") in RELEVANT_FACTOR_IDS}
 
     quotes: list[SourceQuote] = []
     for event in raw.get("events", []):
@@ -106,15 +121,35 @@ def parse_line_dump(
             continue
 
         factors = factors_by_event.get(event["id"], {})
-        if DRAW_FACTOR in factors:
-            continue  # Bo2-style 3-way market, not supported yet
+        start_time_utc = _unix_to_iso(event.get("startTime"))
 
-        odds_a = factors.get(TEAM1_WIN_FACTOR)
-        odds_b = factors.get(TEAM2_WIN_FACTOR)
+        if game in totals_games:
+            over, under = factors.get(TOTAL_OVER_FACTOR), factors.get(TOTAL_UNDER_FACTOR)
+            if not over or not under:
+                continue
+            odds_over, odds_under, line_str = over.get("v"), under.get("v"), over.get("pt")
+            if not odds_over or not odds_under or line_str is None:
+                continue
+            try:
+                line = float(line_str)
+            except ValueError:
+                continue
+            if not (PLAUSIBLE_TOTAL_LINE_RANGE[0] <= line <= PLAUSIBLE_TOTAL_LINE_RANGE[1]):
+                continue  # not a real match goal total (e.g. a special/outright reusing this factor slot)
+
+            market = f"total_{line}"
+            quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"Тотал больше {line}", odds_over, market))
+            quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"Тотал меньше {line}", odds_under, market))
+            continue
+
+        if DRAW_FACTOR in factors:
+            continue  # 3-way win market, not supported yet
+
+        odds_a = factors.get(TEAM1_WIN_FACTOR, {}).get("v")
+        odds_b = factors.get(TEAM2_WIN_FACTOR, {}).get("v")
         if not odds_a or not odds_b:
             continue
 
-        start_time_utc = _unix_to_iso(event.get("startTime"))
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, team_a, odds_a))
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, team_b, odds_b))
 

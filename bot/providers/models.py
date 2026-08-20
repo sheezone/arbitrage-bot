@@ -36,5 +36,6 @@ class SourceQuote:
     team_b: str
     start_time_utc: str  # ISO 8601
     bookmaker: str
-    outcome_name: str  # matches team_a or team_b as spelled by this particular source
+    outcome_name: str  # matches team_a/team_b for market="winner", else a literal outcome label
     odds: float
+    market: str = "winner"  # "winner" (team-name outcomes) or e.g. "total_2.5" (Over/Under, no draw possible)

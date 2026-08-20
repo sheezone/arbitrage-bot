@@ -72,3 +72,46 @@ def test_parse_skips_event_missing_price_cells():
     """
     quotes = parse_category_page(html, "tennis", ["tennis"])
     assert quotes == []
+
+
+def _football_event_html(event_id: str, team_a: str, team_b: str, line: str, price_over: str, price_under: str) -> str:
+    return f"""
+    <div class="bg coupon-row" data-event-eventid="{event_id}" data-event-path="Football/Some+League">
+      <table class="coupon-row-item"><tbody><tr>
+        <td class="hidden" data-mutable-id="eventJsonInfo"
+            data-json='{{"teamNames": ["{team_a}", "{team_b}"]}}'></td>
+        <td data-market-type="RESULT" data-sel='{{"epr": "2.10"}}'></td>
+        <td data-market-type="TOTAL" data-sel='{{"epr": "{price_under}"}}'>
+          <span data-selection-key="{event_id}@Total_Goals0.Under_{line}">{price_under}</span>
+        </td>
+        <td data-market-type="TOTAL" data-sel='{{"epr": "{price_over}"}}'>
+          <span data-selection-key="{event_id}@Total_Goals0.Over_{line}">{price_over}</span>
+        </td>
+      </tr></tbody></table>
+    </div>
+    """
+
+
+def test_parse_football_uses_total_goals_market():
+    html = _football_event_html("10", "Arsenal", "Chelsea", "2.5", "1.90", "1.95")
+    quotes = parse_category_page(html, "football", ["football"])
+    assert len(quotes) == 2
+    assert {q.market for q in quotes} == {"total_2.5"}
+    assert {q.outcome_name for q in quotes} == {"Тотал больше 2.5", "Тотал меньше 2.5"}
+    assert all(q.game == "football" for q in quotes)
+
+
+def test_parse_football_ignores_individual_team_total():
+    html = f"""
+    <div class="bg coupon-row" data-event-eventid="11" data-event-path="Football/Some+League">
+      <table class="coupon-row-item"><tbody><tr>
+        <td class="hidden" data-mutable-id="eventJsonInfo"
+            data-json='{{"teamNames": ["Arsenal", "Chelsea"]}}'></td>
+        <td data-market-type="TOTAL" data-sel='{{"epr": "1.80"}}'>
+          <span data-selection-key="11@Total_Goals1.Over_1.5">1.80</span>
+        </td>
+      </tr></tbody></table>
+    </div>
+    """
+    quotes = parse_category_page(html, "football", ["football"])
+    assert quotes == []  # individual-team total (Total_Goals1), not the match total (Total_Goals0)

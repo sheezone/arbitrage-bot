@@ -16,6 +16,16 @@ transliterated+normalized team-name pair is "close enough" (SequenceMatcher rati
 existing cluster, unioning across sources. This is still not fuzzy matching against every
 possible name variant (no external name-alias database), so a sufficiently different
 abbreviation can still fail to merge -- a known limitation, not a bug.
+
+A match cluster can carry more than one independent 2-way market at once (e.g. football:
+only the Total-goals market, see bot/providers/_line_platform.py) -- SourceQuote.market
+tags which one. split_by_market() splits a cluster into per-market groups BEFORE arbitrage
+math runs, so a "Total 2.5" quote from one book is never compared against a "Total 3.5"
+quote from another (that would be comparing two different bets, not two prices on the same
+bet, and would produce a nonsense "arbitrage"). to_arbitrage_input() then branches: for the
+"winner" market it keeps the team-name remap described above; for any other market it
+groups by outcome_name literally, since providers already emit a shared canonical label
+for the same outcome (e.g. every source says "Тотал больше 2.5", not team names).
 """
 from __future__ import annotations
 
@@ -92,13 +102,32 @@ def group_quotes(quotes: list[SourceQuote]) -> list[list[SourceQuote]]:
     return [cluster_quotes for clusters in buckets.values() for _, cluster_quotes in clusters]
 
 
+def split_by_market(group: list[SourceQuote]) -> dict[str, list[SourceQuote]]:
+    """Split one match cluster into per-market sub-groups so arbitrage math never mixes
+    quotes from two different bets on the same match (e.g. Total 2.5 vs Total 3.5)."""
+    by_market: dict[str, list[SourceQuote]] = {}
+    for q in group:
+        by_market.setdefault(q.market, []).append(q)
+    return by_market
+
+
 def to_arbitrage_input(group: list[SourceQuote]) -> tuple[str, str, dict[str, list[OutcomeOdds]]]:
-    """Pick the first quote's team names as canonical display labels, and remap every
-    quote's outcome_name onto whichever canonical label it's most similar to."""
+    """`group` must already be single-market (see split_by_market). Pick the first quote's
+    team names as canonical display labels. For the "winner" market, remap every quote's
+    outcome_name onto whichever canonical label it's most similar to; for any other market
+    (e.g. a football Total), group directly by the provider-supplied outcome_name, since
+    providers already emit a shared canonical label per outcome for those markets."""
     canonical_a, canonical_b = group[0].team_a, group[0].team_b
+
+    if group[0].market != "winner":
+        odds_by_outcome: dict[str, list[OutcomeOdds]] = {}
+        for q in group:
+            odds_by_outcome.setdefault(q.outcome_name, []).append(OutcomeOdds(q.outcome_name, q.bookmaker, q.odds))
+        return canonical_a, canonical_b, odds_by_outcome
+
     norm_a, norm_b = normalize_team(canonical_a), normalize_team(canonical_b)
 
-    odds_by_outcome: dict[str, list[OutcomeOdds]] = {canonical_a: [], canonical_b: []}
+    odds_by_outcome = {canonical_a: [], canonical_b: []}
     for q in group:
         norm_outcome = normalize_team(q.outcome_name)
         sim_a, sim_b = _similarity(norm_outcome, norm_a), _similarity(norm_outcome, norm_b)

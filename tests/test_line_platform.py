@@ -69,3 +69,45 @@ def test_draw_factor_still_skips_event_for_parent_matched_games():
         raw, {}, bookmaker="fonbet", game_to_parent_sport=GAME_TO_PARENT_SPORT, exclude_category_ids=EXCLUDE_CATEGORY_IDS
     )
     assert quotes == []
+
+
+def test_football_uses_total_goals_market_not_win_market():
+    raw = _raw(
+        sports=[{"id": 400, "kind": "segment", "parentId": 1, "sportCategoryId": None, "name": "EPL"}],
+        events=[{"id": 5, "sportId": 400, "team1": "Arsenal", "team2": "Chelsea", "place": "line", "startTime": 0}],
+        custom_factors=[
+            {
+                "e": 5,
+                "factors": [
+                    {"f": 921, "v": 2.0},
+                    {"f": 922, "v": 3.5},  # draw exists in the win market -- irrelevant to totals
+                    {"f": 923, "v": 3.8},
+                    {"f": 930, "v": 1.9, "pt": "2.5"},
+                    {"f": 931, "v": 1.95, "pt": "2.5"},
+                ],
+            }
+        ],
+    )
+    quotes = parse_line_dump(
+        raw,
+        {},
+        bookmaker="fonbet",
+        game_to_parent_sport={"football": 1},
+        totals_games=frozenset({"football"}),
+    )
+    assert len(quotes) == 2
+    assert {q.market for q in quotes} == {"total_2.5"}
+    assert {q.outcome_name for q in quotes} == {"Тотал больше 2.5", "Тотал меньше 2.5"}
+    assert all(q.game == "football" for q in quotes)
+
+
+def test_football_rejects_implausible_total_line():
+    raw = _raw(
+        sports=[{"id": 400, "kind": "segment", "parentId": 1, "sportCategoryId": None, "name": "Weird special"}],
+        events=[{"id": 6, "sportId": 400, "team1": "A", "team2": "B", "place": "line", "startTime": 0}],
+        custom_factors=[{"e": 6, "factors": [{"f": 930, "v": 1.85, "pt": "23.5"}, {"f": 931, "v": 1.9, "pt": "23.5"}]}],
+    )
+    quotes = parse_line_dump(
+        raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
+    )
+    assert quotes == []

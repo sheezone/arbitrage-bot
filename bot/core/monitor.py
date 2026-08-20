@@ -10,7 +10,7 @@ from aiogram import Bot
 
 from bot.core import billing
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
-from bot.core.reconcile import group_quotes, to_arbitrage_input
+from bot.core.reconcile import group_quotes, split_by_market, to_arbitrage_input
 from bot.core.state import LatestState, MatchSnapshot
 from bot.db.repository import Repository
 from bot.providers.base import OddsProvider
@@ -83,20 +83,25 @@ async def _fetch_all_quotes(
     return all_quotes
 
 
-def _evaluate_group(group: list[SourceQuote]) -> tuple[str, str, str, ArbitrageResult] | None:
-    """Returns (game, team_a, team_b, arb) if this group is a real arbitrage opportunity."""
-    if len({q.bookmaker for q in group}) < 2:
-        return None
+def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, ArbitrageResult]]:
+    """Returns (game, team_a, team_b, market, arb) for every submarket in this match cluster
+    that turns out to be a real arbitrage opportunity (usually zero or one, but a match can
+    carry more than one independent market -- see bot/core/reconcile.py split_by_market)."""
+    results: list[tuple[str, str, str, str, ArbitrageResult]] = []
+    for market, subgroup in split_by_market(group).items():
+        if len({q.bookmaker for q in subgroup}) < 2:
+            continue
 
-    team_a, team_b, odds_by_outcome = to_arbitrage_input(group)
-    if any(len(v) == 0 for v in odds_by_outcome.values()):
-        return None
+        team_a, team_b, odds_by_outcome = to_arbitrage_input(subgroup)
+        if len(odds_by_outcome) < 2 or any(len(v) == 0 for v in odds_by_outcome.values()):
+            continue
 
-    arb = calc_arbitrage(odds_by_outcome)
-    if not arb.is_arbitrage:
-        return None
+        arb = calc_arbitrage(odds_by_outcome)
+        if not arb.is_arbitrage:
+            continue
 
-    return group[0].game, team_a, team_b, arb
+        results.append((subgroup[0].game, team_a, team_b, market, arb))
+    return results
 
 
 async def _notify_group(
@@ -108,8 +113,9 @@ async def _notify_group(
     repo: Repository,
     bot: Bot,
     admin_chat_ids: frozenset[int] = frozenset(),
+    market: str = "winner",
 ) -> None:
-    match_id = f"{game}:{team_a}:{team_b}:{start_time_utc}"
+    match_id = f"{game}:{team_a}:{team_b}:{start_time_utc}:{market}"
     bh = _bookmakers_hash(arb.best_odds)
     if repo.has_seen_opportunity(match_id, bh):
         return
@@ -176,19 +182,19 @@ async def run_monitor_loop(
         found: list[MatchSnapshot] = []
         for group in groups:
             try:
-                result = _evaluate_group(group)
+                results = _evaluate_group(group)
             except Exception:
                 logger.exception("Failed to evaluate match group")
                 continue
-            if result is None:
-                continue
 
-            game, team_a, team_b, arb = result
-            found.append(MatchSnapshot(game, team_a, team_b, arb))
-            try:
-                await _notify_group(game, team_a, team_b, arb, group[0].start_time_utc, repo, bot, admin_chat_ids)
-            except Exception:
-                logger.exception("Failed to notify match group")
+            for game, team_a, team_b, market, arb in results:
+                found.append(MatchSnapshot(game, team_a, team_b, arb))
+                try:
+                    await _notify_group(
+                        game, team_a, team_b, arb, group[0].start_time_utc, repo, bot, admin_chat_ids, market
+                    )
+                except Exception:
+                    logger.exception("Failed to notify match group")
 
         if surebet_finder is not None:
             try:

@@ -41,14 +41,21 @@ GAME_LABELS = {
     "valorant": "Valorant",
     "tennis": "Теннис",
     "basketball": "Баскетбол",
+    "football": "Футбол (тотал голов)",
 }
 
 CATEGORIES: dict[str, list[str]] = {
     "esports": ["cs2", "dota2", "lol", "valorant"],
     "tennis": ["tennis"],
     "sports": ["basketball"],
+    "football": ["football"],
 }
-CATEGORY_LABELS = {"esports": "🎮 Киберспорт", "tennis": "🎾 Теннис", "sports": "🏀 Баскетбол"}
+CATEGORY_LABELS = {
+    "esports": "🎮 Киберспорт",
+    "tennis": "🎾 Теннис",
+    "sports": "🏀 Баскетбол",
+    "football": "⚽ Футбол",
+}
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_SEARCH = "nav:search"

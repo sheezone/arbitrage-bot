@@ -25,7 +25,7 @@ class Config:
     default_min_profit_pct: float
     db_path: str
     games: list[str] = field(
-        default_factory=lambda: ["cs2", "dota2", "lol", "valorant", "tennis", "basketball"]
+        default_factory=lambda: ["cs2", "dota2", "lol", "valorant", "tennis", "basketball", "football"]
     )
 
 
