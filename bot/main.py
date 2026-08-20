@@ -47,6 +47,8 @@ async def main() -> None:
     ]
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
 
+    me = await bot.get_me()
+
     monitor_task = asyncio.create_task(
         run_monitor_loop(
             sources=sources,
@@ -58,6 +60,9 @@ async def main() -> None:
             state=state,
             surebet_finder=surebet_finder,
             admin_chat_ids=config.admin_chat_ids,
+            showcase_chat_id=config.showcase_chat_id,
+            showcase_interval_seconds=config.showcase_interval_seconds,
+            bot_username=me.username or "",
         )
     )
 

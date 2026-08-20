@@ -19,6 +19,8 @@ class Config:
     surebet_api_token: str
     yookassa_provider_token: str
     admin_chat_ids: frozenset[int]
+    showcase_chat_id: int | None
+    showcase_interval_seconds: int
     poll_interval_seconds: int
     default_min_profit_pct: float
     db_path: str
@@ -42,6 +44,10 @@ def load_config() -> Config:
         admin_chat_ids=frozenset(
             int(x) for x in os.environ.get("ADMIN_CHAT_IDS", "").split(",") if x.strip()
         ),
+        showcase_chat_id=(
+            int(os.environ["SHOWCASE_CHAT_ID"]) if os.environ.get("SHOWCASE_CHAT_ID", "").strip() else None
+        ),
+        showcase_interval_seconds=int(os.environ.get("SHOWCASE_INTERVAL_SECONDS", "600")),
         poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "150")),
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),
         db_path=os.environ.get("DB_PATH", "arbitrage_bot.sqlite3"),

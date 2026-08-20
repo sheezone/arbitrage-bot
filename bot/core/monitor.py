@@ -36,6 +36,18 @@ def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult) -
     return "\n".join(lines)
 
 
+def _format_showcase_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str) -> str:
+    lines = [
+        f"\U0001F4B0 Вилка ({game.upper()}): {team_a} vs {team_b}",
+        f"Прибыль: {arb.profit_pct:.2f}%",
+        "",
+        "Букмекеры и коэффициенты — в боте по подписке.",
+    ]
+    if bot_username:
+        lines.append(f"https://t.me/{bot_username}")
+    return "\n".join(lines)
+
+
 # Consecutive empty (or failed) fetches from one source before we log a "probably broken"
 # warning -- one bad cycle can just be a transient network hiccup, several in a row for a
 # scraped, undocumented endpoint (Fonbet/PARI) most likely means the site changed shape.
@@ -125,6 +137,22 @@ async def _notify_group(
     repo.mark_opportunity_seen(match_id, bh)
 
 
+async def _notify_showcase(
+    found: list[MatchSnapshot],
+    bot: Bot,
+    showcase_chat_id: int,
+    bot_username: str,
+) -> None:
+    if not found:
+        return
+    best = max(found, key=lambda m: m.arb.profit_pct)
+    message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username)
+    try:
+        await bot.send_message(showcase_chat_id, message)
+    except Exception:
+        logger.exception("Failed to post showcase message to chat_id=%s", showcase_chat_id)
+
+
 async def run_monitor_loop(
     sources: list[OddsProvider],
     repo: Repository,
@@ -135,8 +163,12 @@ async def run_monitor_loop(
     state: LatestState,
     surebet_finder: SurebetFinder | None = None,
     admin_chat_ids: frozenset[int] = frozenset(),
+    showcase_chat_id: int | None = None,
+    showcase_interval_seconds: int = 600,
+    bot_username: str = "",
 ) -> None:
     empty_streaks: dict[str, int] = {}
+    last_showcase_post = 0.0
     while True:
         all_quotes = await _fetch_all_quotes(sources, games, empty_streaks)
         groups = group_quotes(all_quotes)
@@ -171,6 +203,10 @@ async def run_monitor_loop(
                     await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids)
                 except Exception:
                     logger.exception("Failed to notify SureBet match")
+
+        if showcase_chat_id is not None and found and time.time() - last_showcase_post >= showcase_interval_seconds:
+            await _notify_showcase(found, bot, showcase_chat_id, bot_username)
+            last_showcase_post = time.time()
 
         state.matches = found
         state.updated_at = time.time()
