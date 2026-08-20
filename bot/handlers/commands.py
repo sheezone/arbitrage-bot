@@ -5,6 +5,7 @@ answers (bankroll/threshold amounts) get deleted the instant they're read so the
 stays down to one live message."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -308,8 +309,11 @@ def register_handlers(
 
         # Attach the persistent bottom-of-chat menu button. Telegram keeps a reply
         # keyboard visible independent of the message that carried it, so this can be
-        # a throwaway message deleted right after -- the keyboard itself stays.
+        # a throwaway message deleted right after -- but deleting it *immediately*
+        # races the client's keyboard-update rendering on some clients (confirmed live:
+        # the new keyboard silently failed to appear), hence the short delay.
         cleanup = await message.answer("⏳", reply_markup=MAIN_MENU_KEYBOARD)
+        await asyncio.sleep(0.5)
         try:
             await cleanup.delete()
         except Exception:
