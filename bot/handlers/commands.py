@@ -62,8 +62,22 @@ CATEGORY_LABELS = {
 }
 
 MENU_BUTTON_TEXT = "☰ Меню"
+SEARCH_BUTTON_TEXT = "🔍 Искать сейчас"
+BANKROLL_BUTTON_TEXT = "💰 Банкролл"
+THRESHOLD_BUTTON_TEXT = "📊 Порог прибыли"
+GAMES_BUTTON_TEXT = "🕹️ Игры"
+SUBSCRIPTION_BUTTON_TEXT = "💳 Подписка"
+HELP_BUTTON_TEXT = "ℹ️ Помощь"
+
 MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text=MENU_BUTTON_TEXT)]], resize_keyboard=True, is_persistent=True
+    keyboard=[
+        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
+        [KeyboardButton(text=BANKROLL_BUTTON_TEXT), KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
+        [KeyboardButton(text=GAMES_BUTTON_TEXT), KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT)],
+        [KeyboardButton(text=HELP_BUTTON_TEXT)],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
 )
 
 NAV_DASHBOARD = "nav:dashboard"
@@ -329,14 +343,65 @@ def register_handlers(
         )
         repo.set_menu_message_id(message.chat.id, sent.message_id)
 
-    @router.message(F.text == MENU_BUTTON_TEXT)
-    async def on_menu_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        await state.clear()
-        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
+    async def _dismiss(message: Message) -> None:
         try:
             await message.delete()
         except Exception:
             pass
+
+    @router.message(F.text == MENU_BUTTON_TEXT)
+    async def on_menu_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
+        await _dismiss(message)
+
+    @router.message(F.text == SEARCH_BUTTON_TEXT)
+    async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _search_view(user, latest_state)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.message(F.text == GAMES_BUTTON_TEXT)
+    async def on_games_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _games_view(user)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.message(F.text == SUBSCRIPTION_BUTTON_TEXT)
+    async def on_subscription_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _subscription_view(user, bool(yookassa_provider_token), admin_chat_ids)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.message(F.text == HELP_BUTTON_TEXT)
+    async def on_help_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        text, keyboard = _help_view()
+        user = repo.get_user(message.chat.id)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.message(F.text == BANKROLL_BUTTON_TEXT)
+    async def on_bankroll_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        user = repo.get_user(message.chat.id)
+        await state.set_state(Settings.waiting_bankroll)
+        text, keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100")
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.message(F.text == THRESHOLD_BUTTON_TEXT)
+    async def on_threshold_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        user = repo.get_user(message.chat.id)
+        await state.set_state(Settings.waiting_threshold)
+        text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
 
     @router.callback_query(F.data == NAV_DASHBOARD)
     async def on_nav_dashboard(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
