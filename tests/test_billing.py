@@ -4,7 +4,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from bot.core.billing import PLANS, TRIAL_DAYS, days_left, has_access, is_admin, on_trial
+from bot.core.billing import (
+    PLANS,
+    TRIAL_DAYS,
+    days_left,
+    has_access,
+    is_admin,
+    on_trial,
+    referral_commission_rub,
+    referral_discount,
+)
 from bot.db.repository import UserSettings
 
 NOW = datetime.now(timezone.utc)
@@ -22,6 +31,8 @@ def _user(trial_started_ago_days: float, subscription_expires_in_days: float | N
         trial_started_at=(NOW - timedelta(days=trial_started_ago_days)).isoformat(),
         subscription_expires_at=sub,
         time_horizons=[3],
+        referred_by=None,
+        referral_balance_rub=0.0,
     )
 
 
@@ -80,3 +91,42 @@ def test_all_plans_have_positive_days_and_prices():
         assert plan.days > 0
         assert plan.price_rub > 0
         assert plan.price_stars > 0
+
+
+def test_referral_discount_reduces_rub_price():
+    discounted, used = referral_discount(999, "RUB", balance_rub=200)
+    assert discounted == 799
+    assert used == 200
+
+
+def test_referral_discount_never_reaches_zero():
+    discounted, used = referral_discount(999, "RUB", balance_rub=5000)
+    assert discounted == 1  # never fully free
+    assert used == 998
+
+
+def test_referral_discount_converts_for_stars_currency():
+    # balance is stored in RUB-equivalent; spending it on a Stars invoice converts back
+    discounted, used = referral_discount(700, "XTR", balance_rub=140)  # 140 RUB == 100 Stars
+    assert discounted == 600
+    assert used == 100
+
+
+def test_referral_discount_caps_at_available_balance():
+    discounted, used = referral_discount(999, "RUB", balance_rub=50)
+    assert discounted == 949
+    assert used == 50
+
+
+def test_referral_discount_with_zero_balance_is_a_no_op():
+    discounted, used = referral_discount(999, "RUB", balance_rub=0)
+    assert discounted == 999
+    assert used == 0
+
+
+def test_referral_commission_for_rub_payment():
+    assert referral_commission_rub(999, "RUB") == 199.8
+
+
+def test_referral_commission_for_stars_payment_converts_to_rub():
+    assert referral_commission_rub(700, "XTR") == 196.0

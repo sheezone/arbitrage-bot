@@ -20,6 +20,8 @@ class UserSettings:
     trial_started_at: str
     subscription_expires_at: str | None
     time_horizons: list[int]
+    referred_by: int | None
+    referral_balance_rub: float
 
 
 class Repository:
@@ -53,11 +55,19 @@ class Repository:
             # Carry over whatever single value existing users already had under the old,
             # single-select column so upgrading to multi-select doesn't reset anyone.
             self._conn.execute("UPDATE users SET time_horizons = CAST(time_horizon_days AS TEXT)")
+        if "referred_by" not in columns:
+            self._conn.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
+        if "referral_balance_rub" not in columns:
+            self._conn.execute("ALTER TABLE users ADD COLUMN referral_balance_rub REAL NOT NULL DEFAULT 0")
 
-    def upsert_user(self, chat_id: int) -> None:
+    def upsert_user(self, chat_id: int, referred_by: int | None = None) -> None:
+        """`referred_by` only ever takes effect for a genuinely new row -- ON CONFLICT DO
+        NOTHING means an existing user's referrer can never be silently overwritten by a
+        later /start with a different referral link."""
         self._conn.execute(
-            "INSERT INTO users (chat_id, trial_started_at) VALUES (?, ?) ON CONFLICT(chat_id) DO NOTHING",
-            (chat_id, datetime.now(timezone.utc).isoformat()),
+            "INSERT INTO users (chat_id, trial_started_at, referred_by) VALUES (?, ?, ?) "
+            "ON CONFLICT(chat_id) DO NOTHING",
+            (chat_id, datetime.now(timezone.utc).isoformat(), referred_by),
         )
         self._conn.commit()
 
@@ -114,6 +124,24 @@ class Repository:
         )
         self._conn.commit()
 
+    def credit_referral_balance(self, chat_id: int, amount_rub: float) -> None:
+        self._conn.execute(
+            "UPDATE users SET referral_balance_rub = referral_balance_rub + ? WHERE chat_id = ?",
+            (amount_rub, chat_id),
+        )
+        self._conn.commit()
+
+    def consume_referral_balance(self, chat_id: int, amount_rub: float) -> None:
+        self._conn.execute(
+            "UPDATE users SET referral_balance_rub = MAX(0, referral_balance_rub - ?) WHERE chat_id = ?",
+            (amount_rub, chat_id),
+        )
+        self._conn.commit()
+
+    def count_referrals(self, chat_id: int) -> int:
+        row = self._conn.execute("SELECT COUNT(*) AS c FROM users WHERE referred_by = ?", (chat_id,)).fetchone()
+        return row["c"]
+
     def set_menu_message_id(self, chat_id: int, message_id: int | None) -> None:
         self._conn.execute(
             "UPDATE users SET menu_message_id = ? WHERE chat_id = ?", (message_id, chat_id)
@@ -160,6 +188,8 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         trial_started_at=row["trial_started_at"],
         subscription_expires_at=row["subscription_expires_at"],
         time_horizons=[int(d) for d in row["time_horizons"].split(",")],
+        referred_by=row["referred_by"],
+        referral_balance_rub=row["referral_balance_rub"],
     )
 
 

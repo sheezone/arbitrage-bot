@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS users (
     trial_started_at TEXT,
     subscription_expires_at TEXT,
     time_horizon_days INTEGER NOT NULL DEFAULT 3,
-    time_horizons TEXT NOT NULL DEFAULT '3'
+    time_horizons TEXT NOT NULL DEFAULT '3',
+    referred_by INTEGER,
+    referral_balance_rub REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS seen_opportunities (

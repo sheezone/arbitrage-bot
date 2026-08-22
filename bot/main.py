@@ -52,14 +52,6 @@ async def main() -> None:
     bot = Bot(token=config.bot_token)
     dp = Dispatcher()
     state = LatestState()
-    dp.include_router(
-        register_handlers(
-            repo,
-            state,
-            yookassa_provider_token=config.yookassa_provider_token,
-            admin_chat_ids=config.admin_chat_ids,
-        )
-    )
 
     sources = [
         OddsPapiProvider(api_key=config.odds_api_key, base_url=config.odds_api_base_url),
@@ -78,6 +70,16 @@ async def main() -> None:
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
 
     me = await _get_me_with_retries(bot)
+
+    dp.include_router(
+        register_handlers(
+            repo,
+            state,
+            yookassa_provider_token=config.yookassa_provider_token,
+            admin_chat_ids=config.admin_chat_ids,
+            bot_username=me.username or "",
+        )
+    )
 
     monitor_task = asyncio.create_task(
         run_monitor_loop(

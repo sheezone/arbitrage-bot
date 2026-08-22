@@ -32,6 +32,36 @@ PLANS: list[Plan] = [
 
 PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in PLANS}
 
+# Referral program: 1 tier only (no sub-referrals), credited as a discount balance the
+# referrer can spend on their own future subscription purchases -- not a cash payout,
+# since there's no integration here for sending real money out. STARS_TO_RUB_RATE matches
+# the same rough peg used for PLANS above, needed to compare/convert between the two
+# currencies a payment (and therefore a commission) can arrive in.
+REFERRAL_COMMISSION_PCT = 0.20
+STARS_TO_RUB_RATE = 1.4
+
+
+def to_rub_equivalent(amount: float, currency: str) -> float:
+    return amount if currency == "RUB" else amount * STARS_TO_RUB_RATE
+
+
+def from_rub_equivalent(amount_rub: float, currency: str) -> float:
+    return amount_rub if currency == "RUB" else amount_rub / STARS_TO_RUB_RATE
+
+
+def referral_discount(original_amount: float, currency: str, balance_rub: float) -> tuple[float, float]:
+    """(discounted_amount, discount_used_in_that_currency). Never discounts the full way
+    to zero -- a real invoice needs a positive amount -- and never uses more balance than
+    available."""
+    available = from_rub_equivalent(max(0.0, balance_rub), currency)
+    discount = max(0.0, min(available, original_amount - 1))
+    return original_amount - discount, discount
+
+
+def referral_commission_rub(payment_amount: float, currency: str) -> float:
+    """Commission credited to the referrer, in RUB-equivalent, for one payment."""
+    return REFERRAL_COMMISSION_PCT * to_rub_equivalent(payment_amount, currency)
+
 
 def _trial_end(user: UserSettings) -> datetime:
     return datetime.fromisoformat(user.trial_started_at) + timedelta(days=TRIAL_DAYS)

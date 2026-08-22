@@ -76,14 +76,13 @@ PROFILE_BUTTON_TEXT = "👤 Мой профиль"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
 
 # The dashboard message itself carries no inline keyboard (see _dashboard_view) -- this
-# compact 2x2 grid is the only bottom-of-chat surface. What to search for (bankroll,
+# compact row is the only bottom-of-chat surface. What to search for (bankroll,
 # threshold, games, time horizon) lives one level down inside "🔍 Поиск вилок" itself
 # (see _search_view), right next to the results it controls; account-level things
-# (pause, subscription) live inside "👤 Мой профиль" (see _profile_view).
+# (pause, subscription, help) live inside "👤 Мой профиль" (see _profile_view).
 MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT)],
-        [KeyboardButton(text=HELP_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
+        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -101,6 +100,8 @@ NAV_GAMES = "nav:games"
 NAV_HORIZON = "nav:horizon"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
 NAV_SUBSCRIPTION = "nav:subscription"
+NAV_HELP = "nav:help"
+NAV_REFERRAL = "nav:referral"
 
 View = tuple[str, InlineKeyboardMarkup | None]
 
@@ -167,7 +168,27 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
     rows = [
         [_btn(pause_label, NAV_TOGGLE_ACTIVE)],
         [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
+        [_btn("🤝 Партнёрская программа", NAV_REFERRAL)],
+        [_btn("ℹ️ Помощь", NAV_HELP)],
         [_btn("◀️ Назад", NAV_DASHBOARD)],
+    ]
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _referral_view(user: UserSettings, repo: Repository, bot_username: str) -> View:
+    referrals = repo.count_referrals(user.chat_id)
+    link = f"https://t.me/{bot_username}?start={user.chat_id}" if bot_username else "—"
+    text = (
+        "🤝 <b>ПАРТНЁРСКАЯ ПРОГРАММА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Приглашайте друзей — получайте {billing.REFERRAL_COMMISSION_PCT:.0%} с каждой их "
+        "оплаты подписки в виде скидки на свою следующую покупку (не вывод деньгами).\n\n"
+        f"👥 Приглашено: <b>{referrals}</b>\n"
+        f"💰 Баланс скидки: <b>{user.referral_balance_rub:.2f}₽</b>\n\n"
+        f"🔗 Ваша ссылка:\n{link}"
+    )
+    rows = [
+        [_btn("🔄 Обновить", NAV_REFERRAL)],
+        [_btn("◀️ Назад", NAV_PROFILE)],
     ]
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -200,7 +221,9 @@ def _help_view() -> View:
         "проскальзывание коэффициента выше)\n"
         "🕹️ Игры — какие виды спорта отслеживать\n"
         "📅 Период — показывать вилки только на матчи в течение 1 дня / 3 дней / месяца\n\n"
-        "<b>Внутри «👤 Мой профиль»:</b> пауза уведомлений и подписка.\n\n"
+        "<b>Внутри «👤 Мой профиль»:</b> пауза уведомлений, подписка и "
+        f"партнёрская программа ({billing.REFERRAL_COMMISSION_PCT:.0%} с оплат "
+        "приглашённых — в виде скидки на свою подписку).\n\n"
         "Уведомления приходят автоматически, как только находится "
         "вилка выше вашего порога. Кнопка «🔍 Поиск вилок» мгновенно "
         "показывает последний найденный результат без нового опроса "
@@ -358,12 +381,24 @@ def register_handlers(
     latest_state: LatestState,
     yookassa_provider_token: str = "",
     admin_chat_ids: frozenset[int] = frozenset(),
+    bot_username: str = "",
 ) -> Router:
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         is_new_user = repo.get_user(message.chat.id) is None
-        repo.upsert_user(message.chat.id)
+
+        referred_by = None
+        if is_new_user:
+            # Deep-link referral payload: t.me/<bot>?start=<referrer_chat_id>. Self-
+            # referral and a payload pointing at a chat_id that isn't a real user are
+            # both silently ignored rather than guessed at.
+            parts = (message.text or "").split(maxsplit=1)
+            if len(parts) == 2 and parts[1].strip().lstrip("-").isdigit():
+                candidate = int(parts[1].strip())
+                if candidate != message.chat.id and repo.get_user(candidate) is not None:
+                    referred_by = candidate
+        repo.upsert_user(message.chat.id, referred_by=referred_by)
         user = repo.get_user(message.chat.id)
 
         # Re-attach the persistent bottom menu on every /start, not just for new users --
@@ -494,12 +529,18 @@ def register_handlers(
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
-    @router.message(F.text == HELP_BUTTON_TEXT)
-    async def on_help_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        await state.clear()
+    @router.callback_query(F.data == NAV_REFERRAL)
+    async def on_nav_referral(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _referral_view(user, repo, bot_username)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data == NAV_HELP)
+    async def on_nav_help(callback: CallbackQuery, bot: Bot) -> None:
         text, keyboard = _help_view()
-        user = repo.get_user(message.chat.id)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
         await _dismiss(message)
 
     @router.callback_query(F.data == NAV_BANKROLL)
@@ -539,17 +580,24 @@ def register_handlers(
             return
 
         if method == "stars":
-            currency, provider_token, amount = "XTR", "", plan.price_stars
+            currency, provider_token, original_amount = "XTR", "", float(plan.price_stars)
         else:
             if not yookassa_provider_token:
                 await callback.answer("Оплата картой пока не подключена", show_alert=True)
                 return
-            currency, provider_token, amount = "RUB", yookassa_provider_token, plan.price_rub * 100
+            currency, provider_token, original_amount = "RUB", yookassa_provider_token, float(plan.price_rub)
+
+        user = repo.get_user(callback.message.chat.id)
+        discounted, discount_used = billing.referral_discount(original_amount, currency, user.referral_balance_rub)
+        amount = round(discounted) if currency == "XTR" else round(discounted * 100)
+        description = "Доступ к уведомлениям о вилках Арбитражного бота"
+        if discount_used > 0:
+            description += f" (скидка за рефералов: -{discount_used:.0f})"
 
         await bot.send_invoice(
             chat_id=callback.message.chat.id,
             title=f"Подписка на {plan.label}",
-            description="Доступ к уведомлениям о вилках Арбитражного бота",
+            description=description,
             payload=plan.id,
             provider_token=provider_token,
             currency=currency,
@@ -568,11 +616,25 @@ def register_handlers(
         if plan is None:
             return
         provider = "stars" if payment.currency == "XTR" else "yookassa"
-        amount = float(payment.total_amount) if provider == "stars" else payment.total_amount / 100
+        charged = float(payment.total_amount) if provider == "stars" else payment.total_amount / 100
         repo.extend_subscription(message.chat.id, plan.days)
         repo.record_payment(
-            message.chat.id, plan.id, provider, amount, payment.currency, payment.telegram_payment_charge_id
+            message.chat.id, plan.id, provider, charged, payment.currency, payment.telegram_payment_charge_id
         )
+
+        # Referral bookkeeping: the discount this buyer just spent comes out of their own
+        # balance; a fresh commission on the amount they actually paid goes to whoever
+        # referred them (if anyone did).
+        original = float(plan.price_stars) if provider == "stars" else float(plan.price_rub)
+        discount_used = max(0.0, original - charged)
+        if discount_used > 0:
+            repo.consume_referral_balance(message.chat.id, billing.to_rub_equivalent(discount_used, payment.currency))
+
+        buyer = repo.get_user(message.chat.id)
+        if buyer.referred_by is not None:
+            commission_rub = billing.referral_commission_rub(charged, payment.currency)
+            repo.credit_referral_balance(buyer.referred_by, commission_rub)
+
         await message.answer(f"✅ Подписка продлена на {plan.label}. Спасибо!")
         await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
