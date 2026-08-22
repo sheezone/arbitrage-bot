@@ -20,10 +20,14 @@ at <=1% margin and is rate-limited to roughly one request/minute, so it's cached
 owner ever buys real API access (100 EUR/bookmaker/month via surebet.com), point
 SUREBET_API_TOKEN at the paid token in .env -- nothing else here needs to change.
 
-Bookmaker list is deliberately limited to ones this bot cannot reach directly itself
-(Melbet/Winline/Zenit/Betcity/BetBoom are all behind Cloudflare/Qrator/WebSocket -- see
-bot/providers/baltbet.py's module docstring for the investigation), not Fonbet/PARI/
-Marathon/Baltbet, which are already scraped directly and would just be redundant here.
+Bookmaker list is deliberately limited to ones this bot cannot reach directly itself,
+not Fonbet/PARI/Marathon/Baltbet/Melbet/Zenit, which are already scraped directly (see
+their own modules) and would just be redundant here. Winline/Betcity/BetBoom are still
+behind Cloudflare/Qrator/WebSocket with no equivalent shortcut found yet -- see
+bot/providers/baltbet.py's module docstring for that investigation. Melbet and Zenit
+were in this list too until 2026-08-21/22, when both turned out to be directly reachable
+after all (a real browser for Melbet's encrypted API, a plain HTTP request for Zenit's
+unencrypted one) -- removed here to avoid fetching the same odds twice.
 """
 from __future__ import annotations
 
@@ -52,7 +56,7 @@ GAME_TO_SPORT_ID = {
 }
 SPORT_ID_TO_GAME = {v: k for k, v in GAME_TO_SPORT_ID.items()}
 
-BOOKMAKERS = ["melbet", "winline", "zenit", "betcity", "bingoboom"]
+BOOKMAKERS = ["winline", "betcity", "bingoboom"]
 
 # Football and hockey (added 2026-08-20) are the sports here whose match-winner market has
 # a real third outcome (both allow a draw in regulation time). Checked live: this API's own

@@ -19,6 +19,7 @@ from bot.providers.oddspapi import OddsPapiProvider
 from bot.providers.pari import PariProvider
 from bot.providers.surebet import SurebetFinder
 from bot.providers.the_odds_api import TheOddsApiProvider
+from bot.providers.zenit import ZenitProvider
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -45,6 +46,7 @@ async def main() -> None:
         MarathonProvider(),
         BaltbetProvider(),
         TheOddsApiProvider(api_key=config.the_odds_api_key),
+        ZenitProvider(),
     ]
     # Opt-in, heavier than everything else here (drives a real headless Chromium) --
     # see bot/providers/melbet.py's module docstring. Off by default; ENABLE_MELBET=true
