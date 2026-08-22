@@ -24,6 +24,7 @@ class Config:
     poll_interval_seconds: int
     default_min_profit_pct: float
     db_path: str
+    enable_melbet: bool = False
     games: list[str] = field(
         default_factory=lambda: ["cs2", "dota2", "lol", "valorant", "tennis", "basketball", "football", "hockey"]
     )
@@ -51,4 +52,5 @@ def load_config() -> Config:
         poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "150")),
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),
         db_path=os.environ.get("DB_PATH", "arbitrage_bot.sqlite3"),
+        enable_melbet=os.environ.get("ENABLE_MELBET", "").strip().lower() in ("1", "true", "yes"),
     )

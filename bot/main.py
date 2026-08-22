@@ -14,6 +14,7 @@ from bot.handlers.commands import register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.fonbet import FonbetProvider
 from bot.providers.marathon import MarathonProvider
+from bot.providers.melbet import MelbetProvider
 from bot.providers.oddspapi import OddsPapiProvider
 from bot.providers.pari import PariProvider
 from bot.providers.surebet import SurebetFinder
@@ -45,6 +46,11 @@ async def main() -> None:
         BaltbetProvider(),
         TheOddsApiProvider(api_key=config.the_odds_api_key),
     ]
+    # Opt-in, heavier than everything else here (drives a real headless Chromium) --
+    # see bot/providers/melbet.py's module docstring. Off by default; ENABLE_MELBET=true
+    # to turn it on once its memory footprint has been watched on the production VPS.
+    if config.enable_melbet:
+        sources.append(MelbetProvider())
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
 
     me = await bot.get_me()
