@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import BotCommand
 
 from bot.config import load_config
@@ -22,6 +23,27 @@ from bot.providers.the_odds_api import TheOddsApiProvider
 from bot.providers.zenit import ZenitProvider
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+STARTUP_RETRY_ATTEMPTS = 5
+STARTUP_RETRY_DELAY_SECONDS = 5
+
+
+async def _get_me_with_retries(bot: Bot):
+    """A single flaky network timeout during startup used to crash the whole process --
+    confirmed live on the production VPS, systemd was restarting it every ~70 seconds on
+    repeat TelegramNetworkError from this exact call. Retrying a handful of times here is
+    far cheaper than a full process restart (which also drops the monitor loop and any
+    in-flight browser/HTTP sessions)."""
+    last_error: Exception | None = None
+    for attempt in range(1, STARTUP_RETRY_ATTEMPTS + 1):
+        try:
+            return await bot.get_me()
+        except TelegramNetworkError as e:
+            last_error = e
+            logger.warning("bot.get_me() failed (attempt %d/%d): %s", attempt, STARTUP_RETRY_ATTEMPTS, e)
+            await asyncio.sleep(STARTUP_RETRY_DELAY_SECONDS)
+    raise last_error
 
 
 async def main() -> None:
@@ -55,7 +77,7 @@ async def main() -> None:
         sources.append(MelbetProvider())
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
 
-    me = await bot.get_me()
+    me = await _get_me_with_retries(bot)
 
     monitor_task = asyncio.create_task(
         run_monitor_loop(
@@ -74,7 +96,10 @@ async def main() -> None:
         )
     )
 
-    await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
+    try:
+        await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
+    except TelegramNetworkError:
+        logger.warning("set_my_commands failed on startup -- non-critical, continuing without it")
 
     try:
         await dp.start_polling(bot)
