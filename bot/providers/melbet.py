@@ -84,6 +84,21 @@ class MelbetProvider(OddsProvider):
         await self._page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
         return self._page
 
+    async def _reset(self) -> None:
+        """Confirmed live: discarding just `self._page` on a failed evaluate() and
+        leaving `self._browser`/`self._playwright` in place meant the next cycle's
+        `_ensure_page()` launched a whole SECOND browser on top of the first (only
+        `self._page` was checked) -- a full Chromium process leaked every failed cycle,
+        1GB+ and 70+ processes within minutes on the production VPS. Close everything
+        before dropping the references so the next cycle starts genuinely clean."""
+        try:
+            await self.close()
+        except Exception:
+            logger.exception("Melbet: error while closing browser during reset")
+        self._page = None
+        self._browser = None
+        self._playwright = None
+
     async def fetch_quotes(self, games: list[str]) -> list[SourceQuote]:
         wanted = [g for g in games if g in SPORT_IDS]
         if not wanted:
@@ -93,6 +108,7 @@ class MelbetProvider(OddsProvider):
             page = await self._ensure_page()
         except Exception:
             logger.exception("Melbet: failed to launch/attach browser page")
+            await self._reset()
             return []
 
         quotes: list[SourceQuote] = []
@@ -102,9 +118,9 @@ class MelbetProvider(OddsProvider):
                     _FETCH_JS, [SPORT_IDS[game], REQUESTED_STAKE_TYPES, LANG_ID, PARTNER_ID]
                 )
             except Exception:
-                logger.exception("Melbet: fetch failed for %s -- resetting page for next cycle", game)
-                self._page = None  # force a fresh page/navigation next cycle
-                continue
+                logger.exception("Melbet: fetch failed for %s -- resetting browser for next cycle", game)
+                await self._reset()
+                break  # the page/browser is gone -- no point trying the remaining games this cycle
             quotes.extend(parse_events(game, raw_events or []))
         return quotes
 
