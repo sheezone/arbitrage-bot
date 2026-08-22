@@ -34,6 +34,7 @@ from aiogram.types import (
 
 from bot.core import billing
 from bot.core.arbitrage import calc_stakes
+from bot.core.monitor import format_match_start
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
@@ -236,6 +237,9 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
         for m in matches:
             stakes = calc_stakes(user.bankroll, m.arb.best_odds)
             lines.append(f"<b>{GAME_LABELS.get(m.game, m.game.upper())}</b>: {m.team_a} vs {m.team_b}")
+            match_time = format_match_start(m.start_time_utc)
+            if match_time:
+                lines.append(f"🕒 {match_time}")
             lines.append(f"Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
             for outcome in m.arb.best_odds:
                 lines.append(f"  {outcome.outcome_name}: {outcome.odds} @ {outcome.bookmaker}")

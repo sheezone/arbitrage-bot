@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
 
@@ -31,32 +31,59 @@ GAME_EMOJI = {
     "hockey": "🏒",
 }
 
+MOSCOW_TZ = timezone(timedelta(hours=3))
+_MONTHS_RU = [
+    "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
+]
+
+
+def format_match_start(start_time_utc: str) -> str:
+    """Match kickoff time in Moscow time, e.g. "21 авг, 18:00 МСК". Returns "" when
+    unavailable -- Marathon never supplies a full timestamp (see its module docstring),
+    and any source can hand back an unparseable/empty value."""
+    if not start_time_utc:
+        return ""
+    try:
+        dt = datetime.fromisoformat(start_time_utc.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    local = dt.astimezone(MOSCOW_TZ)
+    return f"{local.day} {_MONTHS_RU[local.month - 1]}, {local.strftime('%H:%M')} МСК"
+
 
 def _bookmakers_hash(best_odds: list[OutcomeOdds]) -> str:
     parts = sorted(f"{o.outcome_name}:{o.bookmaker}:{o.odds}" for o in best_odds)
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
-def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult) -> str:
+def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "") -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
         f"\U0001F4B0 {emoji} Найдена вилка ({game.upper()}): {team_a} vs {team_b}",
-        f"Прибыль: {arb.profit_pct:.2f}%",
-        "",
     ]
+    match_time = format_match_start(start_time_utc)
+    if match_time:
+        lines.append(f"🕒 {match_time}")
+    lines.append(f"Прибыль: {arb.profit_pct:.2f}%")
+    lines.append("")
     for outcome in arb.best_odds:
         lines.append(f"  {outcome.outcome_name}: {outcome.odds} @ {outcome.bookmaker}")
     return "\n".join(lines)
 
 
-def _format_showcase_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str) -> str:
+def _format_showcase_message(
+    game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str, start_time_utc: str = ""
+) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
         f"\U0001F4B0 {emoji} Вилка ({game.upper()}): {team_a} vs {team_b}",
-        f"Прибыль: {arb.profit_pct:.2f}%",
-        "",
-        "Букмекеры и коэффициенты — в боте по подписке.",
     ]
+    match_time = format_match_start(start_time_utc)
+    if match_time:
+        lines.append(f"🕒 {match_time}")
+    lines.append(f"Прибыль: {arb.profit_pct:.2f}%")
+    lines.append("")
+    lines.append("Букмекеры и коэффициенты — в боте по подписке.")
     if bot_username:
         lines.append(f"https://t.me/{bot_username}")
     return "\n".join(lines)
@@ -144,7 +171,7 @@ async def _notify_group(
             continue
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
-        message = _format_message(game, team_a, team_b, arb)
+        message = _format_message(game, team_a, team_b, arb, start_time_utc)
         message += f"\n\nСтавки при банкролле {user.bankroll:.2f}:\n"
         for outcome_name, stake in stakes.items():
             message += f"  {outcome_name}: {stake:.2f}\n"
@@ -166,7 +193,7 @@ async def _notify_showcase(
     if not found:
         return
     best = max(found, key=lambda m: m.arb.profit_pct)
-    message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username)
+    message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
     try:
         await bot.send_message(showcase_chat_id, message)
     except Exception:
@@ -202,7 +229,7 @@ async def run_monitor_loop(
                 continue
 
             for game, team_a, team_b, market, arb in results:
-                found.append(MatchSnapshot(game, team_a, team_b, arb))
+                found.append(MatchSnapshot(game, team_a, team_b, arb, group[0].start_time_utc))
                 try:
                     await _notify_group(
                         game, team_a, team_b, arb, group[0].start_time_utc, repo, bot, admin_chat_ids, market
@@ -218,7 +245,7 @@ async def run_monitor_loop(
                 surebet_matches = []
 
             for game, team_a, team_b, start_time_utc, arb in surebet_matches:
-                found.append(MatchSnapshot(game, team_a, team_b, arb))
+                found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc))
                 try:
                     await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids)
                 except Exception:
