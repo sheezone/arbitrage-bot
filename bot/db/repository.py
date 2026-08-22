@@ -19,7 +19,7 @@ class UserSettings:
     menu_message_id: int | None
     trial_started_at: str
     subscription_expires_at: str | None
-    time_horizon_days: int
+    time_horizons: list[int]
 
 
 class Repository:
@@ -48,6 +48,11 @@ class Repository:
             self._conn.execute("ALTER TABLE users ADD COLUMN subscription_expires_at TEXT")
         if "time_horizon_days" not in columns:
             self._conn.execute("ALTER TABLE users ADD COLUMN time_horizon_days INTEGER NOT NULL DEFAULT 3")
+        if "time_horizons" not in columns:
+            self._conn.execute("ALTER TABLE users ADD COLUMN time_horizons TEXT NOT NULL DEFAULT '3'")
+            # Carry over whatever single value existing users already had under the old,
+            # single-select column so upgrading to multi-select doesn't reset anyone.
+            self._conn.execute("UPDATE users SET time_horizons = CAST(time_horizon_days AS TEXT)")
 
     def upsert_user(self, chat_id: int) -> None:
         self._conn.execute(
@@ -102,9 +107,10 @@ class Repository:
         )
         self._conn.commit()
 
-    def set_time_horizon_days(self, chat_id: int, days: int) -> None:
+    def set_time_horizons(self, chat_id: int, days: list[int]) -> None:
         self._conn.execute(
-            "UPDATE users SET time_horizon_days = ? WHERE chat_id = ?", (days, chat_id)
+            "UPDATE users SET time_horizons = ? WHERE chat_id = ?",
+            (",".join(str(d) for d in days), chat_id),
         )
         self._conn.commit()
 
@@ -153,7 +159,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         menu_message_id=row["menu_message_id"],
         trial_started_at=row["trial_started_at"],
         subscription_expires_at=row["subscription_expires_at"],
-        time_horizon_days=row["time_horizon_days"],
+        time_horizons=[int(d) for d in row["time_horizons"].split(",")],
     )
 
 

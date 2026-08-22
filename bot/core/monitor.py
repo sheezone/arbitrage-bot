@@ -51,16 +51,19 @@ def format_match_start(start_time_utc: str) -> str:
     return f"{local.day} {_MONTHS_RU[local.month - 1]}, {local.strftime('%H:%M')} МСК"
 
 
-def within_time_horizon(start_time_utc: str, horizon_days: int, now: datetime) -> bool:
-    """True if the match starts within `horizon_days` from `now`. Unknown/unparseable
-    start times (Marathon never supplies one) are let through rather than hidden --
-    we can't evaluate what we don't have, so the safer default is to still show it."""
+def within_time_horizon(start_time_utc: str, horizons_days: list[int], now: datetime) -> bool:
+    """True if the match starts within the widest of `horizons_days` from `now` (the user
+    can check up to 2 of the 1/3/30-day options at once -- narrower selections add nothing
+    a wider one doesn't already cover, so only the max matters for filtering). Unknown/
+    unparseable start times (Marathon never supplies one) are let through rather than
+    hidden -- we can't evaluate what we don't have, so the safer default is to still show it."""
     if not start_time_utc:
         return True
     try:
         start = datetime.fromisoformat(start_time_utc.replace("Z", "+00:00"))
     except ValueError:
         return True
+    horizon_days = max(horizons_days) if horizons_days else 0
     return start - now <= timedelta(days=horizon_days)
 
 
@@ -182,7 +185,7 @@ async def _notify_group(
             continue
         if game not in user.watched_games:
             continue
-        if not within_time_horizon(start_time_utc, user.time_horizon_days, now):
+        if not within_time_horizon(start_time_utc, user.time_horizons, now):
             continue
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)

@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     menu_message_id INTEGER,
     trial_started_at TEXT,
     subscription_expires_at TEXT,
-    time_horizon_days INTEGER NOT NULL DEFAULT 3
+    time_horizon_days INTEGER NOT NULL DEFAULT 3,
+    time_horizons TEXT NOT NULL DEFAULT '3'
 );
 
 CREATE TABLE IF NOT EXISTS seen_opportunities (

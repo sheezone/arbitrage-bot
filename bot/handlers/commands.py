@@ -71,24 +71,19 @@ CATEGORY_LABELS = {
 }
 
 MENU_BUTTON_TEXT = "☰ Меню"
-SEARCH_BUTTON_TEXT = "🔍 Искать сейчас"
-BANKROLL_BUTTON_TEXT = "💰 Банкролл"
-THRESHOLD_BUTTON_TEXT = "📊 Порог прибыли"
-GAMES_BUTTON_TEXT = "🕹️ Игры"
-HORIZON_BUTTON_TEXT = "📅 Период"
-PAUSE_BUTTON_TEXT = "⏸️ Пауза / ▶️ Продолжить"
-SUBSCRIPTION_BUTTON_TEXT = "💳 Подписка"
+SEARCH_BUTTON_TEXT = "🔍 Поиск вилок"
+PROFILE_BUTTON_TEXT = "👤 Мой профиль"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
 
-# The dashboard message itself carries no inline keyboard (see _dashboard_view) --
-# every action lives here instead, so this is the only navigation surface for it.
+# The dashboard message itself carries no inline keyboard (see _dashboard_view) -- this
+# compact 2x2 grid is the only bottom-of-chat surface. What to search for (bankroll,
+# threshold, games, time horizon) lives one level down inside "🔍 Поиск вилок" itself
+# (see _search_view), right next to the results it controls; account-level things
+# (pause, subscription) live inside "👤 Мой профиль" (see _profile_view).
 MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
-        [KeyboardButton(text=BANKROLL_BUTTON_TEXT), KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
-        [KeyboardButton(text=GAMES_BUTTON_TEXT), KeyboardButton(text=HORIZON_BUTTON_TEXT)],
-        [KeyboardButton(text=PAUSE_BUTTON_TEXT)],
-        [KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT), KeyboardButton(text=HELP_BUTTON_TEXT)],
+        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT)],
+        [KeyboardButton(text=HELP_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -97,8 +92,15 @@ MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
 TIME_HORIZONS = {1: "1 день", 3: "3 дня", 30: "Месяц"}
 
 NAV_DASHBOARD = "nav:dashboard"
+NAV_PROFILE = "nav:profile"
 NAV_SEARCH = "nav:search"
 NAV_CANCEL = "nav:cancel"
+NAV_BANKROLL = "nav:bankroll"
+NAV_THRESHOLD = "nav:threshold"
+NAV_GAMES = "nav:games"
+NAV_HORIZON = "nav:horizon"
+NAV_TOGGLE_ACTIVE = "nav:toggle_active"
+NAV_SUBSCRIPTION = "nav:subscription"
 
 View = tuple[str, InlineKeyboardMarkup | None]
 
@@ -115,12 +117,11 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
             "━━━━━━━━━━━━━━━━━━━━\n\n"
             "⏳ Пробный период закончился.\n"
             "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках "
-            f"(кнопка «{SUBSCRIPTION_BUTTON_TEXT}» снизу)."
+            f"(кнопка «{PROFILE_BUTTON_TEXT}» снизу → «💳 Подписка»)."
         )
         return text, None
 
     status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
-    games = ", ".join(CATEGORY_LABELS[c] for c, gs in CATEGORIES.items() if set(gs) & set(user.watched_games))
     if billing.is_admin(user, admin_chat_ids):
         access_line = "♾️ Безлимитный доступ"
     else:
@@ -134,19 +135,41 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
     text = (
         "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n\n"
         f"{status}  ·  {access_line}\n\n"
-        f"💰 Банкролл  <b>{user.bankroll:.2f}</b>\n"
-        f"📊 Порог прибыли  <b>{user.min_profit_pct:.2f}%</b>\n"
-        f"📅 Период  <b>{TIME_HORIZONS.get(user.time_horizon_days, f'{user.time_horizon_days} дн.')}</b>\n"
-        f"🕹️ Спорт  {games or '—'}\n\n"
+        f"Настройки — «{PROFILE_BUTTON_TEXT}» снизу\n"
         "⬇️ Управление — кнопками снизу"
     )
     return text, None
 
 
-def _back_keyboard(extra: list[InlineKeyboardButton] | None = None) -> InlineKeyboardMarkup:
+def _back_keyboard(extra: list[InlineKeyboardButton] | None = None, target: str = NAV_PROFILE) -> InlineKeyboardMarkup:
     rows = [extra] if extra else []
-    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
+    rows.append([_btn("◀️ Назад", target)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
+    now = datetime.now(timezone.utc)
+    status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
+    pause_label = "⏸️ Поставить на паузу" if user.is_active else "▶️ Возобновить"
+    if billing.is_admin(user, admin_chat_ids):
+        access_line = "♾️ Безлимитный доступ (админ)"
+    else:
+        left = billing.days_left(user, now)
+        access_line = (
+            f"⏳ Пробный период · осталось {left} дн."
+            if billing.on_trial(user, now)
+            else f"💳 Подписка активна · осталось {left} дн."
+            if left > 0
+            else "Доступ истёк"
+        )
+
+    text = f"👤 <b>МОЙ ПРОФИЛЬ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nСтатус: {status}\n{access_line}"
+    rows = [
+        [_btn(pause_label, NAV_TOGGLE_ACTIVE)],
+        [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
+        [_btn("◀️ Назад", NAV_DASHBOARD)],
+    ]
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _help_view() -> View:
@@ -169,23 +192,23 @@ def _help_view() -> View:
         "<b>7 источников:</b> OddsPapi, Fonbet, PARI, Marathon, Baltbet, "
         "The Odds API, SureBet — чем больше источников, тем больше шанс "
         "найти расхождение в котировках.\n\n"
-        "<b>Настройки на главном экране:</b>\n"
+        "<b>Настройки внутри «🔍 Поиск вилок»:</b>\n"
         "💰 Банкролл — сумма, под которую бот рассчитывает точные ставки "
         "на каждый исход\n"
         "📊 Порог прибыли — минимальный % прибыли, при котором придёт "
         "уведомление (чем ниже, тем чаще уведомления, но и риск на "
         "проскальзывание коэффициента выше)\n"
         "🕹️ Игры — какие виды спорта отслеживать\n"
-        "📅 Период — показывать вилки только на матчи в течение 1 дня / 3 дней / месяца\n"
-        "⏸️/▶️ — временно поставить уведомления на паузу\n\n"
+        "📅 Период — показывать вилки только на матчи в течение 1 дня / 3 дней / месяца\n\n"
+        "<b>Внутри «👤 Мой профиль»:</b> пауза уведомлений и подписка.\n\n"
         "Уведомления приходят автоматически, как только находится "
-        "вилка выше вашего порога. Кнопка «🔍 Искать сейчас» мгновенно "
+        "вилка выше вашего порога. Кнопка «🔍 Поиск вилок» мгновенно "
         "показывает последний найденный результат без нового опроса "
         "источников.\n\n"
         f"Первые {billing.TRIAL_DAYS} дн. бесплатно (пробный период), дальше — "
-        "платная подписка, раздел «💳 Подписка» на главном экране."
+        "платная подписка, раздел «👤 Мой профиль» → «💳 Подписка»."
     )
-    return text, _back_keyboard()
+    return text, _back_keyboard(target=NAV_DASHBOARD)
 
 
 def _games_view(user: UserSettings) -> View:
@@ -194,20 +217,24 @@ def _games_view(user: UserSettings) -> View:
     for category, games in CATEGORIES.items():
         mark = "✅" if selected.issuperset(games) else "⬜"
         rows.append([_btn(f"{mark} {CATEGORY_LABELS[category]}", f"cat_toggle:{category}")])
-    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
+    rows.append([_btn("◀️ Назад", NAV_SEARCH)])
     text = "🕹️ <b>ВЫБОР КАТЕГОРИЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nОтметьте, что отслеживать:"
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+MAX_TIME_HORIZONS_SELECTED = 2
+
+
 def _horizon_view(user: UserSettings) -> View:
+    selected = set(user.time_horizons)
     rows = []
     for days, label in TIME_HORIZONS.items():
-        mark = "✅" if user.time_horizon_days == days else "⬜"
+        mark = "✅" if days in selected else "⬜"
         rows.append([_btn(f"{mark} {label}", f"horizon:{days}")])
-    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
+    rows.append([_btn("◀️ Назад", NAV_SEARCH)])
     text = (
         "📅 <b>ПЕРИОД ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Показывать только вилки на матчи, которые начнутся в течение:"
+        f"Показывать только вилки на матчи, которые начнутся в течение (можно выбрать до {MAX_TIME_HORIZONS_SELECTED}):"
     )
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -227,7 +254,7 @@ def _subscription_view(user: UserSettings, yookassa_enabled: bool, admin_chat_id
         if yookassa_enabled:
             row.append(_btn(f"{plan.label} — {plan.price_rub}₽", f"sub:{plan.id}:rub"))
         rows.append(row)
-    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
+    rows.append([_btn("◀️ Назад", NAV_PROFILE)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -235,13 +262,24 @@ def _input_prompt_view(label: str, example: str, error: str | None = None) -> Vi
     text = f"{label}\nНапример: {example}"
     if error:
         text = f"⚠️ {error}\n\n{text}"
-    return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)])
+    return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
+
+
+def _search_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_btn("🔄 Обновить", NAV_SEARCH)],
+            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
+            [_btn("🕹️ Игры", NAV_GAMES), _btn("📅 Период", NAV_HORIZON)],
+            [_btn("◀️ Назад", NAV_DASHBOARD)],
+        ]
+    )
 
 
 def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     if latest_state.updated_at == 0:
-        text = "🔍 <b>ПОИСК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
-        return text, _back_keyboard([_btn("🔄 Обновить", NAV_SEARCH)])
+        text = "🔍 <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
+        return text, _search_keyboard()
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
     now = datetime.now(timezone.utc)
@@ -250,10 +288,10 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
         for m in latest_state.matches
         if m.game in user.watched_games
         and m.arb.profit_pct >= user.min_profit_pct
-        and within_time_horizon(m.start_time_utc, user.time_horizon_days, now)
+        and within_time_horizon(m.start_time_utc, user.time_horizons, now)
     ]
 
-    lines = ["🔍 <b>ПОИСК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    lines = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
         lines.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at}.")
     else:
@@ -270,7 +308,7 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
             lines.append("  Ставки: " + ", ".join(f"{k}: {v:.2f}" for k, v in stakes.items()))
             lines.append("")
 
-    return "\n".join(lines), _back_keyboard([_btn("🔄 Обновить", NAV_SEARCH)])
+    return "\n".join(lines), _search_keyboard()
 
 
 async def _render(
@@ -389,46 +427,72 @@ def register_handlers(
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
         await _dismiss(message)
 
-    @router.message(F.text == GAMES_BUTTON_TEXT)
-    async def on_games_button(message: Message, state: FSMContext, bot: Bot) -> None:
+    @router.message(F.text == PROFILE_BUTTON_TEXT)
+    async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         user = repo.get_user(message.chat.id)
+        text, keyboard = _profile_view(user, admin_chat_ids)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.callback_query(F.data == NAV_PROFILE)
+    async def on_nav_profile(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _profile_view(user, admin_chat_ids)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data == NAV_GAMES)
+    async def on_nav_games(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
         text, keyboard = _games_view(user)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
 
-    @router.message(F.text == HORIZON_BUTTON_TEXT)
-    async def on_horizon_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        await state.clear()
-        user = repo.get_user(message.chat.id)
-        text, keyboard = _horizon_view(user)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
-
-    @router.callback_query(F.data.startswith("horizon:"))
-    async def on_horizon_toggle(callback: CallbackQuery, bot: Bot) -> None:
-        days = int(callback.data.split(":", 1)[1])
-        repo.set_time_horizon_days(callback.message.chat.id, days)
+    @router.callback_query(F.data == NAV_HORIZON)
+    async def on_nav_horizon(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _horizon_view(user)
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
-    @router.message(F.text == PAUSE_BUTTON_TEXT)
-    async def on_pause_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        await state.clear()
-        user = repo.get_user(message.chat.id)
-        repo.set_active(message.chat.id, not user.is_active)
-        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
-        await _dismiss(message)
+    @router.callback_query(F.data.startswith("horizon:"))
+    async def on_horizon_toggle(callback: CallbackQuery, bot: Bot) -> None:
+        days = int(callback.data.split(":", 1)[1])
+        user = repo.get_user(callback.message.chat.id)
+        selected = set(user.time_horizons)
+        if days in selected:
+            if len(selected) == 1:
+                await callback.answer("Нужно оставить хотя бы один вариант", show_alert=True)
+                return
+            selected.discard(days)
+        else:
+            if len(selected) >= MAX_TIME_HORIZONS_SELECTED:
+                await callback.answer(f"Можно выбрать максимум {MAX_TIME_HORIZONS_SELECTED}", show_alert=True)
+                return
+            selected.add(days)
+        repo.set_time_horizons(callback.message.chat.id, sorted(selected))
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _horizon_view(user)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
 
-    @router.message(F.text == SUBSCRIPTION_BUTTON_TEXT)
-    async def on_subscription_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        await state.clear()
-        user = repo.get_user(message.chat.id)
+    @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
+    async def on_nav_toggle_active(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
+        repo.set_active(callback.message.chat.id, not user.is_active)
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _profile_view(user, admin_chat_ids)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer("Пауза" if not user.is_active else "Возобновлено")
+
+    @router.callback_query(F.data == NAV_SUBSCRIPTION)
+    async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
         text, keyboard = _subscription_view(user, bool(yookassa_provider_token), admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
 
     @router.message(F.text == HELP_BUTTON_TEXT)
     async def on_help_button(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -438,21 +502,19 @@ def register_handlers(
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
         await _dismiss(message)
 
-    @router.message(F.text == BANKROLL_BUTTON_TEXT)
-    async def on_bankroll_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        user = repo.get_user(message.chat.id)
+    @router.callback_query(F.data == NAV_BANKROLL)
+    async def on_nav_bankroll(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_bankroll)
         text, keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100")
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
 
-    @router.message(F.text == THRESHOLD_BUTTON_TEXT)
-    async def on_threshold_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        user = repo.get_user(message.chat.id)
+    @router.callback_query(F.data == NAV_THRESHOLD)
+    async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_threshold)
         text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
 
     @router.callback_query(F.data == NAV_DASHBOARD)
     async def on_nav_dashboard(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -463,7 +525,9 @@ def register_handlers(
     @router.callback_query(F.data == NAV_CANCEL)
     async def on_nav_cancel(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
-        await _render_dashboard(bot, repo, callback.message.chat.id, admin_chat_ids)
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _search_view(user, latest_state)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer("Отменено")
 
     @router.callback_query(F.data.startswith("sub:"))
@@ -560,7 +624,9 @@ def register_handlers(
 
         repo.set_bankroll(message.chat.id, amount)
         await state.clear()
-        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _search_view(user, latest_state)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
 
     @router.message(Settings.waiting_threshold)
     async def on_threshold_value(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -584,6 +650,8 @@ def register_handlers(
 
         repo.set_min_profit_pct(message.chat.id, pct)
         await state.clear()
-        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _search_view(user, latest_state)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
 
     return router
