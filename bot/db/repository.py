@@ -19,6 +19,7 @@ class UserSettings:
     menu_message_id: int | None
     trial_started_at: str
     subscription_expires_at: str | None
+    time_horizon_days: int
 
 
 class Repository:
@@ -45,6 +46,8 @@ class Repository:
             )
         if "subscription_expires_at" not in columns:
             self._conn.execute("ALTER TABLE users ADD COLUMN subscription_expires_at TEXT")
+        if "time_horizon_days" not in columns:
+            self._conn.execute("ALTER TABLE users ADD COLUMN time_horizon_days INTEGER NOT NULL DEFAULT 3")
 
     def upsert_user(self, chat_id: int) -> None:
         self._conn.execute(
@@ -99,6 +102,12 @@ class Repository:
         )
         self._conn.commit()
 
+    def set_time_horizon_days(self, chat_id: int, days: int) -> None:
+        self._conn.execute(
+            "UPDATE users SET time_horizon_days = ? WHERE chat_id = ?", (days, chat_id)
+        )
+        self._conn.commit()
+
     def set_menu_message_id(self, chat_id: int, message_id: int | None) -> None:
         self._conn.execute(
             "UPDATE users SET menu_message_id = ? WHERE chat_id = ?", (message_id, chat_id)
@@ -144,6 +153,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         menu_message_id=row["menu_message_id"],
         trial_started_at=row["trial_started_at"],
         subscription_expires_at=row["subscription_expires_at"],
+        time_horizon_days=row["time_horizon_days"],
     )
 
 

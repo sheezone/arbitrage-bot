@@ -21,6 +21,7 @@ def _user(trial_started_ago_days: float, subscription_expires_in_days: float | N
         menu_message_id=None,
         trial_started_at=(NOW - timedelta(days=trial_started_ago_days)).isoformat(),
         subscription_expires_at=sub,
+        time_horizon_days=3,
     )
 
 

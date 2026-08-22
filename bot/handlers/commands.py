@@ -34,7 +34,7 @@ from aiogram.types import (
 
 from bot.core import billing
 from bot.core.arbitrage import calc_stakes
-from bot.core.monitor import format_match_start
+from bot.core.monitor import format_match_start, within_time_horizon
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
@@ -75,6 +75,7 @@ SEARCH_BUTTON_TEXT = "🔍 Искать сейчас"
 BANKROLL_BUTTON_TEXT = "💰 Банкролл"
 THRESHOLD_BUTTON_TEXT = "📊 Порог прибыли"
 GAMES_BUTTON_TEXT = "🕹️ Игры"
+HORIZON_BUTTON_TEXT = "📅 Период"
 PAUSE_BUTTON_TEXT = "⏸️ Пауза / ▶️ Продолжить"
 SUBSCRIPTION_BUTTON_TEXT = "💳 Подписка"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
@@ -85,12 +86,15 @@ MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
         [KeyboardButton(text=BANKROLL_BUTTON_TEXT), KeyboardButton(text=THRESHOLD_BUTTON_TEXT)],
-        [KeyboardButton(text=GAMES_BUTTON_TEXT), KeyboardButton(text=PAUSE_BUTTON_TEXT)],
+        [KeyboardButton(text=GAMES_BUTTON_TEXT), KeyboardButton(text=HORIZON_BUTTON_TEXT)],
+        [KeyboardButton(text=PAUSE_BUTTON_TEXT)],
         [KeyboardButton(text=SUBSCRIPTION_BUTTON_TEXT), KeyboardButton(text=HELP_BUTTON_TEXT)],
     ],
     resize_keyboard=True,
     is_persistent=True,
 )
+
+TIME_HORIZONS = {1: "1 день", 3: "3 дня", 30: "Месяц"}
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_SEARCH = "nav:search"
@@ -132,6 +136,7 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
         f"{status}  ·  {access_line}\n\n"
         f"💰 Банкролл  <b>{user.bankroll:.2f}</b>\n"
         f"📊 Порог прибыли  <b>{user.min_profit_pct:.2f}%</b>\n"
+        f"📅 Период  <b>{TIME_HORIZONS.get(user.time_horizon_days, f'{user.time_horizon_days} дн.')}</b>\n"
         f"🕹️ Спорт  {games or '—'}\n\n"
         "⬇️ Управление — кнопками снизу"
     )
@@ -171,6 +176,7 @@ def _help_view() -> View:
         "уведомление (чем ниже, тем чаще уведомления, но и риск на "
         "проскальзывание коэффициента выше)\n"
         "🕹️ Игры — какие виды спорта отслеживать\n"
+        "📅 Период — показывать вилки только на матчи в течение 1 дня / 3 дней / месяца\n"
         "⏸️/▶️ — временно поставить уведомления на паузу\n\n"
         "Уведомления приходят автоматически, как только находится "
         "вилка выше вашего порога. Кнопка «🔍 Искать сейчас» мгновенно "
@@ -190,6 +196,19 @@ def _games_view(user: UserSettings) -> View:
         rows.append([_btn(f"{mark} {CATEGORY_LABELS[category]}", f"cat_toggle:{category}")])
     rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
     text = "🕹️ <b>ВЫБОР КАТЕГОРИЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nОтметьте, что отслеживать:"
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _horizon_view(user: UserSettings) -> View:
+    rows = []
+    for days, label in TIME_HORIZONS.items():
+        mark = "✅" if user.time_horizon_days == days else "⬜"
+        rows.append([_btn(f"{mark} {label}", f"horizon:{days}")])
+    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
+    text = (
+        "📅 <b>ПЕРИОД ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Показывать только вилки на матчи, которые начнутся в течение:"
+    )
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -225,8 +244,13 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
         return text, _back_keyboard([_btn("🔄 Обновить", NAV_SEARCH)])
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
+    now = datetime.now(timezone.utc)
     matches = [
-        m for m in latest_state.matches if m.game in user.watched_games and m.arb.profit_pct >= user.min_profit_pct
+        m
+        for m in latest_state.matches
+        if m.game in user.watched_games
+        and m.arb.profit_pct >= user.min_profit_pct
+        and within_time_horizon(m.start_time_utc, user.time_horizon_days, now)
     ]
 
     lines = ["🔍 <b>ПОИСК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
@@ -372,6 +396,23 @@ def register_handlers(
         text, keyboard = _games_view(user)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
         await _dismiss(message)
+
+    @router.message(F.text == HORIZON_BUTTON_TEXT)
+    async def on_horizon_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _horizon_view(user)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _dismiss(message)
+
+    @router.callback_query(F.data.startswith("horizon:"))
+    async def on_horizon_toggle(callback: CallbackQuery, bot: Bot) -> None:
+        days = int(callback.data.split(":", 1)[1])
+        repo.set_time_horizon_days(callback.message.chat.id, days)
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _horizon_view(user)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
 
     @router.message(F.text == PAUSE_BUTTON_TEXT)
     async def on_pause_button(message: Message, state: FSMContext, bot: Bot) -> None:

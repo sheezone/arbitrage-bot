@@ -51,6 +51,19 @@ def format_match_start(start_time_utc: str) -> str:
     return f"{local.day} {_MONTHS_RU[local.month - 1]}, {local.strftime('%H:%M')} МСК"
 
 
+def within_time_horizon(start_time_utc: str, horizon_days: int, now: datetime) -> bool:
+    """True if the match starts within `horizon_days` from `now`. Unknown/unparseable
+    start times (Marathon never supplies one) are let through rather than hidden --
+    we can't evaluate what we don't have, so the safer default is to still show it."""
+    if not start_time_utc:
+        return True
+    try:
+        start = datetime.fromisoformat(start_time_utc.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    return start - now <= timedelta(days=horizon_days)
+
+
 def _bookmakers_hash(best_odds: list[OutcomeOdds]) -> str:
     parts = sorted(f"{o.outcome_name}:{o.bookmaker}:{o.odds}" for o in best_odds)
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
@@ -168,6 +181,8 @@ async def _notify_group(
         if arb.profit_pct < user.min_profit_pct:
             continue
         if game not in user.watched_games:
+            continue
+        if not within_time_horizon(start_time_utc, user.time_horizon_days, now):
             continue
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
