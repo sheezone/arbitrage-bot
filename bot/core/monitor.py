@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramNetworkError
 
 from bot.core import billing
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
@@ -70,6 +71,31 @@ def within_time_horizon(start_time_utc: str, horizons_days: list[int], now: date
 def _bookmakers_hash(best_odds: list[OutcomeOdds]) -> str:
     parts = sorted(f"{o.outcome_name}:{o.bookmaker}:{o.odds}" for o in best_odds)
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
+SEND_RETRY_ATTEMPTS = 3
+SEND_RETRY_DELAY_SECONDS = 3
+
+
+async def _send_message_with_retries(bot: Bot, chat_id: int, text: str, **kwargs) -> None:
+    """Confirmed live: this VPS's network path to api.telegram.org intermittently stalls
+    for 100+ seconds (not a code bug -- a raw `curl` to api.telegram.org reproduced the
+    same multi-minute hang). A single failed send used to just drop that notification
+    silently; retrying a few times gives a transient stall a chance to clear before we
+    give up on it."""
+    last_error: Exception | None = None
+    for attempt in range(1, SEND_RETRY_ATTEMPTS + 1):
+        try:
+            await bot.send_message(chat_id, text, **kwargs)
+            return
+        except TelegramNetworkError as e:
+            last_error = e
+            logger.warning(
+                "send_message to chat_id=%s failed (attempt %d/%d): %s", chat_id, attempt, SEND_RETRY_ATTEMPTS, e
+            )
+            if attempt < SEND_RETRY_ATTEMPTS:
+                await asyncio.sleep(SEND_RETRY_DELAY_SECONDS)
+    raise last_error
 
 
 def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "") -> str:
@@ -195,7 +221,7 @@ async def _notify_group(
             message += f"  {outcome_name}: {stake:.2f}\n"
 
         try:
-            await bot.send_message(user.chat_id, message, protect_content=True)
+            await _send_message_with_retries(bot, user.chat_id, message, protect_content=True)
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
 
@@ -213,7 +239,7 @@ async def _notify_showcase(
     best = max(found, key=lambda m: m.arb.profit_pct)
     message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
     try:
-        await bot.send_message(showcase_chat_id, message)
+        await _send_message_with_retries(bot, showcase_chat_id, message)
     except Exception:
         logger.exception("Failed to post showcase message to chat_id=%s", showcase_chat_id)
 
