@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import BotCommand
 
@@ -49,7 +51,16 @@ async def _get_me_with_retries(bot: Bot):
 async def main() -> None:
     config = load_config()
     repo = Repository(config.db_path)
-    bot = Bot(token=config.bot_token)
+
+    # Confirmed live on the production VPS: resolving api.telegram.org's AAAA (IPv6)
+    # record stalls for 100+ seconds before falling back to IPv4 -- a plain `curl -4`
+    # to the same host responds in well under a second, and disabling IPv6 at the OS
+    # level (sysctl) didn't fix it (still a DNS-resolution-time issue, not a routing
+    # one). Forcing the connector to IPv4 here sidesteps it at the source rather than
+    # depending on the retry/timeout hardening elsewhere to paper over a 100+ second hang.
+    session = AiohttpSession()
+    session._connector_init["family"] = socket.AF_INET
+    bot = Bot(token=config.bot_token, session=session)
     dp = Dispatcher()
     state = LatestState()
 
