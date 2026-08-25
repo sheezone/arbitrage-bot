@@ -103,7 +103,6 @@ async def main() -> None:
             bot=bot,
             games=config.games,
             poll_interval_seconds=config.poll_interval_seconds,
-            default_min_profit_pct=config.default_min_profit_pct,
             state=state,
             surebet_finder=surebet_finder,
             admin_chat_ids=config.admin_chat_ids,

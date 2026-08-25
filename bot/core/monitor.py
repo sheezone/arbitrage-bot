@@ -211,10 +211,6 @@ async def _notify_group(
     for user in repo.get_active_users():
         if not billing.has_access(user, now, admin_chat_ids):
             continue
-        if arb.profit_pct < user.min_profit_pct:
-            continue
-        if game not in user.watched_games:
-            continue
         if not within_time_horizon(start_time_utc, user.time_horizons, now):
             continue
 
@@ -232,15 +228,16 @@ async def _notify_group(
     repo.mark_opportunity_seen(match_id, bh)
 
 
+def _showcase_key(m: MatchSnapshot) -> str:
+    return f"{m.game}:{m.team_a}:{m.team_b}:{m.start_time_utc}:{_bookmakers_hash(m.arb.best_odds)}"
+
+
 async def _notify_showcase(
-    found: list[MatchSnapshot],
+    best: MatchSnapshot,
     bot: Bot,
     showcase_chat_id: int,
     bot_username: str,
 ) -> None:
-    if not found:
-        return
-    best = max(found, key=lambda m: m.arb.profit_pct)
     message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
     try:
         await _send_message_with_retries(bot, showcase_chat_id, message)
@@ -254,7 +251,6 @@ async def run_monitor_loop(
     bot: Bot,
     games: list[str],
     poll_interval_seconds: int,
-    default_min_profit_pct: float,
     state: LatestState,
     surebet_finder: SurebetFinder | None = None,
     admin_chat_ids: frozenset[int] = frozenset(),
@@ -264,6 +260,8 @@ async def run_monitor_loop(
 ) -> None:
     empty_streaks: dict[str, int] = {}
     last_showcase_post = 0.0
+    last_showcase_key: str | None = None
+    daily_best: MatchSnapshot | None = None
     while True:
         all_quotes = await _fetch_all_quotes(sources, games, empty_streaks)
         groups = group_quotes(all_quotes)
@@ -299,9 +297,22 @@ async def run_monitor_loop(
                 except Exception:
                     logger.exception("Failed to notify SureBet match")
 
-        if showcase_chat_id is not None and found and time.time() - last_showcase_post >= showcase_interval_seconds:
-            await _notify_showcase(found, bot, showcase_chat_id, bot_username)
+        if showcase_chat_id is not None and found:
+            best_now = max(found, key=lambda m: m.arb.profit_pct)
+            if daily_best is None or best_now.arb.profit_pct > daily_best.arb.profit_pct:
+                daily_best = best_now
+
+        if (
+            showcase_chat_id is not None
+            and daily_best is not None
+            and time.time() - last_showcase_post >= showcase_interval_seconds
+        ):
+            key = _showcase_key(daily_best)
+            if key != last_showcase_key:
+                await _notify_showcase(daily_best, bot, showcase_chat_id, bot_username)
+                last_showcase_key = key
             last_showcase_post = time.time()
+            daily_best = None
 
         state.matches = found
         state.updated_at = time.time()

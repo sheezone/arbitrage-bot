@@ -55,21 +55,6 @@ GAME_LABELS = {
     "hockey": "Хоккей (тотал шайб)",
 }
 
-CATEGORIES: dict[str, list[str]] = {
-    "esports": ["cs2", "dota2", "lol", "valorant"],
-    "tennis": ["tennis"],
-    "sports": ["basketball"],
-    "football": ["football"],
-    "hockey": ["hockey"],
-}
-CATEGORY_LABELS = {
-    "esports": "🎮 Киберспорт",
-    "tennis": "🎾 Теннис",
-    "sports": "🏀 Баскетбол",
-    "football": "⚽ Футбол",
-    "hockey": "🏒 Хоккей",
-}
-
 MENU_BUTTON_TEXT = "☰ Меню"
 SEARCH_BUTTON_TEXT = "🔍 Поиск вилок"
 PROFILE_BUTTON_TEXT = "👤 Мой профиль"
@@ -95,8 +80,6 @@ NAV_PROFILE = "nav:profile"
 NAV_SEARCH = "nav:search"
 NAV_CANCEL = "nav:cancel"
 NAV_BANKROLL = "nav:bankroll"
-NAV_THRESHOLD = "nav:threshold"
-NAV_GAMES = "nav:games"
 NAV_HORIZON = "nav:horizon"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
 NAV_SUBSCRIPTION = "nav:subscription"
@@ -212,38 +195,23 @@ def _help_view() -> View:
         "всегда ровно два исхода\n\n"
         "<b>Источники:</b> OddsPapi, Fonbet, PARI, Marathon, Baltbet, "
         "The Odds API, Zenit, Melbet, Leon, SureBet — чем больше источников, тем больше шанс "
-        "найти расхождение в котировках.\n\n"
+        "найти расхождение в котировках. Отслеживаются все виды спорта сразу.\n\n"
         "<b>Настройки внутри «🔍 Поиск вилок»:</b>\n"
         "💰 Банкролл — сумма, под которую бот рассчитывает точные ставки "
         "на каждый исход\n"
-        "📊 Порог прибыли — минимальный % прибыли, при котором придёт "
-        "уведомление (чем ниже, тем чаще уведомления, но и риск на "
-        "проскальзывание коэффициента выше)\n"
-        "🕹️ Игры — какие виды спорта отслеживать\n"
         "📅 Период — показывать вилки только на матчи, которые начнутся в течение "
         "24 часов или позже\n\n"
         "<b>Внутри «👤 Мой профиль»:</b> пауза уведомлений, подписка и "
         f"партнёрская программа ({billing.REFERRAL_COMMISSION_PCT:.0%} с оплат "
         "приглашённых — в виде скидки на свою подписку).\n\n"
         "Уведомления приходят автоматически, как только находится "
-        "вилка выше вашего порога. Кнопка «🔍 Поиск вилок» мгновенно "
+        "вилка. Кнопка «🔍 Поиск вилок» мгновенно "
         "показывает последний найденный результат без нового опроса "
         "источников.\n\n"
         f"Первые {billing.TRIAL_DAYS} дн. бесплатно (пробный период), дальше — "
         "платная подписка, раздел «👤 Мой профиль» → «💳 Подписка»."
     )
     return text, _back_keyboard(target=NAV_DASHBOARD)
-
-
-def _games_view(user: UserSettings) -> View:
-    selected = set(user.watched_games)
-    rows = []
-    for category, games in CATEGORIES.items():
-        mark = "✅" if selected.issuperset(games) else "⬜"
-        rows.append([_btn(f"{mark} {CATEGORY_LABELS[category]}", f"cat_toggle:{category}")])
-    rows.append([_btn("◀️ Назад", NAV_SEARCH)])
-    text = "🕹️ <b>ВЫБОР КАТЕГОРИЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nОтметьте, что отслеживать:"
-    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _horizon_view(user: UserSettings) -> View:
@@ -290,8 +258,7 @@ def _search_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_btn("🔄 Обновить", NAV_SEARCH)],
-            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
-            [_btn("🕹️ Игры", NAV_GAMES), _btn("📅 Период", NAV_HORIZON)],
+            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📅 Период", NAV_HORIZON)],
             [_btn("◀️ Назад", NAV_DASHBOARD)],
         ]
     )
@@ -304,13 +271,7 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
     now = datetime.now(timezone.utc)
-    matches = [
-        m
-        for m in latest_state.matches
-        if m.game in user.watched_games
-        and m.arb.profit_pct >= user.min_profit_pct
-        and within_time_horizon(m.start_time_utc, user.time_horizons, now)
-    ]
+    matches = [m for m in latest_state.matches if within_time_horizon(m.start_time_utc, user.time_horizons, now)]
 
     lines = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
@@ -476,13 +437,6 @@ def register_handlers(
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
-    @router.callback_query(F.data == NAV_GAMES)
-    async def on_nav_games(callback: CallbackQuery, bot: Bot) -> None:
-        user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _games_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
-
     @router.callback_query(F.data == NAV_HORIZON)
     async def on_nav_horizon(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
@@ -543,13 +497,6 @@ def register_handlers(
     async def on_nav_bankroll(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_bankroll)
         text, keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100")
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
-
-    @router.callback_query(F.data == NAV_THRESHOLD)
-    async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-        await state.set_state(Settings.waiting_threshold)
-        text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
@@ -641,25 +588,6 @@ def register_handlers(
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
-    @router.callback_query(F.data.startswith("cat_toggle:"))
-    async def on_category_toggle(callback: CallbackQuery, bot: Bot) -> None:
-        category = callback.data.split(":", 1)[1]
-        category_games = set(CATEGORIES[category])
-        user = repo.get_user(callback.message.chat.id)
-        selected = set(user.watched_games)
-        if selected.issuperset(category_games):
-            selected -= category_games
-        else:
-            selected |= category_games
-        if not selected:
-            await callback.answer("Нужно выбрать хотя бы одну категорию", show_alert=True)
-            return
-        repo.set_watched_games(callback.message.chat.id, sorted(selected))
-        user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _games_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
-        await callback.answer()
-
     @router.message(Settings.waiting_bankroll)
     async def on_bankroll_value(message: Message, state: FSMContext, bot: Bot) -> None:
         raw = message.text or ""
@@ -681,32 +609,6 @@ def register_handlers(
             return
 
         repo.set_bankroll(message.chat.id, amount)
-        await state.clear()
-        user = repo.get_user(message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-
-    @router.message(Settings.waiting_threshold)
-    async def on_threshold_value(message: Message, state: FSMContext, bot: Bot) -> None:
-        raw = message.text or ""
-        try:
-            await message.delete()
-        except Exception:
-            pass
-
-        user = repo.get_user(message.chat.id)
-        try:
-            pct = float(raw.replace(",", "."))
-            if pct < 0:
-                raise ValueError
-        except ValueError:
-            text, keyboard = _input_prompt_view(
-                "📊 Введите минимальный процент прибыли для уведомления:", "1.5", error="Нужно неотрицательное число"
-            )
-            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-            return
-
-        repo.set_min_profit_pct(message.chat.id, pct)
         await state.clear()
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state)
