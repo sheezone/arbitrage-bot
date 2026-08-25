@@ -36,6 +36,7 @@ production VPS, that's the signal to drop this provider rather than chase it fur
 from __future__ import annotations
 
 import logging
+import time
 
 from bot.providers.base import OddsProvider
 from bot.providers.models import SourceQuote
@@ -64,16 +65,29 @@ _FETCH_JS = (
     "window.$httpApi.getTopEventsList(sportId, stakeTypes, langId, partnerId, '')"
 )
 
+# Confirmed live: even with no fetch failures at all, a single long-lived page/browser
+# accumulated 70+ child processes and 1GB+ RSS over 24h of uptime -- Melbet's own page JS
+# keeps background live-data timers running the whole time (see module docstring), and
+# headless Chromium doesn't reliably garbage-collect everything that spawns over many
+# hours. Recycling the whole browser periodically bounds this regardless of root cause,
+# rather than trying to chase down exactly what Chromium is leaking internally.
+MAX_PAGE_AGE_SECONDS = 1800
+
 
 class MelbetProvider(OddsProvider):
     def __init__(self):
         self._playwright = None
         self._browser = None
         self._page = None
+        self._page_created_at = 0.0
 
     async def _ensure_page(self):
         if self._page is not None:
-            return self._page
+            if time.monotonic() - self._page_created_at > MAX_PAGE_AGE_SECONDS:
+                logger.info("Melbet: recycling browser after %ds to bound resource growth", MAX_PAGE_AGE_SECONDS)
+                await self._reset()
+            else:
+                return self._page
         from playwright.async_api import async_playwright
 
         self._playwright = await async_playwright().start()
@@ -82,6 +96,7 @@ class MelbetProvider(OddsProvider):
         )
         self._page = await self._browser.new_page()
         await self._page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
+        self._page_created_at = time.monotonic()
         return self._page
 
     async def _reset(self) -> None:
