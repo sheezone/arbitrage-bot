@@ -123,7 +123,9 @@ def format_stakes_lines(stakes: dict) -> list[str]:
     return [f"    ▫️ {html.escape(outcome_name)}: <b>{stake:.2f}</b>" for outcome_name, stake in stakes.items()]
 
 
-def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "") -> str:
+def _format_message(
+    game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "", bankroll: float | None = None
+) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
         f"💰 {emoji} <b>Найдена вилка</b> ({game.upper()})",
@@ -133,6 +135,11 @@ def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, s
     if match_time:
         lines.append(f"🕒 {match_time}")
     lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
+    if bankroll is not None:
+        # The guaranteed profit is the same no matter which leg wins -- that's the whole
+        # point of an arb -- so this is a single number, not a per-outcome range.
+        profit_amount = bankroll * arb.profit_pct / 100
+        lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     return "\n".join(lines)
@@ -237,7 +244,7 @@ async def _notify_group(
             continue
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
-        message = _format_message(game, team_a, team_b, arb, start_time_utc)
+        message = _format_message(game, team_a, team_b, arb, start_time_utc, user.bankroll)
         message += f"\n\n💵 Ставки при банкролле <b>{user.bankroll:.2f}</b>:\n"
         message += "<blockquote>" + "\n".join(format_stakes_lines(stakes)) + "</blockquote>"
 

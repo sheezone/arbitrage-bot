@@ -288,6 +288,8 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
             if match_time:
                 lines.append(f"🕒 {match_time}")
             lines.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
+            profit_amount = user.bankroll * m.arb.profit_pct / 100
+            lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
             lines.append("")
             quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
             lines.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
