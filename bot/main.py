@@ -20,6 +20,7 @@ from bot.providers.leon import LeonProvider
 from bot.providers.marathon import MarathonProvider
 from bot.providers.melbet import MelbetProvider
 from bot.providers.oddspapi import OddsPapiProvider
+from bot.providers.olimpbet import OlimpBetProvider
 from bot.providers.pari import PariProvider
 from bot.providers.surebet import SurebetFinder
 from bot.providers.the_odds_api import TheOddsApiProvider
@@ -74,6 +75,7 @@ async def main() -> None:
         TheOddsApiProvider(api_key=config.the_odds_api_key),
         ZenitProvider(),
         LeonProvider(),
+        OlimpBetProvider(),
     ]
     # Opt-in, heavier than everything else here (drives a real headless Chromium) --
     # see bot/providers/melbet.py's module docstring. Off by default; ENABLE_MELBET=true
