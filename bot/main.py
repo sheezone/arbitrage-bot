@@ -16,6 +16,7 @@ from bot.db.repository import Repository
 from bot.handlers.commands import register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.fonbet import FonbetProvider
+from bot.providers.leon import LeonProvider
 from bot.providers.marathon import MarathonProvider
 from bot.providers.melbet import MelbetProvider
 from bot.providers.oddspapi import OddsPapiProvider
@@ -72,6 +73,7 @@ async def main() -> None:
         BaltbetProvider(),
         TheOddsApiProvider(api_key=config.the_odds_api_key),
         ZenitProvider(),
+        LeonProvider(),
     ]
     # Opt-in, heavier than everything else here (drives a real headless Chromium) --
     # see bot/providers/melbet.py's module docstring. Off by default; ENABLE_MELBET=true
@@ -99,7 +101,6 @@ async def main() -> None:
             bot=bot,
             games=config.games,
             poll_interval_seconds=config.poll_interval_seconds,
-            default_min_profit_pct=config.default_min_profit_pct,
             state=state,
             surebet_finder=surebet_finder,
             admin_chat_ids=config.admin_chat_ids,

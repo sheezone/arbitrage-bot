@@ -211,10 +211,6 @@ async def _notify_group(
     for user in repo.get_active_users():
         if not billing.has_access(user, now, admin_chat_ids):
             continue
-        if arb.profit_pct < user.min_profit_pct:
-            continue
-        if game not in user.watched_games:
-            continue
         if not within_time_horizon(start_time_utc, user.time_horizons, now):
             continue
 
@@ -254,7 +250,6 @@ async def run_monitor_loop(
     bot: Bot,
     games: list[str],
     poll_interval_seconds: int,
-    default_min_profit_pct: float,
     state: LatestState,
     surebet_finder: SurebetFinder | None = None,
     admin_chat_ids: frozenset[int] = frozenset(),
