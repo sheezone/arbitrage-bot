@@ -26,6 +26,7 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     KeyboardButton,
     LabeledPrice,
     Message,
@@ -43,7 +44,11 @@ from bot.handlers.states import Settings
 router = Router()
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
-BANNER_PATH = Path(__file__).resolve().parent.parent / "assets" / "banner.png"
+_ASSETS = Path(__file__).resolve().parent.parent / "assets"
+BANNER_PATH = _ASSETS / "banner.png"
+BANNER_REFERRAL_PATH = _ASSETS / "banner_referral.png"
+BANNER_STATUS_ACTIVE_PATH = _ASSETS / "banner_status_active.png"
+BANNER_STATUS_PAUSED_PATH = _ASSETS / "banner_status_paused.png"
 
 GAME_LABELS = {
     "cs2": "CS2",
@@ -157,6 +162,10 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
         [_btn("◀️ Назад", NAV_DASHBOARD)],
     ]
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _status_banner(user: UserSettings) -> Path:
+    return BANNER_STATUS_ACTIVE_PATH if user.is_active else BANNER_STATUS_PAUSED_PATH
 
 
 def _referral_view(user: UserSettings, repo: Repository, bot_username: str) -> View:
@@ -299,17 +308,26 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
 
 
 async def _render(
-    bot: Bot, repo: Repository, chat_id: int, message_id: int | None, text: str, keyboard, *, photo: bool = False
+    bot: Bot,
+    repo: Repository,
+    chat_id: int,
+    message_id: int | None,
+    text: str,
+    keyboard,
+    *,
+    photo_path: Path | None = None,
 ) -> None:
     """Edit the tracked menu message in place; only send a new one if editing is
     impossible (first run, message type mismatch between photo/text, or the old
-    message is gone/too old to edit)."""
+    message is gone/too old to edit). Photo screens use edit_message_media (not
+    edit_message_caption) since different photo screens (dashboard/referral/profile
+    status) each ship their own banner file -- a caption-only edit would leave a
+    stale photo from whichever screen was shown before."""
     if message_id:
         try:
-            if photo:
-                await bot.edit_message_caption(
-                    chat_id=chat_id, message_id=message_id, caption=text, reply_markup=keyboard, parse_mode="HTML"
-                )
+            if photo_path is not None:
+                media = InputMediaPhoto(media=FSInputFile(photo_path), caption=text, parse_mode="HTML")
+                await bot.edit_message_media(chat_id=chat_id, message_id=message_id, media=media, reply_markup=keyboard)
             else:
                 await bot.edit_message_text(
                     chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode="HTML"
@@ -323,9 +341,9 @@ async def _render(
             except Exception:
                 pass
 
-    if photo:
+    if photo_path is not None:
         sent = await bot.send_photo(
-            chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
+            chat_id, FSInputFile(photo_path), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
     else:
         sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
@@ -337,7 +355,7 @@ async def _render_dashboard(
 ) -> None:
     user = repo.get_user(chat_id)
     text, keyboard = _dashboard_view(user, admin_chat_ids)
-    await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard, photo=True)
+    await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard, photo_path=BANNER_PATH)
 
 
 def register_handlers(
@@ -432,14 +450,17 @@ def register_handlers(
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
         text, keyboard = _profile_view(user, admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=_status_banner(user))
 
     @router.callback_query(F.data == NAV_PROFILE)
     async def on_nav_profile(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _profile_view(user, admin_chat_ids)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=_status_banner(user),
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_HORIZON)
@@ -475,7 +496,10 @@ def register_handlers(
         repo.set_active(callback.message.chat.id, not user.is_active)
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _profile_view(user, admin_chat_ids)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=_status_banner(user),
+        )
         await callback.answer("Пауза" if not user.is_active else "Возобновлено")
 
     @router.callback_query(F.data == NAV_SUBSCRIPTION)
@@ -489,7 +513,10 @@ def register_handlers(
     async def on_nav_referral(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _referral_view(user, repo, bot_username)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_REFERRAL_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_HELP)
