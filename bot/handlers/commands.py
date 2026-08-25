@@ -411,24 +411,24 @@ def register_handlers(
     @router.message(F.text == MENU_BUTTON_TEXT)
     async def on_menu_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
-        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
         await _dismiss(message)
+        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
     @router.message(F.text == SEARCH_BUTTON_TEXT)
     async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
+        await _dismiss(message)
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
 
     @router.message(F.text == PROFILE_BUTTON_TEXT)
     async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
+        await _dismiss(message)
         user = repo.get_user(message.chat.id)
         text, keyboard = _profile_view(user, admin_chat_ids)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
-        await _dismiss(message)
 
     @router.callback_query(F.data == NAV_PROFILE)
     async def on_nav_profile(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -493,7 +493,6 @@ def register_handlers(
         text, keyboard = _help_view()
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
-        await _dismiss(message)
 
     @router.callback_query(F.data == NAV_BANKROLL)
     async def on_nav_bankroll(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
