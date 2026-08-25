@@ -48,7 +48,7 @@ def test_totals_market_gets_descriptive_label():
     results = parse_records(data)
     assert len(results) == 1
     labels = {o.outcome_name for o in results[0][4].best_odds}
-    assert labels == {"Тотал > 10.5", "Тотал < 10.5"}
+    assert labels == {"Тотал больше 10.5", "Тотал меньше 10.5"}
 
 
 def test_recomputed_negative_arbitrage_is_dropped():

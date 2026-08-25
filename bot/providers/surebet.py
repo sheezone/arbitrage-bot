@@ -162,9 +162,9 @@ def _describe_outcome(prong: dict) -> str:
     period_label = f" ({period})" if period and period not in ("regularTime", "full") else ""
 
     if kind == "over":
-        return f"Тотал > {condition}{period_label}"
+        return f"Тотал больше {condition}{period_label}"
     if kind == "under":
-        return f"Тотал < {condition}{period_label}"
+        return f"Тотал меньше {condition}{period_label}"
     if kind == "ah1":
         return f"Фора {teams[0]} {condition}{period_label}"
     if kind == "ah2":
