@@ -245,9 +245,6 @@ def _games_view(user: UserSettings) -> View:
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-MAX_TIME_HORIZONS_SELECTED = 2
-
-
 def _horizon_view(user: UserSettings) -> View:
     selected = set(user.time_horizons)
     rows = []
@@ -496,16 +493,15 @@ def register_handlers(
     async def on_horizon_toggle(callback: CallbackQuery, bot: Bot) -> None:
         days = int(callback.data.split(":", 1)[1])
         user = repo.get_user(callback.message.chat.id)
-        selected = set(user.time_horizons)
+        # Drop any leftover values from before the 1/3/30/90-day options were replaced by
+        # just these two buckets, so a stale value never blocks toggling a real one.
+        selected = set(user.time_horizons) & set(TIME_HORIZONS)
         if days in selected:
             if len(selected) == 1:
                 await callback.answer("Нужно оставить хотя бы один вариант", show_alert=True)
                 return
             selected.discard(days)
         else:
-            if len(selected) >= MAX_TIME_HORIZONS_SELECTED:
-                await callback.answer(f"Можно выбрать максимум {MAX_TIME_HORIZONS_SELECTED}", show_alert=True)
-                return
             selected.add(days)
         repo.set_time_horizons(callback.message.chat.id, sorted(selected))
         user = repo.get_user(callback.message.chat.id)
