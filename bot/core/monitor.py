@@ -52,10 +52,14 @@ def format_match_start(start_time_utc: str) -> str:
     return f"{local.day} {_MONTHS_RU[local.month - 1]}, {local.strftime('%H:%M')} МСК"
 
 
-def within_time_horizon(start_time_utc: str, horizons_days: list[int], now: datetime) -> bool:
-    """True if the match starts within the widest of `horizons_days` from `now` (the user
-    can check up to 2 of the 1/3/30-day options at once -- narrower selections add nothing
-    a wider one doesn't already cover, so only the max matters for filtering). Unknown/
+HORIZON_UNDER_24H = 1
+HORIZON_OVER_24H = 2
+
+
+def within_time_horizon(start_time_utc: str, selected_buckets: list[int], now: datetime) -> bool:
+    """Two buckets: HORIZON_UNDER_24H (match starts within the next 24h) and
+    HORIZON_OVER_24H (starts later than that, or already started/unknown timing is
+    irrelevant here). True if the match's bucket is one of `selected_buckets`. Unknown/
     unparseable start times (Marathon never supplies one) are let through rather than
     hidden -- we can't evaluate what we don't have, so the safer default is to still show it."""
     if not start_time_utc:
@@ -64,8 +68,8 @@ def within_time_horizon(start_time_utc: str, horizons_days: list[int], now: date
         start = datetime.fromisoformat(start_time_utc.replace("Z", "+00:00"))
     except ValueError:
         return True
-    horizon_days = max(horizons_days) if horizons_days else 0
-    return start - now <= timedelta(days=horizon_days)
+    bucket = HORIZON_UNDER_24H if start - now <= timedelta(hours=24) else HORIZON_OVER_24H
+    return bucket in selected_buckets
 
 
 def _bookmakers_hash(best_odds: list[OutcomeOdds]) -> str:

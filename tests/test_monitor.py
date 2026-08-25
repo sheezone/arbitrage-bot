@@ -26,19 +26,37 @@ def test_returns_empty_string_for_unparseable_time():
 NOW = datetime(2026, 8, 22, tzinfo=timezone.utc)
 
 
-def test_match_within_horizon_passes():
-    start = (NOW + timedelta(days=2)).isoformat()
-    assert within_time_horizon(start, [3], NOW)
+def test_match_under_24h_passes_when_that_bucket_selected():
+    start = (NOW + timedelta(hours=12)).isoformat()
+    assert within_time_horizon(start, [1], NOW)
 
 
-def test_match_beyond_horizon_is_filtered():
+def test_match_under_24h_filtered_when_only_over_24h_selected():
+    start = (NOW + timedelta(hours=12)).isoformat()
+    assert not within_time_horizon(start, [2], NOW)
+
+
+def test_match_over_24h_passes_when_that_bucket_selected():
     start = (NOW + timedelta(days=10)).isoformat()
-    assert not within_time_horizon(start, [3], NOW)
+    assert within_time_horizon(start, [2], NOW)
 
 
-def test_match_exactly_at_horizon_boundary_passes():
-    start = (NOW + timedelta(days=3)).isoformat()
-    assert within_time_horizon(start, [3], NOW)
+def test_match_over_24h_filtered_when_only_under_24h_selected():
+    start = (NOW + timedelta(days=10)).isoformat()
+    assert not within_time_horizon(start, [1], NOW)
+
+
+def test_match_exactly_at_24h_boundary_counts_as_under():
+    start = (NOW + timedelta(hours=24)).isoformat()
+    assert within_time_horizon(start, [1], NOW)
+    assert not within_time_horizon(start, [2], NOW)
+
+
+def test_both_buckets_selected_passes_regardless_of_timing():
+    soon = (NOW + timedelta(hours=1)).isoformat()
+    later = (NOW + timedelta(days=30)).isoformat()
+    assert within_time_horizon(soon, [1, 2], NOW)
+    assert within_time_horizon(later, [1, 2], NOW)
 
 
 def test_unknown_start_time_is_not_filtered():
@@ -47,9 +65,3 @@ def test_unknown_start_time_is_not_filtered():
 
 def test_unparseable_start_time_is_not_filtered():
     assert within_time_horizon("garbage", [1], NOW)
-
-
-def test_uses_the_widest_of_multiple_selected_horizons():
-    start = (NOW + timedelta(days=10)).isoformat()
-    assert not within_time_horizon(start, [1, 3], NOW)
-    assert within_time_horizon(start, [1, 30], NOW)
