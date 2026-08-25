@@ -13,6 +13,7 @@ confirmed live that deleting that carrier message -- immediately or after a dela
 makes the keyboard itself disappear on at least one client."""
 from __future__ import annotations
 
+import html
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -34,7 +35,7 @@ from aiogram.types import (
 
 from bot.core import billing
 from bot.core.arbitrage import calc_stakes
-from bot.core.monitor import format_match_start, within_time_horizon
+from bot.core.monitor import GAME_EMOJI, format_match_start, format_odds_lines, format_stakes_lines, within_time_horizon
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
@@ -280,14 +281,18 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
         lines.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at})\n")
         for m in matches:
             stakes = calc_stakes(user.bankroll, m.arb.best_odds)
-            lines.append(f"<b>{GAME_LABELS.get(m.game, m.game.upper())}</b>: {m.team_a} vs {m.team_b}")
+            emoji = GAME_EMOJI.get(m.game, "🏆")
+            lines.append(f"{emoji} <b>{GAME_LABELS.get(m.game, m.game.upper())}</b>")
+            lines.append(f"⚔️ <b>{html.escape(m.team_a)}</b> vs <b>{html.escape(m.team_b)}</b>")
             match_time = format_match_start(m.start_time_utc)
             if match_time:
                 lines.append(f"🕒 {match_time}")
-            lines.append(f"Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
-            for outcome in m.arb.best_odds:
-                lines.append(f"  {outcome.outcome_name}: {outcome.odds} @ {outcome.bookmaker}")
-            lines.append("  Ставки: " + ", ".join(f"{k}: {v:.2f}" for k, v in stakes.items()))
+            lines.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
+            lines.append("")
+            lines.extend(format_odds_lines(m.arb.best_odds))
+            lines.append("💵 <b>Ставки:</b>")
+            lines.extend(format_stakes_lines(stakes))
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
             lines.append("")
 
     return "\n".join(lines), _search_keyboard()

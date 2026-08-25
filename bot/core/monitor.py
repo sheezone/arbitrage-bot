@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -102,18 +103,38 @@ async def _send_message_with_retries(bot: Bot, chat_id: int, text: str, **kwargs
     raise last_error
 
 
+# Alternating markers so each leg of the arb reads as its own row rather than blurring
+# together -- confirmed live this matters most for two-line total markets ("Тотал больше
+# X" / "Тотал меньше X"), which used to get squashed onto one comma-joined line.
+_OUTCOME_MARKERS = ["📈", "📉", "🔹", "🔸"]
+
+
+def format_odds_lines(best_odds: list[OutcomeOdds]) -> list[str]:
+    lines = []
+    for i, outcome in enumerate(best_odds):
+        marker = _OUTCOME_MARKERS[i % len(_OUTCOME_MARKERS)]
+        name = html.escape(outcome.outcome_name)
+        bookmaker = html.escape(outcome.bookmaker)
+        lines.append(f"{marker} <b>{name}</b>: {outcome.odds} @ <b>{bookmaker}</b>")
+    return lines
+
+
+def format_stakes_lines(stakes: dict) -> list[str]:
+    return [f"    ▫️ {html.escape(outcome_name)}: <b>{stake:.2f}</b>" for outcome_name, stake in stakes.items()]
+
+
 def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "") -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"\U0001F4B0 {emoji} Найдена вилка ({game.upper()}): {team_a} vs {team_b}",
+        f"💰 {emoji} <b>Найдена вилка</b> ({game.upper()})",
+        f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
         lines.append(f"🕒 {match_time}")
-    lines.append(f"Прибыль: {arb.profit_pct:.2f}%")
+    lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
     lines.append("")
-    for outcome in arb.best_odds:
-        lines.append(f"  {outcome.outcome_name}: {outcome.odds} @ {outcome.bookmaker}")
+    lines.extend(format_odds_lines(arb.best_odds))
     return "\n".join(lines)
 
 
@@ -122,12 +143,13 @@ def _format_showcase_message(
 ) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"\U0001F4B0 {emoji} Вилка ({game.upper()}): {team_a} vs {team_b}",
+        f"💰 {emoji} <b>Вилка</b> ({game.upper()})",
+        f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
         lines.append(f"🕒 {match_time}")
-    lines.append(f"Прибыль: {arb.profit_pct:.2f}%")
+    lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
     lines.append("")
     lines.append("Букмекеры и коэффициенты — в боте по подписке.")
     if bot_username:
@@ -216,12 +238,11 @@ async def _notify_group(
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
         message = _format_message(game, team_a, team_b, arb, start_time_utc)
-        message += f"\n\nСтавки при банкролле {user.bankroll:.2f}:\n"
-        for outcome_name, stake in stakes.items():
-            message += f"  {outcome_name}: {stake:.2f}\n"
+        message += f"\n\n💵 Ставки при банкролле <b>{user.bankroll:.2f}</b>:\n"
+        message += "\n".join(format_stakes_lines(stakes))
 
         try:
-            await _send_message_with_retries(bot, user.chat_id, message, protect_content=True)
+            await _send_message_with_retries(bot, user.chat_id, message, parse_mode="HTML", protect_content=True)
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
 
@@ -240,7 +261,7 @@ async def _notify_showcase(
 ) -> None:
     message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
     try:
-        await _send_message_with_retries(bot, showcase_chat_id, message)
+        await _send_message_with_retries(bot, showcase_chat_id, message, parse_mode="HTML")
     except Exception:
         logger.exception("Failed to post showcase message to chat_id=%s", showcase_chat_id)
 
