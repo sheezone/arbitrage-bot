@@ -114,7 +114,7 @@ def format_odds_lines(best_odds: list[OutcomeOdds]) -> list[str]:
     for i, outcome in enumerate(best_odds):
         marker = _OUTCOME_MARKERS[i % len(_OUTCOME_MARKERS)]
         name = html.escape(outcome.outcome_name)
-        bookmaker = html.escape(outcome.bookmaker)
+        bookmaker = html.escape(outcome.bookmaker.upper())
         lines.append(f"{marker} <b>{name}</b>: {outcome.odds} @ <b>{bookmaker}</b>")
     return lines
 
