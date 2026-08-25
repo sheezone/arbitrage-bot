@@ -140,7 +140,7 @@ def parse_records(data: dict) -> list[SurebetMatch]:
                 valid = False
                 break
             label = _describe_outcome(prong)
-            odds_by_outcome.setdefault(label, []).append(OutcomeOdds(label, f"surebet:{bookmaker}", float(value)))
+            odds_by_outcome.setdefault(label, []).append(OutcomeOdds(label, bookmaker, float(value)))
         if not valid or len(odds_by_outcome) != 2:
             continue  # both prongs landed on the same label, or something was missing -- skip
 
