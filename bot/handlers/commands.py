@@ -88,7 +88,7 @@ MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     is_persistent=True,
 )
 
-TIME_HORIZONS = {1: "1 день", 3: "3 дня", 30: "Месяц"}
+TIME_HORIZONS = {1: "1 день", 7: "Неделя", 30: "Месяц", 90: "3 месяца"}
 
 NAV_DASHBOARD = "nav:dashboard"
 NAV_PROFILE = "nav:profile"
