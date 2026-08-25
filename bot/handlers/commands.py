@@ -289,10 +289,8 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
                 lines.append(f"🕒 {match_time}")
             lines.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
             lines.append("")
-            lines.extend(format_odds_lines(m.arb.best_odds))
-            lines.append("💵 <b>Ставки:</b>")
-            lines.extend(format_stakes_lines(stakes))
-            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
+            lines.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
             lines.append("")
 
     return "\n".join(lines), _search_keyboard()

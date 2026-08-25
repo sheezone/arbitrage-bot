@@ -134,7 +134,7 @@ def _format_message(game: str, team_a: str, team_b: str, arb: ArbitrageResult, s
         lines.append(f"🕒 {match_time}")
     lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
     lines.append("")
-    lines.extend(format_odds_lines(arb.best_odds))
+    lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     return "\n".join(lines)
 
 
@@ -239,7 +239,7 @@ async def _notify_group(
         stakes = calc_stakes(user.bankroll, arb.best_odds)
         message = _format_message(game, team_a, team_b, arb, start_time_utc)
         message += f"\n\n💵 Ставки при банкролле <b>{user.bankroll:.2f}</b>:\n"
-        message += "\n".join(format_stakes_lines(stakes))
+        message += "<blockquote>" + "\n".join(format_stakes_lines(stakes)) + "</blockquote>"
 
         try:
             await _send_message_with_retries(bot, user.chat_id, message, parse_mode="HTML", protect_content=True)
