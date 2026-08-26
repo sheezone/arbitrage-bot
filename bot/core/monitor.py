@@ -243,6 +243,8 @@ async def _notify_group(
     for user in repo.get_active_users():
         if not billing.has_access(user, now, admin_chat_ids):
             continue
+        if arb.profit_pct < user.min_profit_pct:
+            continue
         if not within_time_horizon(start_time_utc, user.time_horizons, now):
             continue
 

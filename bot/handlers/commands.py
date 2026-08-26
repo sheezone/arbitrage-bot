@@ -92,6 +92,7 @@ NAV_PROFILE = "nav:profile"
 NAV_SEARCH = "nav:search"
 NAV_CANCEL = "nav:cancel"
 NAV_BANKROLL = "nav:bankroll"
+NAV_THRESHOLD = "nav:threshold"
 NAV_HORIZON = "nav:horizon"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
 NAV_SUBSCRIPTION = "nav:subscription"
@@ -216,6 +217,8 @@ def _help_view() -> View:
         "<b>Настройки внутри «🔍 Поиск вилок»:</b>\n"
         "💰 Банкролл — сумма, под которую бот рассчитывает точные ставки "
         "на каждый исход\n"
+        "📊 Порог прибыли — минимальный % прибыли, при котором придёт "
+        "уведомление\n"
         "📅 Период — показывать вилки только на матчи, которые начнутся в течение "
         "24 часов или позже\n\n"
         "<b>Внутри «👤 Мой профиль»:</b> пауза уведомлений, подписка и "
@@ -275,7 +278,8 @@ def _search_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_btn("🔄 Обновить", NAV_SEARCH)],
-            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📅 Период", NAV_HORIZON)],
+            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
+            [_btn("📅 Период", NAV_HORIZON)],
             [_btn("◀️ Назад", NAV_DASHBOARD)],
         ]
     )
@@ -296,7 +300,11 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
     now = datetime.now(timezone.utc)
-    matches = [m for m in latest_state.matches if within_time_horizon(m.start_time_utc, user.time_horizons, now)]
+    matches = [
+        m
+        for m in latest_state.matches
+        if m.arb.profit_pct >= user.min_profit_pct and within_time_horizon(m.start_time_utc, user.time_horizons, now)
+    ]
     matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
     header = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
@@ -580,6 +588,13 @@ def register_handlers(
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
+    @router.callback_query(F.data == NAV_THRESHOLD)
+    async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        await state.set_state(Settings.waiting_threshold)
+        text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
     @router.callback_query(F.data == NAV_DASHBOARD)
     async def on_nav_dashboard(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -695,6 +710,32 @@ def register_handlers(
             return
 
         repo.set_bankroll(message.chat.id, amount)
+        await state.clear()
+        user = repo.get_user(message.chat.id)
+        text, keyboard = _search_view(user, latest_state)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+
+    @router.message(Settings.waiting_threshold)
+    async def on_threshold_value(message: Message, state: FSMContext, bot: Bot) -> None:
+        raw = message.text or ""
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        user = repo.get_user(message.chat.id)
+        try:
+            pct = float(raw.replace(",", "."))
+            if pct < 0:
+                raise ValueError
+        except ValueError:
+            text, keyboard = _input_prompt_view(
+                "📊 Введите минимальный процент прибыли для уведомления:", "1.5", error="Нужно неотрицательное число"
+            )
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+            return
+
+        repo.set_min_profit_pct(message.chat.id, pct)
         await state.clear()
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state)
