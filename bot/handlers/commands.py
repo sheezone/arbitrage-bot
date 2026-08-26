@@ -51,6 +51,7 @@ BANNER_STATUS_ACTIVE_PATH = _ASSETS / "banner_status_active.png"
 BANNER_STATUS_PAUSED_PATH = _ASSETS / "banner_status_paused.png"
 BANNER_SEARCH_PATH = _ASSETS / "banner_search.png"
 BANNER_SUBSCRIPTION_PATH = _ASSETS / "banner_subscription.png"
+BANNER_THRESHOLD_PATH = _ASSETS / "banner_threshold.png"
 BANNER_HELP_PATH = _ASSETS / "banner_help.png"
 
 GAME_LABELS = {
@@ -592,7 +593,10 @@ def register_handlers(
     async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_threshold)
         text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_THRESHOLD_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_DASHBOARD)
@@ -732,7 +736,9 @@ def register_handlers(
             text, keyboard = _input_prompt_view(
                 "📊 Введите минимальный процент прибыли для уведомления:", "1.5", error="Нужно неотрицательное число"
             )
-            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+            await _render(
+                bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_THRESHOLD_PATH
+            )
             return
 
         repo.set_min_profit_pct(message.chat.id, pct)
