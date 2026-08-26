@@ -111,13 +111,37 @@ async def _send_message_with_retries(bot: Bot, chat_id: int, text: str, **kwargs
 # X" / "Тотал меньше X"), which used to get squashed onto one comma-joined line.
 _OUTCOME_MARKERS = ["📈", "📉", "🔹", "🔸"]
 
+# Homepage for every bookmaker key this codebase's providers ever set on a quote (see each
+# provider module's own SourceQuote(...) calls, plus surebet.py's BOOKMAKERS/display-name
+# map) -- lets the bookmaker name in a result link straight to where to place the bet,
+# instead of just naming it. A key with no entry here still renders, just not as a link.
+BOOKMAKER_URLS = {
+    "fonbet": "https://www.fonbet.ru",
+    "pari": "https://pari.ru",
+    "marathon": "https://www.marathonbet.ru",
+    "baltbet": "https://baltbet.ru",
+    "zenit": "https://zenit.win",
+    "melbet": "https://melbet.ru",
+    "leon": "https://leon.ru",
+    "olimpbet": "https://www.olimp.bet",
+    "winline": "https://winline.ru",
+    "betcity": "https://betcity.ru",
+    "betboom": "https://betboom.ru",
+    "ligastavok": "https://www.ligastavok.ru",
+    "bet365": "https://www.bet365.com",
+    "1xbet": "https://1xbet.com",
+    "pinnacle": "https://www.pinnacle.com",
+}
+
 
 def format_odds_lines(best_odds: list[OutcomeOdds]) -> list[str]:
     lines = []
     for i, outcome in enumerate(best_odds):
         marker = _OUTCOME_MARKERS[i % len(_OUTCOME_MARKERS)]
         name = html.escape(outcome.outcome_name)
-        bookmaker = html.escape(outcome.bookmaker.upper())
+        bookmaker_name = html.escape(outcome.bookmaker.upper())
+        url = BOOKMAKER_URLS.get(outcome.bookmaker.lower())
+        bookmaker = f'<a href="{url}">{bookmaker_name}</a>' if url else bookmaker_name
         lines.append(f"{marker} <b>{name}</b>: {outcome.odds} @ <b>{bookmaker}</b>")
     return lines
 
