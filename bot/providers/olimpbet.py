@@ -18,6 +18,17 @@ Football and hockey use the TOTAL outcomes at `groupPosition == 7` ("Доп. Т�
 here) or the 1X2 win market, for the same reason as everywhere else in this codebase: both
 allow a draw, but a goals/pucks total doesn't. See bot/providers/_line_platform.py's module
 docstring for the fuller rationale.
+
+Added 2026-08-26 (единоборства/волейбол request): boxing (sportId 12) and MMA (96) offer a
+real "Ничья" (draw) outcome on their RESULT market -- confirmed live -- so, same reasoning
+as football/hockey, they use a total-rounds TOTAL market instead. Unlike football/hockey
+there's no fixed groupPosition for it (seen both 3 and 4 live) and usually just one line is
+offered at all (only ~9/50 boxing events, ~12/53 MMA events had one live), so
+`_extract_total_pair` scans every TOTAL outcome regardless of groupPosition and groups by
+line instead of trusting a single known position. Volleyball (10) has no draw -- confirmed
+live its RESULT market (groupPosition 1) only ever carries the two team outcomes, no "Ничья"
+-- so it uses that match-winner market directly, same as basketball/tennis elsewhere in this
+codebase.
 """
 from __future__ import annotations
 
@@ -34,11 +45,20 @@ TOP_EVENTS_PATH = "/api/v4/0/line/top/sports-with-competitions-with-events"
 SPORT_IDS = {
     "football": "1",
     "hockey": "2",
+    "boxing": "12",
+    "mma": "96",
+    "volleyball": "10",
 }
+
+GOALS_TOTAL_GAMES = frozenset({"football", "hockey"})
+ROUNDS_TOTAL_GAMES = frozenset({"boxing", "mma"})
+RESULT_MARKET_GAMES = frozenset({"volleyball"})
 
 MAIN_TOTAL_GROUP_POSITION = 7
 STAT_PROP_TEAM_PREFIX = "УГЛ"  # corner-count (and similar) prop "matches", not real ones
 PLAUSIBLE_TOTAL_LINE_RANGE = (0.5, 8.5)  # real match goal/puck totals; guards against mismatched markets
+PLAUSIBLE_ROUNDS_LINE_RANGE = (0.5, 14.5)  # real boxing/MMA total-rounds lines
+RESULT_GROUP_POSITION = 1
 
 
 class OlimpBetProvider(OddsProvider):
@@ -84,22 +104,69 @@ def _parse_event(game: str, event: dict) -> list[SourceQuote]:
     if not team_a or not team_b or team_a.startswith(STAT_PROP_TEAM_PREFIX) or team_b.startswith(STAT_PROP_TEAM_PREFIX):
         return []
 
-    total_outcomes = [
-        o for o in event.get("outcomes") or []
-        if o.get("tableType") == "TOTAL" and o.get("groupPosition") == MAIN_TOTAL_GROUP_POSITION
+    outcomes = event.get("outcomes") or []
+    start_time_utc = _unix_to_iso(event.get("startDateTime"))
+
+    if game in RESULT_MARKET_GAMES:
+        return _parse_result_market(game, team_a, team_b, start_time_utc, outcomes)
+
+    if game in GOALS_TOTAL_GAMES:
+        total_outcomes = [
+            o for o in outcomes
+            if o.get("tableType") == "TOTAL" and o.get("groupPosition") == MAIN_TOTAL_GROUP_POSITION
+        ]
+        pair = _total_pair_from_group(total_outcomes, PLAUSIBLE_TOTAL_LINE_RANGE)
+    else:
+        # boxing/MMA: no fixed groupPosition for the (usually singular) total-rounds line
+        # -- see module docstring -- so scan every TOTAL outcome and group by line instead.
+        pair = _best_total_pair(outcomes, PLAUSIBLE_ROUNDS_LINE_RANGE)
+
+    if pair is None:
+        return []
+    line, over_odds, under_odds = pair
+    market = f"total_{line}"
+    return [
+        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал больше {line}", over_odds, market),
+        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал меньше {line}", under_odds, market),
     ]
-    if len(total_outcomes) != 2:
+
+
+def _parse_result_market(game: str, team_a: str, team_b: str, start_time_utc: str, outcomes: list[dict]) -> list[SourceQuote]:
+    result_outcomes = [
+        o for o in outcomes
+        if o.get("tableType") == "RESULT" and o.get("groupPosition") == RESULT_GROUP_POSITION
+    ]
+    if len(result_outcomes) != 2:
+        return []  # a real 3rd ("Ничья") outcome would land here too -- only a clean 2-way market is usable
+
+    by_name = {o.get("unprocessedName"): o for o in result_outcomes}
+    if team_a not in by_name or team_b not in by_name:
+        return []  # names didn't line up 1:1 with team1Name/team2Name -- skip rather than guess which is which
+
+    try:
+        odds_a = float(by_name[team_a].get("probability"))
+        odds_b = float(by_name[team_b].get("probability"))
+    except (TypeError, ValueError):
         return []
 
+    return [
+        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", team_a, odds_a),
+        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", team_b, odds_b),
+    ]
+
+
+def _total_pair_from_group(total_outcomes: list[dict], line_range: tuple[float, float]) -> tuple[float, float, float] | None:
+    if len(total_outcomes) != 2:
+        return None
     lines = {o.get("param") for o in total_outcomes}
     if len(lines) != 1:
-        return []  # the two sides disagree on the line -- skip rather than guess
+        return None  # the two sides disagree on the line -- skip rather than guess
     try:
         line = float(next(iter(lines)))
     except (TypeError, ValueError):
-        return []
-    if not (PLAUSIBLE_TOTAL_LINE_RANGE[0] <= line <= PLAUSIBLE_TOTAL_LINE_RANGE[1]):
-        return []
+        return None
+    if not (line_range[0] <= line <= line_range[1]):
+        return None
 
     over_odds = under_odds = None
     for o in total_outcomes:
@@ -113,14 +180,25 @@ def _parse_event(game: str, event: dict) -> list[SourceQuote]:
         elif name.endswith("мен"):
             under_odds = price
     if not over_odds or not under_odds:
-        return []
+        return None
+    return line, over_odds, under_odds
 
-    start_time_utc = _unix_to_iso(event.get("startDateTime"))
-    market = f"total_{line}"
-    return [
-        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал больше {line}", over_odds, market),
-        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал меньше {line}", under_odds, market),
-    ]
+
+def _best_total_pair(outcomes: list[dict], line_range: tuple[float, float]) -> tuple[float, float, float] | None:
+    by_line: dict[str, list[dict]] = {}
+    for o in outcomes:
+        if o.get("tableType") != "TOTAL":
+            continue
+        by_line.setdefault(o.get("param"), []).append(o)
+
+    candidates = []
+    for param, group in by_line.items():
+        pair = _total_pair_from_group(group, line_range)
+        if pair is not None:
+            candidates.append(pair)
+    if not candidates:
+        return None
+    return min(candidates, key=lambda p: p[0])
 
 
 def _unix_to_iso(ts) -> str:

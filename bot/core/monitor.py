@@ -31,6 +31,9 @@ GAME_EMOJI = {
     "basketball": "🏀",
     "football": "⚽",
     "hockey": "🏒",
+    "boxing": "🥊",
+    "mma": "🥋",
+    "volleyball": "🏐",
 }
 
 MOSCOW_TZ = timezone(timedelta(hours=3))

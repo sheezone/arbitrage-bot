@@ -80,3 +80,58 @@ def test_hockey_uses_sport_id_2():
 def test_ignores_other_sports():
     event = _event("A", "B", [_total_outcome("бол", "150.5", 1.9), _total_outcome("мен", "150.5", 1.85)])
     assert parse_sports_payload("football", _raw("5", "Баскетбол", [event])) == []
+
+
+def _result_outcome(name: str, price: float) -> dict:
+    return {"tableType": "RESULT", "groupPosition": 1, "unprocessedName": name, "probability": str(price)}
+
+
+def test_volleyball_uses_result_market():
+    event = _event("Spain", "Portugal", [_result_outcome("Spain", 1.75), _result_outcome("Portugal", 2.01)])
+    quotes = parse_sports_payload("volleyball", _raw("10", "Волейбол", [event]))
+    assert len(quotes) == 2
+    assert {q.outcome_name for q in quotes} == {"Spain", "Portugal"}
+    assert {q.odds for q in quotes} == {1.75, 2.01}
+
+
+def test_volleyball_skips_when_draw_outcome_present():
+    event = _event(
+        "Spain", "Portugal",
+        [_result_outcome("Spain", 1.75), _result_outcome("Ничья", 25.0), _result_outcome("Portugal", 2.01)],
+    )
+    assert parse_sports_payload("volleyball", _raw("10", "Волейбол", [event])) == []
+
+
+def test_boxing_uses_total_rounds_market_ignoring_group_position():
+    event = _event(
+        "Reeves", "Firth",
+        [
+            _result_outcome("Reeves", 1.13),
+            _result_outcome("Ничья", 25.0),
+            _result_outcome("Firth", 5.93),
+            _total_outcome("бол", "2.5", 2.03, group_position=3),
+            _total_outcome("мен", "2.5", 1.75, group_position=3),
+        ],
+    )
+    quotes = parse_sports_payload("boxing", _raw("12", "Бокс", [event]))
+    assert len(quotes) == 2
+    assert {q.market for q in quotes} == {"total_2.5"}
+
+
+def test_mma_picks_lowest_line_when_multiple_totals_present():
+    event = _event(
+        "A", "B",
+        [
+            _total_outcome("бол", "2.5", 2.03, group_position=4),
+            _total_outcome("мен", "2.5", 1.75, group_position=4),
+            _total_outcome("бол", "3.5", 1.5, group_position=3),
+            _total_outcome("мен", "3.5", 2.5, group_position=3),
+        ],
+    )
+    quotes = parse_sports_payload("mma", _raw("96", "MMA", [event]))
+    assert {q.market for q in quotes} == {"total_2.5"}
+
+
+def test_boxing_skips_event_with_no_total_market():
+    event = _event("Reeves", "Firth", [_result_outcome("Reeves", 1.13), _result_outcome("Firth", 5.93)])
+    assert parse_sports_payload("boxing", _raw("12", "Бокс", [event])) == []

@@ -26,7 +26,10 @@ class Config:
     db_path: str
     enable_melbet: bool = False
     games: list[str] = field(
-        default_factory=lambda: ["cs2", "dota2", "lol", "valorant", "tennis", "basketball", "football", "hockey"]
+        default_factory=lambda: [
+            "cs2", "dota2", "lol", "valorant", "tennis", "basketball", "football", "hockey",
+            "boxing", "mma", "volleyball",
+        ]
     )
 
 
