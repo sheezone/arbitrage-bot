@@ -65,6 +65,11 @@ SPORT_ID_TO_GAME = {v: k for k, v in GAME_TO_SPORT_ID.items()}
 
 BOOKMAKERS = ["winline", "betcity", "bingoboom", "ligastavok"]
 
+# The API's source key "bingoboom" is that bookmaker's old brand -- it now operates in
+# Russia as BetBoom (confirmed via ru.surebet.com/site/xml listing it as "BetBoom (RU)"
+# under that same key). Shown to users under its current name.
+_BOOKMAKER_DISPLAY_NAMES = {"bingoboom": "betboom"}
+
 # Football and hockey (added 2026-08-20) are the sports here whose match-winner market has
 # a real third outcome (both allow a draw in regulation time). Checked live: this API's own
 # matching is normally careful to pair a plain "team to win" prong with a complementary
@@ -141,7 +146,7 @@ def parse_records(data: dict) -> list[SurebetMatch]:
         odds_by_outcome: dict[str, list[OutcomeOdds]] = {}
         valid = True
         for prong in prongs:
-            bookmaker = prong.get("bk")
+            bookmaker = _BOOKMAKER_DISPLAY_NAMES.get(prong.get("bk"), prong.get("bk"))
             value = prong.get("value")
             if not bookmaker or not value:
                 valid = False
