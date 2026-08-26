@@ -28,6 +28,13 @@ bot/providers/baltbet.py's module docstring for that investigation. Melbet and Z
 were in this list too until 2026-08-21/22, when both turned out to be directly reachable
 after all (a real browser for Melbet's encrypted API, a plain HTTP request for Zenit's
 unencrypted one) -- removed here to avoid fetching the same odds twice.
+
+Liga Stavok added 2026-08-26: its own site (ligastavok.ru) sits behind Qrator with a
+CAPTCHA challenge on every request, including the homepage -- not something to bypass, same
+policy as BetBoom above. This SureBet aggregator, however, already covers it (source key
+"ligastavok", confirmed via ru.surebet.com/site/xml's bookmaker list and a live test query
+that returned real surebets involving it) without touching Liga Stavok's own protected site
+at all, so it's added here rather than left out.
 """
 from __future__ import annotations
 
@@ -56,7 +63,7 @@ GAME_TO_SPORT_ID = {
 }
 SPORT_ID_TO_GAME = {v: k for k, v in GAME_TO_SPORT_ID.items()}
 
-BOOKMAKERS = ["winline", "betcity", "bingoboom"]
+BOOKMAKERS = ["winline", "betcity", "bingoboom", "ligastavok"]
 
 # Football and hockey (added 2026-08-20) are the sports here whose match-winner market has
 # a real third outcome (both allow a draw in regulation time). Checked live: this API's own
