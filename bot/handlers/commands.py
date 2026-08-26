@@ -29,6 +29,7 @@ from aiogram.types import (
     InputMediaPhoto,
     KeyboardButton,
     LabeledPrice,
+    LinkPreviewOptions,
     Message,
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
@@ -381,7 +382,8 @@ async def _render(
                 await bot.edit_message_media(chat_id=chat_id, message_id=message_id, media=media, reply_markup=keyboard)
             else:
                 await bot.edit_message_text(
-                    chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode="HTML"
+                    chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode="HTML",
+                    link_preview_options=LinkPreviewOptions(is_disabled=True),
                 )
             return
         except TelegramBadRequest as e:
@@ -397,7 +399,10 @@ async def _render(
             chat_id, FSInputFile(photo_path), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
     else:
-        sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+        sent = await bot.send_message(
+            chat_id, text, reply_markup=keyboard, parse_mode="HTML",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
     repo.set_menu_message_id(chat_id, sent.message_id)
 
 

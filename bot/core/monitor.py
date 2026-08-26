@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError
+from aiogram.types import LinkPreviewOptions
 
 from bot.core import billing
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
@@ -278,7 +279,10 @@ async def _notify_group(
         message += "<blockquote>" + "\n".join(format_stakes_lines(stakes)) + "</blockquote>"
 
         try:
-            await _send_message_with_retries(bot, user.chat_id, message, parse_mode="HTML", protect_content=True)
+            await _send_message_with_retries(
+                bot, user.chat_id, message, parse_mode="HTML", protect_content=True,
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
 
@@ -297,7 +301,9 @@ async def _notify_showcase(
 ) -> None:
     message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
     try:
-        await _send_message_with_retries(bot, showcase_chat_id, message, parse_mode="HTML")
+        await _send_message_with_retries(
+            bot, showcase_chat_id, message, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True)
+        )
     except Exception:
         logger.exception("Failed to post showcase message to chat_id=%s", showcase_chat_id)
 
