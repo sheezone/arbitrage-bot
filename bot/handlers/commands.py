@@ -49,6 +49,9 @@ BANNER_PATH = _ASSETS / "banner.png"
 BANNER_REFERRAL_PATH = _ASSETS / "banner_referral.png"
 BANNER_STATUS_ACTIVE_PATH = _ASSETS / "banner_status_active.png"
 BANNER_STATUS_PAUSED_PATH = _ASSETS / "banner_status_paused.png"
+BANNER_SEARCH_PATH = _ASSETS / "banner_search.png"
+BANNER_SUBSCRIPTION_PATH = _ASSETS / "banner_subscription.png"
+BANNER_HELP_PATH = _ASSETS / "banner_help.png"
 
 GAME_LABELS = {
     "cs2": "CS2",
@@ -350,7 +353,14 @@ async def _render(
     message is gone/too old to edit). Photo screens use edit_message_media (not
     edit_message_caption) since different photo screens (dashboard/referral/profile
     status) each ship their own banner file -- a caption-only edit would leave a
-    stale photo from whichever screen was shown before."""
+    stale photo from whichever screen was shown before.
+
+    A photo caption caps out at 1024 chars (vs. 4096 for plain text) -- the search
+    screen's listing can blow well past that once several matches are found, so a
+    caption too long for the banner silently falls back to a plain text render rather
+    than raising and leaving the screen stuck."""
+    if photo_path is not None and len(text) > 1024:
+        photo_path = None
     if message_id:
         try:
             if photo_path is not None:
@@ -470,7 +480,7 @@ def register_handlers(
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(F.text == PROFILE_BUTTON_TEXT)
     async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -534,7 +544,10 @@ def register_handlers(
     async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _subscription_view(user, bool(yookassa_provider_token), admin_chat_ids)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SUBSCRIPTION_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_REFERRAL)
@@ -550,7 +563,10 @@ def register_handlers(
     @router.callback_query(F.data == NAV_HELP)
     async def on_nav_help(callback: CallbackQuery, bot: Bot) -> None:
         text, keyboard = _help_view()
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_HELP_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_BANKROLL)
@@ -571,7 +587,10 @@ def register_handlers(
         await state.clear()
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _search_view(user, latest_state)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SEARCH_PATH,
+        )
         await callback.answer("Отменено")
 
     @router.callback_query(F.data.startswith("sub:"))
@@ -645,7 +664,10 @@ def register_handlers(
     async def on_nav_search(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _search_view(user, latest_state)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SEARCH_PATH,
+        )
         await callback.answer()
 
     @router.message(Settings.waiting_bankroll)
@@ -672,6 +694,6 @@ def register_handlers(
         await state.clear()
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     return router
