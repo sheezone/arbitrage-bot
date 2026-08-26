@@ -274,6 +274,14 @@ def _search_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+# Telegram caps plain-text messages at 4096 chars; leaving headroom below that (rather
+# than hitting the limit exactly) avoids a hard-to-predict off-by-a-few-entities failure.
+# Confirmed live: with enough simultaneous matches (each now several lines with the
+# blockquote/profit-amount additions), the unbounded listing blew past this and every
+# "Обновить" press failed with "message is too long", silently breaking the screen.
+_SEARCH_TEXT_BUDGET = 3500
+
+
 def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     if latest_state.updated_at == 0:
         text = "🔍 <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
@@ -282,27 +290,47 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
     now = datetime.now(timezone.utc)
     matches = [m for m in latest_state.matches if within_time_horizon(m.start_time_utc, user.time_horizons, now)]
+    matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
-    lines = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    header = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
-        lines.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at}.")
-    else:
-        lines.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at})\n")
-        for m in matches:
-            stakes = calc_stakes(user.bankroll, m.arb.best_odds)
-            emoji = GAME_EMOJI.get(m.game, "🏆")
-            lines.append(f"{emoji} <b>{GAME_LABELS.get(m.game, m.game.upper())}</b>")
-            lines.append(f"⚔️ <b>{html.escape(m.team_a)}</b> vs <b>{html.escape(m.team_b)}</b>")
-            match_time = format_match_start(m.start_time_utc)
-            if match_time:
-                lines.append(f"🕒 {match_time}")
-            lines.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
-            profit_amount = user.bankroll * m.arb.profit_pct / 100
-            lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
-            lines.append("")
-            quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
-            lines.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
-            lines.append("")
+        header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at}.")
+        return "\n".join(header), _search_keyboard()
+
+    header.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at})\n")
+
+    blocks = []
+    for m in matches:
+        stakes = calc_stakes(user.bankroll, m.arb.best_odds)
+        emoji = GAME_EMOJI.get(m.game, "🏆")
+        block = [
+            f"{emoji} <b>{GAME_LABELS.get(m.game, m.game.upper())}</b>",
+            f"⚔️ <b>{html.escape(m.team_a)}</b> vs <b>{html.escape(m.team_b)}</b>",
+        ]
+        match_time = format_match_start(m.start_time_utc)
+        if match_time:
+            block.append(f"🕒 {match_time}")
+        block.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
+        profit_amount = user.bankroll * m.arb.profit_pct / 100
+        block.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
+        block.append("")
+        quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
+        block.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
+        block.append("")
+        blocks.append("\n".join(block))
+
+    lines = list(header)
+    shown = 0
+    budget = _SEARCH_TEXT_BUDGET - sum(len(b) for b in header)
+    for block in blocks:
+        if shown > 0 and len(block) > budget:
+            break
+        lines.append(block)
+        budget -= len(block)
+        shown += 1
+
+    if shown < len(matches):
+        lines.append(f"…и ещё {len(matches) - shown} вилок (показаны лучшие по проценту прибыли).")
 
     return "\n".join(lines), _search_keyboard()
 
