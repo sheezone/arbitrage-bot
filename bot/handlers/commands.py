@@ -280,15 +280,29 @@ def _input_prompt_view(label: str, example: str, error: str | None = None) -> Vi
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
 
 
-_CALCULATOR_LABEL = (
-    "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>\n"
-    "Введите тремя числами через пробел: сумма и два коэффициента."
-)
-_CALCULATOR_EXAMPLE = "1000 2.10 2.05"
+_CALCULATOR_HEADER = "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
 
 
-def _calculator_prompt_view(error: str | None = None) -> View:
-    return _input_prompt_view(_CALCULATOR_LABEL, _CALCULATOR_EXAMPLE, error=error)
+def _calculator_step_view(label: str, example: str, step: str, total_steps: int = 3, error: str | None = None) -> View:
+    """Step N/3 of the calculator's bankroll -> odds A -> odds B flow -- one number per
+    message rather than the old single "1000 2.10 2.05" line, so there's nothing to
+    mis-order and each answer validates (and can be corrected) on its own."""
+    text = f"{_CALCULATOR_HEADER}Шаг {step}/{total_steps}\n{label}\nНапример: {example}"
+    if error:
+        text = f"⚠️ {error}\n\n{text}"
+    return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
+
+
+def _calculator_bankroll_prompt(error: str | None = None) -> View:
+    return _calculator_step_view("💰 Введите банкролл (сумму на вилку):", "1000", step="1", error=error)
+
+
+def _calculator_odds_a_prompt(error: str | None = None) -> View:
+    return _calculator_step_view("📈 Введите коэффициент на первый исход:", "2.10", step="2", error=error)
+
+
+def _calculator_odds_b_prompt(error: str | None = None) -> View:
+    return _calculator_step_view("📉 Введите коэффициент на второй исход:", "2.05", step="3", error=error)
 
 
 def _calculator_keyboard() -> InlineKeyboardMarkup:
@@ -301,20 +315,21 @@ def _calculator_keyboard() -> InlineKeyboardMarkup:
 
 
 def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> View:
+    outcome_a, outcome_b = "Исход 1", "Исход 2"
     odds_by_outcome = {
-        "1": [OutcomeOdds("1", "—", odds_a)],
-        "2": [OutcomeOdds("2", "—", odds_b)],
+        outcome_a: [OutcomeOdds(outcome_a, "", odds_a)],
+        outcome_b: [OutcomeOdds(outcome_b, "", odds_b)],
     }
     arb = calc_arbitrage(odds_by_outcome)
     stakes = calc_stakes(bankroll, arb.best_odds)
 
+    odds_lines = [f"📈 <b>{outcome_a}</b>: {odds_a}", f"📉 <b>{outcome_b}</b>: {odds_b}"]
+
     lines = [
-        "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
+        _CALCULATOR_HEADER.rstrip(),
         "",
-        f"Банкролл: <b>{bankroll:.2f}</b>",
-        f"Коэффициенты: <b>{odds_a}</b> и <b>{odds_b}</b>",
-        "",
+        f"💰 Банкролл: <b>{bankroll:.2f}</b>",
+        "<blockquote>" + "\n".join(odds_lines) + "</blockquote>",
     ]
     if arb.is_arbitrage:
         profit_amount = bankroll * arb.profit_pct / 100
@@ -322,10 +337,14 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
         lines.append(f"💸 Гарантированный выигрыш: <b>{profit_amount:.2f}</b>")
         lines.append("")
         lines.append("💵 <b>Ставки:</b>")
-        stake_lines = [f"▫️ На 1: <b>{stakes['1']:.2f}</b>", f"▫️ На 2: <b>{stakes['2']:.2f}</b>"]
+        stake_lines = [
+            f"▫️ На {outcome_a}: <b>{stakes[outcome_a]:.2f}</b>",
+            f"▫️ На {outcome_b}: <b>{stakes[outcome_b]:.2f}</b>",
+        ]
         lines.append("<blockquote>" + "\n".join(stake_lines) + "</blockquote>")
     else:
-        lines.append(f"⚠️ Это не вилка -- при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
+        lines.append("")
+        lines.append(f"⚠️ Это не вилка — при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
 
     return "\n".join(lines), _calculator_keyboard()
 
@@ -660,8 +679,8 @@ def register_handlers(
 
     @router.callback_query(F.data == NAV_CALCULATOR)
     async def on_nav_calculator(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-        await state.set_state(Settings.waiting_calculator)
-        text, keyboard = _calculator_prompt_view()
+        await state.set_state(Settings.waiting_calc_bankroll)
+        text, keyboard = _calculator_bankroll_prompt()
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
@@ -813,8 +832,8 @@ def register_handlers(
         text, keyboard = _search_view(user, latest_state)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
-    @router.message(Settings.waiting_calculator)
-    async def on_calculator_value(message: Message, state: FSMContext, bot: Bot) -> None:
+    @router.message(Settings.waiting_calc_bankroll)
+    async def on_calc_bankroll_value(message: Message, state: FSMContext, bot: Bot) -> None:
         raw = message.text or ""
         try:
             await message.delete()
@@ -822,17 +841,64 @@ def register_handlers(
             pass
 
         user = repo.get_user(message.chat.id)
-        parts = raw.replace(",", ".").split()
         try:
-            if len(parts) != 3:
-                raise ValueError
-            bankroll, odds_a, odds_b = (float(p) for p in parts)
-            if bankroll <= 0 or odds_a <= 1 or odds_b <= 1:
+            bankroll = float(raw.replace(",", "."))
+            if bankroll <= 0:
                 raise ValueError
         except ValueError:
-            text, keyboard = _calculator_prompt_view(error="Нужно 3 числа: сумма и два коэффициента больше 1")
+            text, keyboard = _calculator_bankroll_prompt(error="Нужно число больше нуля")
             await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
             return
+
+        await state.update_data(calc_bankroll=bankroll)
+        await state.set_state(Settings.waiting_calc_odds_a)
+        text, keyboard = _calculator_odds_a_prompt()
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+
+    @router.message(Settings.waiting_calc_odds_a)
+    async def on_calc_odds_a_value(message: Message, state: FSMContext, bot: Bot) -> None:
+        raw = message.text or ""
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        user = repo.get_user(message.chat.id)
+        try:
+            odds_a = float(raw.replace(",", "."))
+            if odds_a <= 1:
+                raise ValueError
+        except ValueError:
+            text, keyboard = _calculator_odds_a_prompt(error="Коэффициент должен быть больше 1")
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+            return
+
+        await state.update_data(calc_odds_a=odds_a)
+        await state.set_state(Settings.waiting_calc_odds_b)
+        text, keyboard = _calculator_odds_b_prompt()
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+
+    @router.message(Settings.waiting_calc_odds_b)
+    async def on_calc_odds_b_value(message: Message, state: FSMContext, bot: Bot) -> None:
+        raw = message.text or ""
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        user = repo.get_user(message.chat.id)
+        try:
+            odds_b = float(raw.replace(",", "."))
+            if odds_b <= 1:
+                raise ValueError
+        except ValueError:
+            text, keyboard = _calculator_odds_b_prompt(error="Коэффициент должен быть больше 1")
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+            return
+
+        data = await state.get_data()
+        bankroll = data["calc_bankroll"]
+        odds_a = data["calc_odds_a"]
 
         await state.clear()
         text, keyboard = _calculator_result_view(bankroll, odds_a, odds_b)
