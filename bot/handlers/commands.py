@@ -10,7 +10,10 @@ bottom reply keyboard -- a `ReplyKeyboardMarkup` can't share a message with the
 dashboard's inline keyboard, has to be re-sent (not just once ever) so anyone whose
 client cached an older button layout picks up the current one, and is never deleted:
 confirmed live that deleting that carrier message -- immediately or after a delay --
-makes the keyboard itself disappear on at least one client."""
+makes the keyboard itself disappear on at least one client.
+
+Free-text answers include bankroll/threshold amounts and the "🧮 Калькулятор" input
+(bankroll + two odds, space-separated in one message)."""
 from __future__ import annotations
 
 import html
@@ -36,7 +39,7 @@ from aiogram.types import (
 )
 
 from bot.core import billing
-from bot.core.arbitrage import calc_stakes
+from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.monitor import GAME_EMOJI, format_match_start, format_odds_lines, format_stakes_lines, within_time_horizon
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
@@ -96,6 +99,7 @@ NAV_CANCEL = "nav:cancel"
 NAV_BANKROLL = "nav:bankroll"
 NAV_THRESHOLD = "nav:threshold"
 NAV_HORIZON = "nav:horizon"
+NAV_CALCULATOR = "nav:calculator"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
@@ -276,12 +280,62 @@ def _input_prompt_view(label: str, example: str, error: str | None = None) -> Vi
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
 
 
+_CALCULATOR_LABEL = (
+    "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>\n"
+    "Введите тремя числами через пробел: сумма и два коэффициента."
+)
+_CALCULATOR_EXAMPLE = "1000 2.10 2.05"
+
+
+def _calculator_prompt_view(error: str | None = None) -> View:
+    return _input_prompt_view(_CALCULATOR_LABEL, _CALCULATOR_EXAMPLE, error=error)
+
+
+def _calculator_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_btn("🧮 Ещё раз", NAV_CALCULATOR)],
+            [_btn("◀️ Назад", NAV_SEARCH)],
+        ]
+    )
+
+
+def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> View:
+    odds_by_outcome = {
+        "1": [OutcomeOdds("1", "—", odds_a)],
+        "2": [OutcomeOdds("2", "—", odds_b)],
+    }
+    arb = calc_arbitrage(odds_by_outcome)
+    stakes = calc_stakes(bankroll, arb.best_odds)
+
+    lines = [
+        "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"Банкролл: <b>{bankroll:.2f}</b>",
+        f"Коэффициенты: <b>{odds_a}</b> и <b>{odds_b}</b>",
+        "",
+    ]
+    if arb.is_arbitrage:
+        profit_amount = bankroll * arb.profit_pct / 100
+        lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
+        lines.append(f"💸 Гарантированный выигрыш: <b>{profit_amount:.2f}</b>")
+        lines.append("")
+        lines.append("💵 <b>Ставки:</b>")
+        stake_lines = [f"▫️ На 1: <b>{stakes['1']:.2f}</b>", f"▫️ На 2: <b>{stakes['2']:.2f}</b>"]
+        lines.append("<blockquote>" + "\n".join(stake_lines) + "</blockquote>")
+    else:
+        lines.append(f"⚠️ Это не вилка -- при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
+
+    return "\n".join(lines), _calculator_keyboard()
+
+
 def _search_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_btn("🔄 Обновить", NAV_SEARCH)],
             [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
-            [_btn("📅 Период", NAV_HORIZON)],
+            [_btn("📅 Период", NAV_HORIZON), _btn("🧮 Калькулятор", NAV_CALCULATOR)],
             [_btn("◀️ Назад", NAV_DASHBOARD)],
         ]
     )
@@ -604,6 +658,13 @@ def register_handlers(
         )
         await callback.answer()
 
+    @router.callback_query(F.data == NAV_CALCULATOR)
+    async def on_nav_calculator(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        await state.set_state(Settings.waiting_calculator)
+        text, keyboard = _calculator_prompt_view()
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
     @router.callback_query(F.data == NAV_DASHBOARD)
     async def on_nav_dashboard(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -751,5 +812,30 @@ def register_handlers(
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+
+    @router.message(Settings.waiting_calculator)
+    async def on_calculator_value(message: Message, state: FSMContext, bot: Bot) -> None:
+        raw = message.text or ""
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        user = repo.get_user(message.chat.id)
+        parts = raw.replace(",", ".").split()
+        try:
+            if len(parts) != 3:
+                raise ValueError
+            bankroll, odds_a, odds_b = (float(p) for p in parts)
+            if bankroll <= 0 or odds_a <= 1 or odds_b <= 1:
+                raise ValueError
+        except ValueError:
+            text, keyboard = _calculator_prompt_view(error="Нужно 3 числа: сумма и два коэффициента больше 1")
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+            return
+
+        await state.clear()
+        text, keyboard = _calculator_result_view(bankroll, odds_a, odds_b)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
 
     return router
