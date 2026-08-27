@@ -291,8 +291,11 @@ async def _notify_group(
 
 # A profit this high is more often a stale/mispriced quote from a scraped source than a
 # genuine opportunity that big -- confirmed live seeing implausible one-off percentages.
-# Rather than trust it immediately, wait RECHECK_DELAY_SECONDS and re-fetch: only notify
-# if the same match+market still shows a real arb on fresh data.
+# Rather than trust it immediately, wait RECHECK_DELAY_SECONDS and re-fetch, then notify
+# with whatever the fresh data says now -- even if the profit dropped a lot (30% -> 10% or
+# less is expected and fine, that's the point of rechecking). Only when the match can't be
+# found on the fresh data at all (fetch failure, or it just vanished) does it fall back to
+# the original numbers rather than skip -- always notify, never silently drop one.
 HIGH_PROFIT_RECHECK_THRESHOLD = 5.0
 RECHECK_DELAY_SECONDS = 30
 
@@ -329,14 +332,14 @@ async def _recheck_and_notify_high_profit(
         except Exception:
             logger.exception("Failed to re-fetch quotes for high-profit recheck")
 
-        for game, team_a, team_b, market, _stale_arb, start_time_utc in suspicious:
+        for game, team_a, team_b, market, stale_arb, start_time_utc in suspicious:
             fresh_arb = fresh_by_key.get((game, team_a, team_b, market))
             if fresh_arb is None:
                 logger.warning(
-                    "High-profit match %s vs %s (%s) no longer confirmed on recheck -- not notifying",
+                    "High-profit match %s vs %s (%s) not found on recheck -- notifying with the original odds anyway",
                     team_a, team_b, market,
                 )
-                continue
+                fresh_arb = stale_arb
             found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
             try:
                 await _notify_group(game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids, market)
@@ -355,14 +358,14 @@ async def _recheck_and_notify_high_profit(
         except Exception:
             logger.exception("Failed to re-fetch SureBet matches for high-profit recheck")
 
-        for game, team_a, team_b, start_time_utc, _stale_arb in surebet_suspicious:
+        for game, team_a, team_b, start_time_utc, stale_arb in surebet_suspicious:
             fresh_arb = fresh_by_names.get((game, team_a, team_b))
             if fresh_arb is None:
                 logger.warning(
-                    "High-profit SureBet match %s vs %s no longer confirmed on recheck -- not notifying",
+                    "High-profit SureBet match %s vs %s not found on recheck -- notifying with the original odds anyway",
                     team_a, team_b,
                 )
-                continue
+                fresh_arb = stale_arb
             found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
             try:
                 await _notify_group(game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids)
