@@ -289,6 +289,89 @@ async def _notify_group(
     repo.mark_opportunity_seen(match_id, bh)
 
 
+# A profit this high is more often a stale/mispriced quote from a scraped source than a
+# genuine opportunity that big -- confirmed live seeing implausible one-off percentages.
+# Rather than trust it immediately, wait RECHECK_DELAY_SECONDS and re-fetch: only notify
+# if the same match+market still shows a real arb on fresh data.
+HIGH_PROFIT_RECHECK_THRESHOLD = 5.0
+RECHECK_DELAY_SECONDS = 30
+
+
+async def _recheck_and_notify_high_profit(
+    suspicious: list[tuple[str, str, str, str, ArbitrageResult, str]],
+    surebet_suspicious: list[tuple[str, str, str, str, ArbitrageResult]],
+    sources: list[OddsProvider],
+    games: list[str],
+    empty_streaks: dict[str, int],
+    surebet_finder: SurebetFinder | None,
+    repo: Repository,
+    bot: Bot,
+    admin_chat_ids: frozenset[int],
+) -> list[MatchSnapshot]:
+    logger.info(
+        "%d suspiciously high-profit match(es) found (>%.0f%%) -- rechecking in %ds before notifying",
+        len(suspicious) + len(surebet_suspicious), HIGH_PROFIT_RECHECK_THRESHOLD, RECHECK_DELAY_SECONDS,
+    )
+    await asyncio.sleep(RECHECK_DELAY_SECONDS)
+
+    found: list[MatchSnapshot] = []
+
+    if suspicious:
+        fresh_by_key: dict[tuple[str, str, str, str], ArbitrageResult] = {}
+        try:
+            fresh_quotes = await _fetch_all_quotes(sources, games, empty_streaks)
+            for group in group_quotes(fresh_quotes):
+                try:
+                    for game, team_a, team_b, market, arb in _evaluate_group(group):
+                        fresh_by_key[(game, team_a, team_b, market)] = arb
+                except Exception:
+                    logger.exception("Failed to evaluate match group during high-profit recheck")
+        except Exception:
+            logger.exception("Failed to re-fetch quotes for high-profit recheck")
+
+        for game, team_a, team_b, market, _stale_arb, start_time_utc in suspicious:
+            fresh_arb = fresh_by_key.get((game, team_a, team_b, market))
+            if fresh_arb is None:
+                logger.warning(
+                    "High-profit match %s vs %s (%s) no longer confirmed on recheck -- not notifying",
+                    team_a, team_b, market,
+                )
+                continue
+            found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
+            try:
+                await _notify_group(game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids, market)
+            except Exception:
+                logger.exception("Failed to notify rechecked match group")
+
+    if surebet_suspicious and surebet_finder is not None:
+        # SureBet's own MIN_INTERVAL_SECONDS (~65s) cache means a call this soon after the
+        # first one often just returns the same cached response -- this still catches the
+        # case where the opportunity has since dropped out of its own matching, just isn't
+        # always a fully independent second look at the underlying odds.
+        fresh_by_names: dict[tuple[str, str, str], ArbitrageResult] = {}
+        try:
+            fresh_surebet = await surebet_finder.find(games)
+            fresh_by_names = {(g, ta, tb): arb for g, ta, tb, _, arb in fresh_surebet}
+        except Exception:
+            logger.exception("Failed to re-fetch SureBet matches for high-profit recheck")
+
+        for game, team_a, team_b, start_time_utc, _stale_arb in surebet_suspicious:
+            fresh_arb = fresh_by_names.get((game, team_a, team_b))
+            if fresh_arb is None:
+                logger.warning(
+                    "High-profit SureBet match %s vs %s no longer confirmed on recheck -- not notifying",
+                    team_a, team_b,
+                )
+                continue
+            found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
+            try:
+                await _notify_group(game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids)
+            except Exception:
+                logger.exception("Failed to notify rechecked SureBet match")
+
+    return found
+
+
 def _showcase_key(m: MatchSnapshot) -> str:
     return f"{m.game}:{m.team_a}:{m.team_b}:{m.start_time_utc}:{_bookmakers_hash(m.arb.best_odds)}"
 
@@ -330,6 +413,7 @@ async def run_monitor_loop(
         groups = group_quotes(all_quotes)
 
         found: list[MatchSnapshot] = []
+        suspicious: list[tuple[str, str, str, str, ArbitrageResult, str]] = []
         for group in groups:
             try:
                 results = _evaluate_group(group)
@@ -338,14 +422,17 @@ async def run_monitor_loop(
                 continue
 
             for game, team_a, team_b, market, arb in results:
-                found.append(MatchSnapshot(game, team_a, team_b, arb, group[0].start_time_utc))
+                start_time_utc = group[0].start_time_utc
+                if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD:
+                    suspicious.append((game, team_a, team_b, market, arb, start_time_utc))
+                    continue
+                found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc))
                 try:
-                    await _notify_group(
-                        game, team_a, team_b, arb, group[0].start_time_utc, repo, bot, admin_chat_ids, market
-                    )
+                    await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids, market)
                 except Exception:
                     logger.exception("Failed to notify match group")
 
+        surebet_suspicious: list[tuple[str, str, str, str, ArbitrageResult]] = []
         if surebet_finder is not None:
             try:
                 surebet_matches = await surebet_finder.find(games)
@@ -354,11 +441,25 @@ async def run_monitor_loop(
                 surebet_matches = []
 
             for game, team_a, team_b, start_time_utc, arb in surebet_matches:
+                if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD:
+                    surebet_suspicious.append((game, team_a, team_b, start_time_utc, arb))
+                    continue
                 found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc))
                 try:
                     await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids)
                 except Exception:
                     logger.exception("Failed to notify SureBet match")
+
+        if suspicious or surebet_suspicious:
+            try:
+                found.extend(
+                    await _recheck_and_notify_high_profit(
+                        suspicious, surebet_suspicious, sources, games, empty_streaks, surebet_finder,
+                        repo, bot, admin_chat_ids,
+                    )
+                )
+            except Exception:
+                logger.exception("Failed to recheck high-profit matches")
 
         if showcase_chat_id is not None and found:
             best_now = max(found, key=lambda m: m.arb.profit_pct)
