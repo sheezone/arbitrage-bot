@@ -24,6 +24,7 @@ class UserSettings:
     referral_balance_rub: float
     expiry_reminder_sent_for: str | None
     allowed_bookmakers: list[str]
+    muted: bool
 
 
 class Repository:
@@ -71,6 +72,11 @@ class Repository:
             # Empty string = no restriction (every bookmaker allowed) -- the common case,
             # so a fresh/upgraded user sees everything by default rather than nothing.
             self._conn.execute("ALTER TABLE users ADD COLUMN allowed_bookmakers TEXT NOT NULL DEFAULT ''")
+        if "muted" not in columns:
+            # Separate from is_active (which stops notifications entirely): muted still
+            # sends them, just silently (disable_notification) -- so someone can keep
+            # getting vilki without a ping for every one.
+            self._conn.execute("ALTER TABLE users ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None) -> None:
         """`referred_by` only ever takes effect for a genuinely new row -- ON CONFLICT DO
@@ -127,6 +133,10 @@ class Repository:
         self._conn.execute(
             "UPDATE users SET is_active = ? WHERE chat_id = ?", (int(is_active), chat_id)
         )
+        self._conn.commit()
+
+    def set_muted(self, chat_id: int, muted: bool) -> None:
+        self._conn.execute("UPDATE users SET muted = ? WHERE chat_id = ?", (int(muted), chat_id))
         self._conn.commit()
 
     def set_time_horizons(self, chat_id: int, days: list[int]) -> None:
@@ -268,6 +278,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         referral_balance_rub=row["referral_balance_rub"],
         expiry_reminder_sent_for=row["expiry_reminder_sent_for"],
         allowed_bookmakers=[b for b in row["allowed_bookmakers"].split(",") if b],
+        muted=bool(row["muted"]),
     )
 
 

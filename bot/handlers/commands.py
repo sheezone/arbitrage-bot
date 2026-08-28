@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import html
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -67,6 +68,9 @@ BANNER_SEARCH_PATH = _ASSETS / "banner_search.png"
 BANNER_SUBSCRIPTION_PATH = _ASSETS / "banner_subscription.png"
 BANNER_THRESHOLD_PATH = _ASSETS / "banner_threshold.png"
 BANNER_HELP_PATH = _ASSETS / "banner_help.png"
+BANNER_STATS_PATH = _ASSETS / "banner_stats.png"
+BANNER_BOOKMAKERS_PATH = _ASSETS / "banner_bookmakers.png"
+BANNER_SETTINGS_PATH = _ASSETS / "banner_settings.png"
 
 GAME_LABELS = {
     "cs2": "CS2",
@@ -110,8 +114,10 @@ NAV_BANKROLL = "nav:bankroll"
 NAV_THRESHOLD = "nav:threshold"
 NAV_HORIZON = "nav:horizon"
 NAV_CALCULATOR = "nav:calculator"
+NAV_SETTINGS = "nav:settings"
 NAV_SUPPORT = "nav:support"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
+NAV_TOGGLE_MUTED = "nav:toggle_muted"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
 NAV_REFERRAL = "nav:referral"
@@ -164,7 +170,10 @@ def _back_keyboard(extra: list[InlineKeyboardButton] | None = None, target: str 
 def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
     status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
+    if user.is_active and user.muted:
+        status += " (🔕 без звука)"
     pause_label = "⏸️ Поставить на паузу" if user.is_active else "▶️ Возобновить"
+    mute_label = "🔔 Включить звук" if user.muted else "🔕 Тихий режим"
     if billing.is_admin(user, admin_chat_ids):
         access_line = "♾️ Безлимитный доступ (админ)"
     else:
@@ -179,7 +188,7 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
 
     text = f"👤 <b>МОЙ ПРОФИЛЬ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nСтатус: {status}\n{access_line}"
     rows = [
-        [_btn(pause_label, NAV_TOGGLE_ACTIVE)],
+        [_btn(pause_label, NAV_TOGGLE_ACTIVE), _btn(mute_label, NAV_TOGGLE_MUTED)],
         [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
         [_btn("📊 Статистика", NAV_STATS)],
         [_btn("🤝 Партнёрская программа", NAV_REFERRAL)],
@@ -261,7 +270,7 @@ def _help_view() -> View:
         "уведомление\n"
         "📅 Период — показывать вилки только на матчи, которые начнутся в течение "
         "24 часов или позже\n\n"
-        "<b>Внутри «👤 Мой профиль»:</b> пауза уведомлений, подписка и "
+        "<b>Внутри «👤 Мой профиль»:</b> пауза или тихий режим (без звука) для уведомлений, подписка и "
         f"партнёрская программа ({billing.REFERRAL_COMMISSION_PCT:.0%} с оплат "
         "приглашённых — в виде скидки на свою подписку).\n\n"
         "Уведомления приходят автоматически, как только находится "
@@ -275,7 +284,11 @@ def _help_view() -> View:
 
 
 def _support_prompt_view(error: str | None = None) -> View:
-    text = "✉️ <b>НАПИСАТЬ МЕНЕДЖЕРУ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nОпишите вопрос одним сообщением — менеджер ответит прямо в этом чате."
+    text = (
+        "✉️ <b>НАПИСАТЬ МЕНЕДЖЕРУ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Опишите вопрос одним сообщением — менеджер ответит прямо в этом чате.\n\n"
+        "Обычно отвечаем в течение часа."
+    )
     if error:
         text = f"⚠️ {error}\n\n{text}"
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_HELP)
@@ -287,7 +300,7 @@ def _horizon_view(user: UserSettings) -> View:
     for days, label in TIME_HORIZONS.items():
         mark = "✅" if days in selected else "⬜"
         rows.append([_btn(f"{mark} {label}", f"horizon:{days}")])
-    rows.append([_btn("◀️ Назад", NAV_SEARCH)])
+    rows.append([_btn("◀️ Назад", NAV_SETTINGS)])
     text = (
         "📅 <b>ПЕРИОД ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "Когда начинается матч. Можно отметить оба, чтобы видеть всё:"
@@ -296,7 +309,16 @@ def _horizon_view(user: UserSettings) -> View:
 
 
 NAV_BOOKMAKERS = "nav:bookmakers"
+NAV_NOOP = "nav:noop"
 _ALL_BOOKMAKER_KEYS = sorted(BOOKMAKER_URLS.keys())
+
+# Grouped for the toggle screen only (BOOKMAKER_URLS/user_allows_arb stay flat) -- direct
+# sources are scraped/reached by this codebase's own provider modules, the rest only ever
+# show up via the SureBet aggregator (see bot/providers/surebet.py). Purely cosmetic
+# section headers; any key not listed here (there shouldn't be any) falls back into
+# "Другие" so a newly added bookmaker never silently disappears from the screen.
+_DIRECT_BOOKMAKERS = {"fonbet", "pari", "marathon", "baltbet", "zenit", "melbet", "leon", "olimpbet"}
+_AGGREGATOR_BOOKMAKERS = {"winline", "betcity", "betboom", "ligastavok", "bet365", "1xbet", "pinnacle"}
 
 
 def _selected_bookmakers(user: UserSettings) -> set[str]:
@@ -305,11 +327,10 @@ def _selected_bookmakers(user: UserSettings) -> set[str]:
     return set(user.allowed_bookmakers) if user.allowed_bookmakers else set(_ALL_BOOKMAKER_KEYS)
 
 
-def _bookmakers_view(user: UserSettings) -> View:
-    selected = _selected_bookmakers(user)
-    rows = []
+def _bookmaker_rows(keys: list[str], selected: set[str]) -> list[list[InlineKeyboardButton]]:
+    rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
-    for key in _ALL_BOOKMAKER_KEYS:
+    for key in keys:
         mark = "✅" if key in selected else "⬜"
         row.append(_btn(f"{mark} {key.upper()}", f"bk:{key}"))
         if len(row) == 2:
@@ -317,7 +338,26 @@ def _bookmakers_view(user: UserSettings) -> View:
             row = []
     if row:
         rows.append(row)
-    rows.append([_btn("◀️ Назад", NAV_SEARCH)])
+    return rows
+
+
+def _bookmakers_view(user: UserSettings) -> View:
+    selected = _selected_bookmakers(user)
+    direct = sorted(k for k in _ALL_BOOKMAKER_KEYS if k in _DIRECT_BOOKMAKERS)
+    aggregator = sorted(k for k in _ALL_BOOKMAKER_KEYS if k in _AGGREGATOR_BOOKMAKERS)
+    other = sorted(k for k in _ALL_BOOKMAKER_KEYS if k not in _DIRECT_BOOKMAKERS and k not in _AGGREGATOR_BOOKMAKERS)
+
+    rows: list[list[InlineKeyboardButton]] = []
+    if direct:
+        rows.append([_btn("— Прямые источники —", NAV_NOOP)])
+        rows.extend(_bookmaker_rows(direct, selected))
+    if aggregator:
+        rows.append([_btn("— Через SureBet —", NAV_NOOP)])
+        rows.extend(_bookmaker_rows(aggregator, selected))
+    if other:
+        rows.append([_btn("— Другие —", NAV_NOOP)])
+        rows.extend(_bookmaker_rows(other, selected))
+    rows.append([_btn("◀️ Назад", NAV_SETTINGS)])
     text = (
         "🏦 <b>МОИ БУКМЕКЕРЫ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "Вилки с отключёнными букмекерами не показываются и не присылаются. "
@@ -436,12 +476,20 @@ def _search_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_btn("🔄 Обновить", NAV_SEARCH)],
-            [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
-            [_btn("📅 Период", NAV_HORIZON), _btn("🧮 Калькулятор", NAV_CALCULATOR)],
-            [_btn("🏦 Мои букмекеры", NAV_BOOKMAKERS)],
+            [_btn("⚙️ Настройки поиска", NAV_SETTINGS), _btn("🧮 Калькулятор", NAV_CALCULATOR)],
             [_btn("◀️ Назад", NAV_DASHBOARD)],
         ]
     )
+
+
+def _settings_view() -> View:
+    text = "⚙️ <b>НАСТРОЙКИ ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\nЧто и как показывать в «🔍 Поиск вилок»."
+    rows = [
+        [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
+        [_btn("📅 Период", NAV_HORIZON), _btn("🏦 Мои букмекеры", NAV_BOOKMAKERS)],
+        [_btn("◀️ Назад", NAV_SEARCH)],
+    ]
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # Telegram caps plain-text messages at 4096 chars; leaving headroom below that (rather
@@ -452,12 +500,22 @@ def _search_keyboard() -> InlineKeyboardMarkup:
 _SEARCH_TEXT_BUDGET = 3500
 
 
-def _search_view(user: UserSettings, latest_state: LatestState) -> View:
+def _next_update_note(latest_state: LatestState, poll_interval_seconds: int) -> str:
+    """A rough estimate, not a promise -- a cycle that triggers the high-profit recheck
+    (see monitor.py) or hits a slow source can run well past poll_interval_seconds, so this
+    is phrased as "~" and never shown as counting down to zero, just "скоро" once due."""
+    elapsed = time.time() - latest_state.updated_at
+    remaining = poll_interval_seconds - elapsed
+    return f"~{max(1, round(remaining))} сек" if remaining > 3 else "скоро"
+
+
+def _search_view(user: UserSettings, latest_state: LatestState, poll_interval_seconds: int = 150) -> View:
     if latest_state.updated_at == 0:
         text = "🔍 <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
         return text, _search_keyboard()
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
+    next_update = _next_update_note(latest_state, poll_interval_seconds)
     now = datetime.now(timezone.utc)
     matches = [
         m
@@ -470,10 +528,10 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
 
     header = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
-        header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at}.")
+        header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at} · след. проверка {next_update}.")
         return "\n".join(header), _search_keyboard()
 
-    header.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at})\n")
+    header.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at} · след. проверка {next_update})\n")
 
     blocks = []
     for m in matches:
@@ -579,6 +637,7 @@ def register_handlers(
     yookassa_provider_token: str = "",
     admin_chat_ids: frozenset[int] = frozenset(),
     bot_username: str = "",
+    poll_interval_seconds: int = 150,
 ) -> Router:
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -658,7 +717,7 @@ def register_handlers(
         await state.clear()
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(F.text == PROFILE_BUTTON_TEXT)
@@ -680,11 +739,27 @@ def register_handlers(
         )
         await callback.answer()
 
+    @router.callback_query(F.data == NAV_SETTINGS)
+    async def on_nav_settings(callback: CallbackQuery, bot: Bot) -> None:
+        text, keyboard = _settings_view()
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SETTINGS_PATH,
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data == NAV_NOOP)
+    async def on_nav_noop(callback: CallbackQuery) -> None:
+        await callback.answer()
+
     @router.callback_query(F.data == NAV_HORIZON)
     async def on_nav_horizon(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _horizon_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SETTINGS_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data.startswith("horizon:"))
@@ -704,20 +779,29 @@ def register_handlers(
         repo.set_time_horizons(callback.message.chat.id, sorted(selected))
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _horizon_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SETTINGS_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_STATS)
     async def on_nav_stats(callback: CallbackQuery, bot: Bot) -> None:
         text, keyboard = _stats_view(repo)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_STATS_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_BOOKMAKERS)
     async def on_nav_bookmakers(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _bookmakers_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_BOOKMAKERS_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data.startswith("bk:"))
@@ -739,7 +823,10 @@ def register_handlers(
         repo.set_allowed_bookmakers(callback.message.chat.id, to_store)
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _bookmakers_view(user)
-        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_BOOKMAKERS_PATH,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
@@ -753,6 +840,18 @@ def register_handlers(
             photo_path=_status_banner(user),
         )
         await callback.answer("Пауза" if not user.is_active else "Возобновлено")
+
+    @router.callback_query(F.data == NAV_TOGGLE_MUTED)
+    async def on_nav_toggle_muted(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
+        repo.set_muted(callback.message.chat.id, not user.muted)
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _profile_view(user, admin_chat_ids)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=_status_banner(user),
+        )
+        await callback.answer("Тихий режим включён" if user.muted else "Звук уведомлений включён")
 
     @router.callback_query(F.data == NAV_SUBSCRIPTION)
     async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
@@ -806,7 +905,7 @@ def register_handlers(
         repo.set_bankroll(callback.message.chat.id, amount)
         await state.clear()
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SEARCH_PATH,
@@ -840,7 +939,7 @@ def register_handlers(
     async def on_nav_cancel(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SEARCH_PATH,
@@ -917,7 +1016,7 @@ def register_handlers(
     @router.callback_query(F.data == NAV_SEARCH)
     async def on_nav_search(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SEARCH_PATH,
@@ -945,7 +1044,7 @@ def register_handlers(
         repo.set_bankroll(message.chat.id, amount)
         await state.clear()
         user = repo.get_user(message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(Settings.waiting_threshold)
@@ -973,7 +1072,7 @@ def register_handlers(
         repo.set_min_profit_pct(message.chat.id, pct)
         await state.clear()
         user = repo.get_user(message.chat.id)
-        text, keyboard = _search_view(user, latest_state)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(Settings.waiting_calc_bankroll)

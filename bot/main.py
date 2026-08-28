@@ -93,6 +93,7 @@ async def main() -> None:
             yookassa_provider_token=config.yookassa_provider_token,
             admin_chat_ids=config.admin_chat_ids,
             bot_username=me.username or "",
+            poll_interval_seconds=config.poll_interval_seconds,
         )
     )
 

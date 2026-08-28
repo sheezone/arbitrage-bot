@@ -146,3 +146,18 @@ def test_opportunity_stats_today_excludes_yesterdays_entries(tmp_path):
     assert stats["today_count"] == 1
     assert stats["today_avg_profit"] == 2.0
     assert stats["alltime_count"] == 2  # yesterday's entry still counts toward all-time
+
+
+def test_new_user_is_not_muted_by_default(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    assert repo.get_user(1).muted is False
+
+
+def test_set_muted_round_trips(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.set_muted(1, True)
+    assert repo.get_user(1).muted is True
+    repo.set_muted(1, False)
+    assert repo.get_user(1).muted is False

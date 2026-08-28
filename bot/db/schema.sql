@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     referred_by INTEGER,
     referral_balance_rub REAL NOT NULL DEFAULT 0,
     expiry_reminder_sent_for TEXT,
-    allowed_bookmakers TEXT NOT NULL DEFAULT ''
+    allowed_bookmakers TEXT NOT NULL DEFAULT '',
+    muted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS seen_opportunities (

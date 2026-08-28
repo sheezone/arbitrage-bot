@@ -38,6 +38,7 @@ def _user(
         referral_balance_rub=0.0,
         expiry_reminder_sent_for=None,
         allowed_bookmakers=[],
+        muted=False,
     )
 
 

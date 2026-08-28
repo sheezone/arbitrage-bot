@@ -326,7 +326,7 @@ async def _notify_group(
         try:
             await _send_message_with_retries(
                 bot, user.chat_id, message, parse_mode="HTML", protect_content=True,
-                link_preview_options=LinkPreviewOptions(is_disabled=True),
+                link_preview_options=LinkPreviewOptions(is_disabled=True), disable_notification=user.muted,
             )
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
