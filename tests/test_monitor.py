@@ -4,8 +4,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from bot.core.arbitrage import OutcomeOdds
-from bot.core.monitor import format_match_start, user_allows_arb, within_time_horizon
+from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+from bot.core.monitor import (
+    EMOJI_ALERT,
+    _format_message,
+    format_match_start,
+    tg_emoji,
+    user_allows_arb,
+    within_time_horizon,
+)
 
 
 def test_formats_utc_time_as_moscow_time():
@@ -85,3 +92,22 @@ def test_arb_blocked_when_any_leg_is_at_a_disallowed_bookmaker():
 
 def test_bookmaker_matching_is_case_insensitive():
     assert user_allows_arb(["FONBET", "OLIMPBET"], _BEST_ODDS)
+
+
+def test_tg_emoji_renders_the_expected_html_tag():
+    assert tg_emoji(EMOJI_ALERT) == '<tg-emoji emoji-id="5440660757194744323">🚨</tg-emoji>'
+
+
+def test_format_message_includes_the_alert_emoji_tag():
+    arb = ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.95, profit_pct=5.0)
+    text = _format_message("football", "Team A", "Team B", arb)
+    assert tg_emoji(EMOJI_ALERT) in text
+
+
+def test_format_message_uses_high_profit_emoji_above_the_recheck_threshold():
+    from bot.core.monitor import EMOJI_HIGH_PROFIT, HIGH_PROFIT_RECHECK_THRESHOLD
+
+    high_arb = ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.8, profit_pct=HIGH_PROFIT_RECHECK_THRESHOLD + 1)
+    text = _format_message("football", "Team A", "Team B", high_arb)
+    assert tg_emoji(EMOJI_HIGH_PROFIT) in text
+    assert "🚀 Прибыль" not in text

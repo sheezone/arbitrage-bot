@@ -43,10 +43,16 @@ from bot.core import billing
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.monitor import (
     BOOKMAKER_URLS,
+    EMOJI_BELL,
+    EMOJI_CHART,
+    EMOJI_HIGH_PROFIT,
+    EMOJI_WARNING,
     GAME_EMOJI,
+    HIGH_PROFIT_RECHECK_THRESHOLD,
     format_match_start,
     format_odds_lines,
     format_stakes_lines,
+    tg_emoji,
     user_allows_arb,
     within_time_horizon,
 )
@@ -123,10 +129,6 @@ def _btn(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
-def _has_custom_emoji(message: Message) -> bool:
-    return any(e.type == "custom_emoji" for e in (message.entities or []))
-
-
 def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
     if not billing.has_access(user, now, admin_chat_ids):
@@ -199,7 +201,7 @@ NAV_STATS = "nav:stats"
 def _stats_view(repo: Repository) -> View:
     s = repo.get_opportunity_stats()
     text = (
-        "📊 <b>СТАТИСТИКА ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{tg_emoji(EMOJI_CHART)} <b>СТАТИСТИКА ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "<b>Сегодня:</b>\n"
         f"🔎 Найдено вилок: <b>{s['today_count']}</b>\n"
         f"📈 Средняя прибыль: <b>{s['today_avg_profit']:.2f}%</b>\n"
@@ -431,7 +433,7 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
         lines.append("<blockquote>" + "\n".join(stake_lines) + "</blockquote>")
     else:
         lines.append("")
-        lines.append(f"⚠️ Это не вилка — при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
+        lines.append(f"{tg_emoji(EMOJI_WARNING)} Это не вилка — при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
 
     return "\n".join(lines), _calculator_keyboard()
 
@@ -458,7 +460,7 @@ _SEARCH_TEXT_BUDGET = 3500
 
 def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     if latest_state.updated_at == 0:
-        text = "🔍 <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
+        text = f"{tg_emoji(EMOJI_BELL)} <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
         return text, _search_keyboard()
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
@@ -472,7 +474,7 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     ]
     matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
-    header = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    header = [f"{tg_emoji(EMOJI_BELL)} <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
         header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at}.")
         return "\n".join(header), _search_keyboard()
@@ -490,7 +492,8 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
         match_time = format_match_start(m.start_time_utc)
         if match_time:
             block.append(f"🕒 {match_time}")
-        block.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
+        profit_marker = tg_emoji(EMOJI_HIGH_PROFIT) if m.arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD else "🚀"
+        block.append(f"{profit_marker} Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
         profit_amount = user.bankroll * m.arb.profit_pct / 100
         block.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
         block.append("")
@@ -1087,20 +1090,6 @@ def register_handlers(
             text, keyboard = _help_view()
             text = "⚠️ Не удалось отправить сообщение менеджеру, попробуйте позже.\n\n" + text
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_HELP_PATH)
-
-    @router.message(F.chat.id.in_(admin_chat_ids), _has_custom_emoji)
-    async def on_admin_emoji_probe(message: Message) -> None:
-        """Temporary admin-only debug tool: send any message containing Telegram Premium
-        animated (custom) emoji and get their custom_emoji_id back, so real IDs can be
-        wired into <tg-emoji emoji-id="..."> tags in the bot's own messages -- there's no
-        way to know a real, currently-valid ID without capturing it from an actual
-        Premium-sent message like this. Safe to remove once the IDs we want are collected."""
-        ids = [
-            f"{e.custom_emoji_id} -> {message.text[e.offset:e.offset + e.length] if message.text else ''}"
-            for e in (message.entities or [])
-            if e.type == "custom_emoji"
-        ]
-        await message.reply("🆔 " + "\n".join(ids))
 
     @router.message(F.reply_to_message, F.chat.id.in_(admin_chat_ids))
     async def on_support_reply(message: Message, bot: Bot) -> None:

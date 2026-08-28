@@ -23,6 +23,30 @@ from bot.providers.surebet import SurebetFinder
 logger = logging.getLogger(__name__)
 
 
+# Telegram Premium animated emoji -- IDs captured live (2026-08-28) from an actual
+# Premium account via a one-off admin debug probe (since removed from commands.py). Each
+# is (custom_emoji_id, fallback_text); the fallback is exactly what Telegram itself sent
+# back as that emoji's non-animated representation, not guessed, so it's safe to trust
+# verbatim. Rendering via <tg-emoji emoji-id="..."> needs no Premium on the bot's side --
+# any bot can send these since Bot API 6.5 -- but ONLY works in message text/captions,
+# not inline keyboard button labels (Telegram doesn't support custom emoji there).
+EMOJI_ALERT = ("5440660757194744323", "🚨")
+EMOJI_HIGH_PROFIT = ("5206607081334906820", "‼️")
+EMOJI_WARNING = ("5210952531676504517", "❗️")
+EMOJI_MONEY = ("5456140674028019486", "💵💸")
+EMOJI_NEW = ("5395695537687123235", "🆕")
+EMOJI_CANCEL = ("5244837092042750681", "❌")
+EMOJI_LIGHTNING = ("5231200819986047254", "⚡️")
+EMOJI_CHART = ("5447183459602669338", "🕯📈")
+EMOJI_BELL = ("5246762912428603768", "🔔📊")
+EMOJI_COMET = ("5458603043203327669", "☄️")
+
+
+def tg_emoji(pair: tuple[str, str]) -> str:
+    emoji_id, fallback = pair
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+
 GAME_EMOJI = {
     "cs2": "🔫",
     "dota2": "🎮",
@@ -166,18 +190,19 @@ def _format_message(
 ) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"💰 {emoji} <b>Найдена вилка</b> ({game.upper()})",
+        f"{tg_emoji(EMOJI_ALERT)} {emoji} <b>Найдена вилка</b> ({game.upper()})",
         f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
         lines.append(f"🕒 {match_time}")
-    lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
+    profit_marker = tg_emoji(EMOJI_HIGH_PROFIT) if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD else "🚀"
+    lines.append(f"{profit_marker} Прибыль: <b>{arb.profit_pct:.2f}%</b>")
     if bankroll is not None:
         # The guaranteed profit is the same no matter which leg wins -- that's the whole
         # point of an arb -- so this is a single number, not a per-outcome range.
         profit_amount = bankroll * arb.profit_pct / 100
-        lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
+        lines.append(f"{tg_emoji(EMOJI_MONEY)} Возможный выигрыш: <b>{profit_amount:.2f}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     return "\n".join(lines)
@@ -188,7 +213,7 @@ def _format_showcase_message(
 ) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"💰 {emoji} <b>Вилка</b> ({game.upper()})",
+        f"{tg_emoji(EMOJI_NEW)} {emoji} <b>Вилка</b> ({game.upper()})",
         f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
