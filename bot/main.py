@@ -15,6 +15,7 @@ from bot.core.state import LatestState
 from bot.db.repository import Repository
 from bot.handlers.commands import register_handlers
 from bot.providers.baltbet import BaltbetProvider
+from bot.providers.cryptobot import CryptoPayClient
 from bot.providers.fonbet import FonbetProvider
 from bot.providers.leon import LeonProvider
 from bot.providers.marathon import MarathonProvider
@@ -83,6 +84,7 @@ async def main() -> None:
     if config.enable_melbet:
         sources.append(MelbetProvider())
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
+    crypto_pay_client = CryptoPayClient(api_token=config.cryptobot_api_token) if config.cryptobot_api_token else None
 
     me = await _get_me_with_retries(bot)
 
@@ -94,6 +96,7 @@ async def main() -> None:
             admin_chat_ids=config.admin_chat_ids,
             bot_username=me.username or "",
             poll_interval_seconds=config.poll_interval_seconds,
+            crypto_pay_client=crypto_pay_client,
         )
     )
 
@@ -125,6 +128,8 @@ async def main() -> None:
         for source in sources:
             await source.close()
         await surebet_finder.close()
+        if crypto_pay_client is not None:
+            await crypto_pay_client.close()
         repo.close()
         await bot.session.close()
 

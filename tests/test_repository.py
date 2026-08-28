@@ -161,3 +161,25 @@ def test_set_muted_round_trips(tmp_path):
     assert repo.get_user(1).muted is True
     repo.set_muted(1, False)
     assert repo.get_user(1).muted is False
+
+
+def test_has_payment_false_until_recorded(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    assert repo.has_payment("cryptobot:12345") is False
+    repo.record_payment(1, "7d", "cryptobot", 3.5, "USDT", "cryptobot:12345")
+    assert repo.has_payment("cryptobot:12345") is True
+
+
+def test_record_payment_ignores_duplicate_crypto_charge_id(tmp_path):
+    """Guards the has_payment-before-extend idempotency in on_crypto_check (see
+    bot/handlers/commands.py) -- a repeated "Проверить оплату" tap after it already
+    succeeded must not extend the subscription twice."""
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.record_payment(1, "7d", "cryptobot", 3.5, "USDT", "cryptobot:99")
+    repo.record_payment(1, "7d", "cryptobot", 3.5, "USDT", "cryptobot:99")
+    count = repo._conn.execute(
+        "SELECT COUNT(*) FROM payments WHERE telegram_charge_id = ?", ("cryptobot:99",)
+    ).fetchone()[0]
+    assert count == 1

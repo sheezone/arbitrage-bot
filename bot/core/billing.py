@@ -22,15 +22,16 @@ class Plan:
     label: str
     price_rub: int
     price_stars: int
+    price_usdt: float
 
 
 # Stars prices are a rough RUB equivalent at time of writing (~1 Star ~= 1.4 RUB) --
 # Telegram's Stars exchange rate drifts over time, so treat these as a starting point
-# to revisit, not a permanently fixed peg.
+# to revisit, not a permanently fixed peg. Same for price_usdt (see USDT_TO_RUB_RATE below).
 PLANS: list[Plan] = [
-    Plan(id="7d", days=7, label="7 дней", price_rub=299, price_stars=200),
-    Plan(id="30d", days=30, label="30 дней", price_rub=999, price_stars=700),
-    Plan(id="360d", days=360, label="360 дней", price_rub=6990, price_stars=5000),
+    Plan(id="7d", days=7, label="7 дней", price_rub=299, price_stars=200, price_usdt=3.5),
+    Plan(id="30d", days=30, label="30 дней", price_rub=999, price_stars=700, price_usdt=11.0),
+    Plan(id="360d", days=360, label="360 дней", price_rub=6990, price_stars=5000, price_usdt=78.0),
 ]
 
 PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in PLANS}
@@ -42,14 +43,18 @@ PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in PLANS}
 # currencies a payment (and therefore a commission) can arrive in.
 REFERRAL_COMMISSION_PCT = 0.20
 STARS_TO_RUB_RATE = 1.4
+# Same rough-peg caveat as STARS_TO_RUB_RATE -- revisit if RUB/USD drifts a lot from ~90.
+USDT_TO_RUB_RATE = 90.0
+
+_CURRENCY_TO_RUB_RATE = {"RUB": 1.0, "USDT": USDT_TO_RUB_RATE}
 
 
 def to_rub_equivalent(amount: float, currency: str) -> float:
-    return amount if currency == "RUB" else amount * STARS_TO_RUB_RATE
+    return amount * _CURRENCY_TO_RUB_RATE.get(currency, STARS_TO_RUB_RATE)
 
 
 def from_rub_equivalent(amount_rub: float, currency: str) -> float:
-    return amount_rub if currency == "RUB" else amount_rub / STARS_TO_RUB_RATE
+    return amount_rub / _CURRENCY_TO_RUB_RATE.get(currency, STARS_TO_RUB_RATE)
 
 
 def referral_discount(original_amount: float, currency: str, balance_rub: float) -> tuple[float, float]:

@@ -54,6 +54,7 @@ from bot.core.monitor import (
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
+from bot.providers.cryptobot import CryptoPayClient, CryptoPayError
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -366,7 +367,9 @@ def _bookmakers_view(user: UserSettings) -> View:
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _subscription_view(user: UserSettings, yookassa_enabled: bool, admin_chat_ids: frozenset[int] = frozenset()) -> View:
+def _subscription_view(
+    user: UserSettings, yookassa_enabled: bool, crypto_enabled: bool = False, admin_chat_ids: frozenset[int] = frozenset()
+) -> View:
     now = datetime.now(timezone.utc)
     if billing.is_admin(user, admin_chat_ids):
         status = "♾️ Безлимитный доступ (админ)"
@@ -381,6 +384,8 @@ def _subscription_view(user: UserSettings, yookassa_enabled: bool, admin_chat_id
         if yookassa_enabled:
             row.append(_btn(f"{plan.label} — {plan.price_rub}₽", f"sub:{plan.id}:rub"))
         rows.append(row)
+        if crypto_enabled:
+            rows.append([_btn(f"💎 {plan.label} — {plan.price_usdt:g} USDT", f"sub:{plan.id}:crypto")])
     rows.append([_btn("◀️ Назад", NAV_PROFILE)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -638,6 +643,7 @@ def register_handlers(
     admin_chat_ids: frozenset[int] = frozenset(),
     bot_username: str = "",
     poll_interval_seconds: int = 150,
+    crypto_pay_client: CryptoPayClient | None = None,
 ) -> Router:
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -856,7 +862,9 @@ def register_handlers(
     @router.callback_query(F.data == NAV_SUBSCRIPTION)
     async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _subscription_view(user, bool(yookassa_provider_token), admin_chat_ids)
+        text, keyboard = _subscription_view(
+            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids
+        )
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SUBSCRIPTION_PATH,
@@ -954,6 +962,10 @@ def register_handlers(
             await callback.answer()
             return
 
+        if method == "crypto":
+            await on_sub_pay_crypto(callback, plan)
+            return
+
         if method == "stars":
             currency, provider_token, original_amount = "XTR", "", float(plan.price_stars)
         else:
@@ -979,6 +991,102 @@ def register_handlers(
             prices=[LabeledPrice(label=plan.label, amount=amount)],
         )
         await callback.answer()
+
+    async def on_sub_pay_crypto(callback: CallbackQuery, plan: billing.Plan) -> None:
+        if crypto_pay_client is None:
+            await callback.answer("Оплата криптой пока не подключена", show_alert=True)
+            return
+
+        user = repo.get_user(callback.message.chat.id)
+        discounted, discount_used = billing.referral_discount(
+            plan.price_usdt, "USDT", user.referral_balance_rub
+        )
+        description = f"Подписка на {plan.label} — Арбитражный бот"
+        if discount_used > 0:
+            description += f" (скидка за рефералов: -{discount_used:.2f} USDT)"
+
+        try:
+            invoice = await crypto_pay_client.create_invoice(
+                asset="USDT",
+                amount=discounted,
+                description=description,
+                payload=f"{callback.message.chat.id}:{plan.id}",
+            )
+        except Exception:
+            logger.exception("Failed to create CryptoBot invoice for chat_id=%s", callback.message.chat.id)
+            await callback.answer("Не удалось создать счёт, попробуйте позже", show_alert=True)
+            return
+
+        text = (
+            f"💎 <b>ОПЛАТА КРИПТОЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Тариф: <b>{plan.label}</b>\nСумма: <b>{discounted:g} USDT</b>\n\n"
+            "Оплатите по кнопке ниже, затем нажмите «✅ Проверить оплату»."
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="💎 Оплатить", url=invoice["bot_invoice_url"])],
+                [_btn("✅ Проверить оплату", f"crypto_check:{invoice['invoice_id']}")],
+                [_btn("◀️ Назад", NAV_SUBSCRIPTION)],
+            ]
+        )
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("crypto_check:"))
+    async def on_crypto_check(callback: CallbackQuery, bot: Bot) -> None:
+        if crypto_pay_client is None:
+            await callback.answer()
+            return
+        invoice_id = int(callback.data.split(":", 1)[1])
+
+        try:
+            invoice = await crypto_pay_client.get_invoice(invoice_id)
+        except Exception:
+            logger.exception("Failed to check CryptoBot invoice_id=%s", invoice_id)
+            await callback.answer("Не удалось проверить оплату, попробуйте ещё раз", show_alert=True)
+            return
+
+        if invoice is None or invoice.get("status") != "paid":
+            await callback.answer("Пока не оплачено — оплатите и нажмите ещё раз", show_alert=True)
+            return
+
+        payload = invoice.get("payload") or ""
+        payload_chat_id, _, plan_id = payload.partition(":")
+        plan = billing.PLANS_BY_ID.get(plan_id)
+        if not payload_chat_id.isdigit() or int(payload_chat_id) != callback.message.chat.id or plan is None:
+            logger.warning("CryptoBot invoice_id=%s payload mismatch: %r", invoice_id, payload)
+            await callback.answer("Не удалось сопоставить платёж", show_alert=True)
+            return
+
+        # A repeated tap of "Проверить оплату" after it already succeeded once must not
+        # extend the subscription twice -- record_payment's INSERT OR IGNORE on the unique
+        # charge id is what makes that safe, so check it *before* extending, not after.
+        already_credited = repo.has_payment(f"cryptobot:{invoice_id}")
+        if not already_credited:
+            repo.extend_subscription(callback.message.chat.id, plan.days)
+            repo.record_payment(
+                callback.message.chat.id, plan.id, "cryptobot", float(invoice["amount"]), "USDT", f"cryptobot:{invoice_id}"
+            )
+            discount_used = max(0.0, plan.price_usdt - float(invoice["amount"]))
+            if discount_used > 0:
+                repo.consume_referral_balance(
+                    callback.message.chat.id, billing.to_rub_equivalent(discount_used, "USDT")
+                )
+            buyer = repo.get_user(callback.message.chat.id)
+            if buyer.referred_by is not None:
+                commission_rub = billing.referral_commission_rub(float(invoice["amount"]), "USDT")
+                repo.credit_referral_balance(buyer.referred_by, commission_rub)
+
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _subscription_view(
+            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids
+        )
+        text = "✅ <b>Оплата получена, подписка продлена!</b>\n\n" + text
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SUBSCRIPTION_PATH,
+        )
+        await callback.answer("Оплачено!")
 
     @router.pre_checkout_query()
     async def on_pre_checkout(query: PreCheckoutQuery) -> None:

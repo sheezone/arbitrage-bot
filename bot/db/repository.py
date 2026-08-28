@@ -112,6 +112,12 @@ class Repository:
         )
         self._conn.commit()
 
+    def has_payment(self, telegram_charge_id: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM payments WHERE telegram_charge_id = ?", (telegram_charge_id,)
+        ).fetchone()
+        return row is not None
+
     def set_bankroll(self, chat_id: int, bankroll: float) -> None:
         self._conn.execute("UPDATE users SET bankroll = ? WHERE chat_id = ?", (bankroll, chat_id))
         self._conn.commit()

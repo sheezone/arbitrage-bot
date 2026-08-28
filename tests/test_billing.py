@@ -9,11 +9,13 @@ from bot.core.billing import (
     REFERRED_TRIAL_DAYS,
     TRIAL_DAYS,
     days_left,
+    from_rub_equivalent,
     has_access,
     is_admin,
     on_trial,
     referral_commission_rub,
     referral_discount,
+    to_rub_equivalent,
 )
 from bot.db.repository import UserSettings
 
@@ -148,3 +150,17 @@ def test_referral_commission_for_rub_payment():
 
 def test_referral_commission_for_stars_payment_converts_to_rub():
     assert referral_commission_rub(700, "XTR") == 196.0
+
+
+def test_usdt_to_rub_conversion_round_trips():
+    assert to_rub_equivalent(10, "USDT") == 900.0
+    assert from_rub_equivalent(900.0, "USDT") == 10.0
+
+
+def test_referral_commission_for_usdt_payment_converts_to_rub():
+    assert referral_commission_rub(10, "USDT") == 180.0  # 0.20 * (10 * 90)
+
+
+def test_every_plan_has_a_usdt_price():
+    for plan in PLANS:
+        assert plan.price_usdt > 0
