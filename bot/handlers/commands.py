@@ -367,26 +367,51 @@ def _bookmakers_view(user: UserSettings) -> View:
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+NAV_SUB_METHOD_PREFIX = "sub_method:"
+
+
+def _subscription_status_line(user: UserSettings, admin_chat_ids: frozenset[int]) -> str:
+    now = datetime.now(timezone.utc)
+    if billing.is_admin(user, admin_chat_ids):
+        return "♾️ Безлимитный доступ (админ)"
+    left = billing.days_left(user, now)
+    return f"Осталось дней доступа: <b>{left}</b>" if left > 0 else "Доступ истёк"
+
+
 def _subscription_view(
     user: UserSettings, yookassa_enabled: bool, crypto_enabled: bool = False, admin_chat_ids: frozenset[int] = frozenset()
 ) -> View:
-    now = datetime.now(timezone.utc)
-    if billing.is_admin(user, admin_chat_ids):
-        status = "♾️ Безлимитный доступ (админ)"
-    else:
-        left = billing.days_left(user, now)
-        status = f"Осталось дней доступа: <b>{left}</b>" if left > 0 else "Доступ истёк"
+    """Top level: pick a payment method first (each has its own submenu of the 3 plans --
+    see _subscription_method_view) rather than one screen listing every plan x every
+    method at once, which got cramped once crypto joined Stars/card."""
+    status = _subscription_status_line(user, admin_chat_ids)
+    text = f"💳 <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите способ оплаты:"
+    rows = [[_btn("⭐ Telegram Stars", f"{NAV_SUB_METHOD_PREFIX}stars")]]
+    if yookassa_enabled:
+        rows.append([_btn("💳 Банковская карта", f"{NAV_SUB_METHOD_PREFIX}rub")])
+    if crypto_enabled:
+        rows.append([_btn("💎 Криптовалюта (USDT)", f"{NAV_SUB_METHOD_PREFIX}crypto")])
+    rows.append([_btn("◀️ Назад", NAV_PROFILE)])
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
-    text = f"💳 <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
+
+_METHOD_LABELS = {"stars": "⭐ TELEGRAM STARS", "rub": "💳 БАНКОВСКАЯ КАРТА", "crypto": "💎 КРИПТОВАЛЮТА (USDT)"}
+
+
+def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: frozenset[int]) -> View:
+    status = _subscription_status_line(user, admin_chat_ids)
+    label = _METHOD_LABELS.get(method, method.upper())
+    text = f"{label}\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
     rows = []
     for plan in billing.PLANS:
-        row = [_btn(f"{plan.label} — {plan.price_stars} ⭐", f"sub:{plan.id}:stars")]
-        if yookassa_enabled:
-            row.append(_btn(f"{plan.label} — {plan.price_rub}₽", f"sub:{plan.id}:rub"))
-        rows.append(row)
-        if crypto_enabled:
-            rows.append([_btn(f"💎 {plan.label} — {plan.price_usdt:g} USDT", f"sub:{plan.id}:crypto")])
-    rows.append([_btn("◀️ Назад", NAV_PROFILE)])
+        if method == "stars":
+            price = f"{plan.price_stars} ⭐"
+        elif method == "rub":
+            price = f"{plan.price_rub}₽"
+        else:
+            price = f"{plan.price_usdt:g} USDT"
+        rows.append([_btn(f"{plan.label} — {price}", f"sub:{plan.id}:{method}")])
+    rows.append([_btn("◀️ Назад", NAV_SUBSCRIPTION)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -865,6 +890,23 @@ def register_handlers(
         text, keyboard = _subscription_view(
             user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids
         )
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SUBSCRIPTION_PATH,
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith(NAV_SUB_METHOD_PREFIX))
+    async def on_sub_method(callback: CallbackQuery, bot: Bot) -> None:
+        method = callback.data[len(NAV_SUB_METHOD_PREFIX):]
+        if method == "rub" and not yookassa_provider_token:
+            await callback.answer("Оплата картой пока не подключена", show_alert=True)
+            return
+        if method == "crypto" and crypto_pay_client is None:
+            await callback.answer("Оплата криптой пока не подключена", show_alert=True)
+            return
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _subscription_method_view(user, method, admin_chat_ids)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SUBSCRIPTION_PATH,
