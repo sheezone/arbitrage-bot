@@ -123,6 +123,10 @@ def _btn(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
+def _has_custom_emoji(message: Message) -> bool:
+    return any(e.type == "custom_emoji" for e in (message.entities or []))
+
+
 def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
     if not billing.has_access(user, now, admin_chat_ids):
@@ -1083,6 +1087,20 @@ def register_handlers(
             text, keyboard = _help_view()
             text = "⚠️ Не удалось отправить сообщение менеджеру, попробуйте позже.\n\n" + text
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_HELP_PATH)
+
+    @router.message(F.chat.id.in_(admin_chat_ids), _has_custom_emoji)
+    async def on_admin_emoji_probe(message: Message) -> None:
+        """Temporary admin-only debug tool: send any message containing Telegram Premium
+        animated (custom) emoji and get their custom_emoji_id back, so real IDs can be
+        wired into <tg-emoji emoji-id="..."> tags in the bot's own messages -- there's no
+        way to know a real, currently-valid ID without capturing it from an actual
+        Premium-sent message like this. Safe to remove once the IDs we want are collected."""
+        ids = [
+            f"{e.custom_emoji_id} -> {message.text[e.offset:e.offset + e.length] if message.text else ''}"
+            for e in (message.entities or [])
+            if e.type == "custom_emoji"
+        ]
+        await message.reply("🆔 " + "\n".join(ids))
 
     @router.message(F.reply_to_message, F.chat.id.in_(admin_chat_ids))
     async def on_support_reply(message: Message, bot: Bot) -> None:
