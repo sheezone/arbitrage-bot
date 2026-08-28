@@ -49,13 +49,22 @@ def make_banner(filename: str, title: str, subtitle: str, footer: str = "", acce
 
     if footer:
         footer_font = ImageFont.truetype(FONT_REGULAR, 24)
-        _centered_text(draw, 535, footer, footer_font, GRAY)
+        lines = footer.split("\n")
+        start_y = 535 - (len(lines) - 1) * 17  # keep the block vertically centered around the old single-line spot
+        for i, line in enumerate(lines):
+            _centered_text(draw, start_y + i * 34, line, footer_font, GRAY)
 
     img.save(ASSETS / filename)
     print(f"wrote {ASSETS / filename}")
 
 
 if __name__ == "__main__":
+    make_banner(
+        "banner.png",
+        "АРБИТРАЖНЫЙ БОТ",
+        "Вилки на коэффициентах в реальном времени",
+        footer="CS2 · DOTA2 · LOL · VALORANT\nТЕННИС · БАСКЕТБОЛ · ФУТБОЛ · ХОККЕЙ\nБОКС · MMA · ВОЛЕЙБОЛ",
+    )
     make_banner(
         "banner_referral.png",
         "ПАРТНЁРСКАЯ ПРОГРАММА",
