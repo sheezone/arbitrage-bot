@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
     time_horizon_days INTEGER NOT NULL DEFAULT 7,
     time_horizons TEXT NOT NULL DEFAULT '1,2',
     referred_by INTEGER,
-    referral_balance_rub REAL NOT NULL DEFAULT 0
+    referral_balance_rub REAL NOT NULL DEFAULT 0,
+    expiry_reminder_sent_for TEXT,
+    allowed_bookmakers TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS seen_opportunities (
@@ -18,6 +20,12 @@ CREATE TABLE IF NOT EXISTS seen_opportunities (
     bookmakers_hash TEXT NOT NULL,
     notified_at TEXT NOT NULL,
     PRIMARY KEY (fixture_id, bookmakers_hash)
+);
+
+CREATE TABLE IF NOT EXISTS opportunity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    found_at TEXT NOT NULL,
+    profit_pct REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS payments (

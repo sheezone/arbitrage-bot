@@ -135,6 +135,16 @@ BOOKMAKER_URLS = {
 }
 
 
+def user_allows_arb(allowed_bookmakers: list[str], best_odds: list[OutcomeOdds]) -> bool:
+    """Empty allowed_bookmakers means no restriction (the default -- a fresh/upgraded user
+    sees everything). Otherwise every leg of the arb must be at an allowed bookmaker: a
+    vilka the user can't actually place half of isn't useful to them at all."""
+    if not allowed_bookmakers:
+        return True
+    allowed = {b.lower() for b in allowed_bookmakers}
+    return all(o.bookmaker.lower() in allowed for o in best_odds)
+
+
 def format_odds_lines(best_odds: list[OutcomeOdds]) -> list[str]:
     lines = []
     for i, outcome in enumerate(best_odds):
@@ -272,6 +282,8 @@ async def _notify_group(
             continue
         if not within_time_horizon(start_time_utc, user.time_horizons, now):
             continue
+        if not user_allows_arb(user.allowed_bookmakers, arb.best_odds):
+            continue
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
         message = _format_message(game, team_a, team_b, arb, start_time_utc, user.bankroll)
@@ -287,6 +299,7 @@ async def _notify_group(
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
 
     repo.mark_opportunity_seen(match_id, bh)
+    repo.log_opportunity(arb.profit_pct)
 
 
 # A profit this high is more often a stale/mispriced quote from a scraped source than a
@@ -375,6 +388,45 @@ async def _recheck_and_notify_high_profit(
     return found
 
 
+# How long before access actually runs out to warn a user, and how often to even bother
+# checking -- checking every poll cycle (which can be as low as 15s) would just re-query
+# every user for nothing since expiry_reminder_sent_for already dedups the actual sends;
+# an hourly check is more than tight enough for a 24h warning window.
+EXPIRY_REMINDER_WINDOW_HOURS = 24
+EXPIRY_CHECK_INTERVAL_SECONDS = 3600
+
+
+async def _send_expiry_reminders(repo: Repository, bot: Bot, admin_chat_ids: frozenset[int]) -> None:
+    now = datetime.now(timezone.utc)
+    for user in repo.get_all_users():
+        if billing.is_admin(user, admin_chat_ids):
+            continue  # unlimited access, nothing to warn about
+
+        end = billing.access_end(user, now)
+        if end <= now:
+            continue  # already expired -- that's the dashboard's locked-screen job, not this
+        hours_left = (end - now).total_seconds() / 3600
+        if hours_left > EXPIRY_REMINDER_WINDOW_HOURS:
+            continue
+
+        end_key = end.isoformat()
+        if user.expiry_reminder_sent_for == end_key:
+            continue  # already reminded for this exact expiry point (a renewal changes
+            # end_key, which naturally re-arms this for the new deadline)
+
+        kind = "пробный период" if billing.on_trial(user, now) else "подписка"
+        message = (
+            f"⏳ Ваш {kind} заканчивается менее чем через 24 часа.\n\n"
+            "Оформите подписку в разделе «👤 Мой профиль» → «💳 Подписка», чтобы не "
+            "пропустить уведомления о новых вилках."
+        )
+        try:
+            await _send_message_with_retries(bot, user.chat_id, message, parse_mode="HTML")
+            repo.set_expiry_reminder_sent(user.chat_id, end_key)
+        except Exception:
+            logger.exception("Failed to send expiry reminder to chat_id=%s", user.chat_id)
+
+
 def _showcase_key(m: MatchSnapshot) -> str:
     return f"{m.game}:{m.team_a}:{m.team_b}:{m.start_time_utc}:{_bookmakers_hash(m.arb.best_odds)}"
 
@@ -411,7 +463,15 @@ async def run_monitor_loop(
     last_showcase_post = 0.0
     last_showcase_key: str | None = None
     daily_best: MatchSnapshot | None = None
+    last_expiry_check = 0.0
     while True:
+        if time.time() - last_expiry_check >= EXPIRY_CHECK_INTERVAL_SECONDS:
+            try:
+                await _send_expiry_reminders(repo, bot, admin_chat_ids)
+            except Exception:
+                logger.exception("Failed to send expiry reminders")
+            last_expiry_check = time.time()
+
         all_quotes = await _fetch_all_quotes(sources, games, empty_streaks)
         groups = group_quotes(all_quotes)
 

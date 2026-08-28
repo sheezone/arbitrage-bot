@@ -4,7 +4,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from bot.core.monitor import format_match_start, within_time_horizon
+from bot.core.arbitrage import OutcomeOdds
+from bot.core.monitor import format_match_start, user_allows_arb, within_time_horizon
 
 
 def test_formats_utc_time_as_moscow_time():
@@ -65,3 +66,22 @@ def test_unknown_start_time_is_not_filtered():
 
 def test_unparseable_start_time_is_not_filtered():
     assert within_time_horizon("garbage", [1], NOW)
+
+
+_BEST_ODDS = [OutcomeOdds("A", "fonbet", 2.1), OutcomeOdds("B", "olimpbet", 2.05)]
+
+
+def test_empty_allowed_bookmakers_means_no_restriction():
+    assert user_allows_arb([], _BEST_ODDS)
+
+
+def test_arb_allowed_when_every_leg_is_at_an_allowed_bookmaker():
+    assert user_allows_arb(["fonbet", "olimpbet"], _BEST_ODDS)
+
+
+def test_arb_blocked_when_any_leg_is_at_a_disallowed_bookmaker():
+    assert not user_allows_arb(["fonbet"], _BEST_ODDS)
+
+
+def test_bookmaker_matching_is_case_insensitive():
+    assert user_allows_arb(["FONBET", "OLIMPBET"], _BEST_ODDS)

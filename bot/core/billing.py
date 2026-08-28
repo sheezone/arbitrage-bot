@@ -10,6 +10,9 @@ from datetime import datetime, timedelta
 from bot.db.repository import UserSettings
 
 TRIAL_DAYS = 3
+# A user who signed up via someone's referral link gets a longer trial -- extra incentive
+# to actually use a referral link instead of just starting the bot cold.
+REFERRED_TRIAL_DAYS = 5
 
 
 @dataclass(frozen=True)
@@ -64,7 +67,8 @@ def referral_commission_rub(payment_amount: float, currency: str) -> float:
 
 
 def _trial_end(user: UserSettings) -> datetime:
-    return datetime.fromisoformat(user.trial_started_at) + timedelta(days=TRIAL_DAYS)
+    days = REFERRED_TRIAL_DAYS if user.referred_by is not None else TRIAL_DAYS
+    return datetime.fromisoformat(user.trial_started_at) + timedelta(days=days)
 
 
 def _access_end(user: UserSettings) -> datetime:
@@ -74,6 +78,14 @@ def _access_end(user: UserSettings) -> datetime:
     if user.subscription_expires_at:
         return max(trial_end, datetime.fromisoformat(user.subscription_expires_at))
     return trial_end
+
+
+def access_end(user: UserSettings, now: datetime) -> datetime:
+    """Public wrapper around _access_end -- `now` is accepted but unused (access_end
+    doesn't actually depend on it, only trial_started_at/subscription_expires_at do) and
+    kept for symmetry with has_access/days_left so callers don't need to know which
+    functions do and don't need a clock."""
+    return _access_end(user)
 
 
 def is_admin(user: UserSettings, admin_chat_ids: frozenset[int]) -> bool:

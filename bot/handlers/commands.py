@@ -40,7 +40,15 @@ from aiogram.types import (
 
 from bot.core import billing
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
-from bot.core.monitor import GAME_EMOJI, format_match_start, format_odds_lines, format_stakes_lines, within_time_horizon
+from bot.core.monitor import (
+    BOOKMAKER_URLS,
+    GAME_EMOJI,
+    format_match_start,
+    format_odds_lines,
+    format_stakes_lines,
+    user_allows_arb,
+    within_time_horizon,
+)
 from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
@@ -170,9 +178,32 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
     rows = [
         [_btn(pause_label, NAV_TOGGLE_ACTIVE)],
         [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
+        [_btn("📊 Статистика", NAV_STATS)],
         [_btn("🤝 Партнёрская программа", NAV_REFERRAL)],
         [_btn("ℹ️ Помощь", NAV_HELP)],
         [_btn("◀️ Назад", NAV_DASHBOARD)],
+    ]
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+NAV_STATS = "nav:stats"
+
+
+def _stats_view(repo: Repository) -> View:
+    s = repo.get_opportunity_stats()
+    text = (
+        "📊 <b>СТАТИСТИКА ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>Сегодня:</b>\n"
+        f"🔎 Найдено вилок: <b>{s['today_count']}</b>\n"
+        f"📈 Средняя прибыль: <b>{s['today_avg_profit']:.2f}%</b>\n"
+        f"🚀 Лучшая прибыль: <b>{s['today_best_profit']:.2f}%</b>\n\n"
+        "<b>За всё время:</b>\n"
+        f"🔎 Найдено вилок: <b>{s['alltime_count']}</b>\n"
+        f"📈 Средняя прибыль: <b>{s['alltime_avg_profit']:.2f}%</b>"
+    )
+    rows = [
+        [_btn("🔄 Обновить", NAV_STATS)],
+        [_btn("◀️ Назад", NAV_PROFILE)],
     ]
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -254,6 +285,37 @@ def _horizon_view(user: UserSettings) -> View:
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+NAV_BOOKMAKERS = "nav:bookmakers"
+_ALL_BOOKMAKER_KEYS = sorted(BOOKMAKER_URLS.keys())
+
+
+def _selected_bookmakers(user: UserSettings) -> set[str]:
+    """Empty allowed_bookmakers means "no restriction" (see user_allows_arb) -- resolve
+    that to the full set here so the toggle screen always shows concrete checkmarks."""
+    return set(user.allowed_bookmakers) if user.allowed_bookmakers else set(_ALL_BOOKMAKER_KEYS)
+
+
+def _bookmakers_view(user: UserSettings) -> View:
+    selected = _selected_bookmakers(user)
+    rows = []
+    row: list[InlineKeyboardButton] = []
+    for key in _ALL_BOOKMAKER_KEYS:
+        mark = "✅" if key in selected else "⬜"
+        row.append(_btn(f"{mark} {key.upper()}", f"bk:{key}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([_btn("◀️ Назад", NAV_SEARCH)])
+    text = (
+        "🏦 <b>МОИ БУКМЕКЕРЫ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Вилки с отключёнными букмекерами не показываются и не присылаются. "
+        "Отметьте только те конторы, где у вас есть аккаунт."
+    )
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def _subscription_view(user: UserSettings, yookassa_enabled: bool, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
     if billing.is_admin(user, admin_chat_ids):
@@ -278,6 +340,17 @@ def _input_prompt_view(label: str, example: str, error: str | None = None) -> Vi
     if error:
         text = f"⚠️ {error}\n\n{text}"
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
+
+
+BANKROLL_PRESETS = [500, 1000, 5000, 10000]
+NAV_BANKROLL_PRESET_PREFIX = "bankroll_preset:"
+
+
+def _bankroll_prompt_view(error: str | None = None) -> View:
+    text, _keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100", error=error)
+    preset_row = [_btn(str(p), f"{NAV_BANKROLL_PRESET_PREFIX}{p}") for p in BANKROLL_PRESETS]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[preset_row, [_btn("❌ Отмена", NAV_CANCEL)]])
+    return text, keyboard
 
 
 _CALCULATOR_HEADER = "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -355,6 +428,7 @@ def _search_keyboard() -> InlineKeyboardMarkup:
             [_btn("🔄 Обновить", NAV_SEARCH)],
             [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
             [_btn("📅 Период", NAV_HORIZON), _btn("🧮 Калькулятор", NAV_CALCULATOR)],
+            [_btn("🏦 Мои букмекеры", NAV_BOOKMAKERS)],
             [_btn("◀️ Назад", NAV_DASHBOARD)],
         ]
     )
@@ -378,7 +452,9 @@ def _search_view(user: UserSettings, latest_state: LatestState) -> View:
     matches = [
         m
         for m in latest_state.matches
-        if m.arb.profit_pct >= user.min_profit_pct and within_time_horizon(m.start_time_utc, user.time_horizons, now)
+        if m.arb.profit_pct >= user.min_profit_pct
+        and within_time_horizon(m.start_time_utc, user.time_horizons, now)
+        and user_allows_arb(user.allowed_bookmakers, m.arb.best_odds)
     ]
     matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
@@ -524,9 +600,11 @@ def register_handlers(
             # A one-off exception to the single-message UI: a permanent welcome note
             # explaining the trial/subscription policy, sent once per user, left in the
             # chat as a standing reference rather than folded into the dashboard panel.
+            trial_days = billing.REFERRED_TRIAL_DAYS if referred_by is not None else billing.TRIAL_DAYS
+            trial_note = " (по реферальной ссылке — дольше обычного)" if referred_by is not None else ""
             await message.answer(
                 "👋 <b>Добро пожаловать в Арбитражный бот!</b>\n\n"
-                f"Бот работает в тестовом режиме {billing.TRIAL_DAYS} дн. — полный "
+                f"Бот работает в тестовом режиме {trial_days} дн.{trial_note} — полный "
                 "бесплатный доступ ко всем функциям. После этого понадобится оформить "
                 "подписку (кнопка «💳 Подписка» на главном экране), чтобы продолжать "
                 "получать уведомления о найденных вилках.",
@@ -619,6 +697,41 @@ def register_handlers(
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
+    @router.callback_query(F.data == NAV_STATS)
+    async def on_nav_stats(callback: CallbackQuery, bot: Bot) -> None:
+        text, keyboard = _stats_view(repo)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data == NAV_BOOKMAKERS)
+    async def on_nav_bookmakers(callback: CallbackQuery, bot: Bot) -> None:
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _bookmakers_view(user)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("bk:"))
+    async def on_bookmaker_toggle(callback: CallbackQuery, bot: Bot) -> None:
+        key = callback.data.split(":", 1)[1]
+        user = repo.get_user(callback.message.chat.id)
+        selected = _selected_bookmakers(user)
+        if key in selected:
+            if len(selected) == 1:
+                await callback.answer("Нужно оставить хотя бы одного букмекера", show_alert=True)
+                return
+            selected.discard(key)
+        else:
+            selected.add(key)
+        # Selecting everything back is stored as empty (== "no restriction") rather than
+        # the full explicit list -- functionally identical, but also covers any bookmaker
+        # key added to BOOKMAKER_URLS later without silently excluding it for existing users.
+        to_store = [] if selected == set(_ALL_BOOKMAKER_KEYS) else sorted(selected)
+        repo.set_allowed_bookmakers(callback.message.chat.id, to_store)
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _bookmakers_view(user)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
     @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
     async def on_nav_toggle_active(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
@@ -663,9 +776,22 @@ def register_handlers(
     @router.callback_query(F.data == NAV_BANKROLL)
     async def on_nav_bankroll(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_bankroll)
-        text, keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100")
+        text, keyboard = _bankroll_prompt_view()
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
+
+    @router.callback_query(F.data.startswith(NAV_BANKROLL_PRESET_PREFIX))
+    async def on_bankroll_preset(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        amount = float(callback.data[len(NAV_BANKROLL_PRESET_PREFIX):])
+        repo.set_bankroll(callback.message.chat.id, amount)
+        await state.clear()
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _search_view(user, latest_state)
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SEARCH_PATH,
+        )
+        await callback.answer(f"Банкролл: {amount:.0f}")
 
     @router.callback_query(F.data == NAV_THRESHOLD)
     async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -792,9 +918,7 @@ def register_handlers(
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            text, keyboard = _input_prompt_view(
-                "💰 Введите новый банкролл числом:", "100", error="Нужно число больше нуля"
-            )
+            text, keyboard = _bankroll_prompt_view(error="Нужно число больше нуля")
             await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
             return
 

@@ -22,6 +22,8 @@ class UserSettings:
     time_horizons: list[int]
     referred_by: int | None
     referral_balance_rub: float
+    expiry_reminder_sent_for: str | None
+    allowed_bookmakers: list[str]
 
 
 class Repository:
@@ -59,6 +61,16 @@ class Repository:
             self._conn.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
         if "referral_balance_rub" not in columns:
             self._conn.execute("ALTER TABLE users ADD COLUMN referral_balance_rub REAL NOT NULL DEFAULT 0")
+        if "expiry_reminder_sent_for" not in columns:
+            # Stores the exact access-end timestamp a reminder was already sent for --
+            # comparing against the *current* access end (not just a boolean) means a
+            # renewal that pushes the deadline out automatically re-arms the reminder for
+            # the new deadline, with no separate "reset on purchase" step needed.
+            self._conn.execute("ALTER TABLE users ADD COLUMN expiry_reminder_sent_for TEXT")
+        if "allowed_bookmakers" not in columns:
+            # Empty string = no restriction (every bookmaker allowed) -- the common case,
+            # so a fresh/upgraded user sees everything by default rather than nothing.
+            self._conn.execute("ALTER TABLE users ADD COLUMN allowed_bookmakers TEXT NOT NULL DEFAULT ''")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None) -> None:
         """`referred_by` only ever takes effect for a genuinely new row -- ON CONFLICT DO
@@ -158,6 +170,25 @@ class Repository:
         rows = self._conn.execute("SELECT * FROM users WHERE is_active = 1").fetchall()
         return [_row_to_user(r) for r in rows]
 
+    def get_all_users(self) -> list[UserSettings]:
+        """Unlike get_active_users, includes users who paused notifications -- used for
+        things that are account-level rather than a notification preference, e.g. the
+        expiry reminder: a paused user's subscription still runs out either way."""
+        rows = self._conn.execute("SELECT * FROM users").fetchall()
+        return [_row_to_user(r) for r in rows]
+
+    def set_expiry_reminder_sent(self, chat_id: int, access_end_iso: str) -> None:
+        self._conn.execute(
+            "UPDATE users SET expiry_reminder_sent_for = ? WHERE chat_id = ?", (access_end_iso, chat_id)
+        )
+        self._conn.commit()
+
+    def set_allowed_bookmakers(self, chat_id: int, bookmakers: list[str]) -> None:
+        self._conn.execute(
+            "UPDATE users SET allowed_bookmakers = ? WHERE chat_id = ?", (",".join(bookmakers), chat_id)
+        )
+        self._conn.commit()
+
     def has_seen_opportunity(self, fixture_id: str, bookmakers_hash: str) -> bool:
         row = self._conn.execute(
             "SELECT 1 FROM seen_opportunities WHERE fixture_id = ? AND bookmakers_hash = ?",
@@ -172,6 +203,34 @@ class Repository:
             (fixture_id, bookmakers_hash, datetime.now(timezone.utc).isoformat()),
         )
         self._conn.commit()
+
+    def log_opportunity(self, profit_pct: float) -> None:
+        """One row per genuinely new arbitrage opportunity (call this alongside
+        mark_opportunity_seen, which already guarantees "once per unique opportunity"
+        regardless of how many users end up notified) -- feeds the stats screen."""
+        self._conn.execute(
+            "INSERT INTO opportunity_log (found_at, profit_pct) VALUES (?, ?)",
+            (datetime.now(timezone.utc).isoformat(), profit_pct),
+        )
+        self._conn.commit()
+
+    def get_opportunity_stats(self) -> dict:
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        today = self._conn.execute(
+            "SELECT COUNT(*) AS c, AVG(profit_pct) AS avg_p, MAX(profit_pct) AS max_p "
+            "FROM opportunity_log WHERE found_at >= ?",
+            (today_start,),
+        ).fetchone()
+        alltime = self._conn.execute(
+            "SELECT COUNT(*) AS c, AVG(profit_pct) AS avg_p FROM opportunity_log"
+        ).fetchone()
+        return {
+            "today_count": today["c"],
+            "today_avg_profit": today["avg_p"] or 0.0,
+            "today_best_profit": today["max_p"] or 0.0,
+            "alltime_count": alltime["c"],
+            "alltime_avg_profit": alltime["avg_p"] or 0.0,
+        }
 
     def close(self) -> None:
         self._conn.close()
@@ -190,6 +249,8 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         time_horizons=[int(d) for d in row["time_horizons"].split(",")],
         referred_by=row["referred_by"],
         referral_balance_rub=row["referral_balance_rub"],
+        expiry_reminder_sent_for=row["expiry_reminder_sent_for"],
+        allowed_bookmakers=[b for b in row["allowed_bookmakers"].split(",") if b],
     )
 
 

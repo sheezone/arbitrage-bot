@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bot.core.billing import (
     PLANS,
+    REFERRED_TRIAL_DAYS,
     TRIAL_DAYS,
     days_left,
     has_access,
@@ -19,7 +20,9 @@ from bot.db.repository import UserSettings
 NOW = datetime.now(timezone.utc)
 
 
-def _user(trial_started_ago_days: float, subscription_expires_in_days: float | None = None) -> UserSettings:
+def _user(
+    trial_started_ago_days: float, subscription_expires_in_days: float | None = None, referred_by: int | None = None
+) -> UserSettings:
     sub = (NOW + timedelta(days=subscription_expires_in_days)).isoformat() if subscription_expires_in_days is not None else None
     return UserSettings(
         chat_id=1,
@@ -31,9 +34,23 @@ def _user(trial_started_ago_days: float, subscription_expires_in_days: float | N
         trial_started_at=(NOW - timedelta(days=trial_started_ago_days)).isoformat(),
         subscription_expires_at=sub,
         time_horizons=[3],
-        referred_by=None,
+        referred_by=referred_by,
         referral_balance_rub=0.0,
+        expiry_reminder_sent_for=None,
+        allowed_bookmakers=[],
     )
+
+
+def test_referred_user_gets_a_longer_trial():
+    user = _user(trial_started_ago_days=TRIAL_DAYS + 1, referred_by=42)
+    assert has_access(user, NOW)  # would already be over for a non-referred user
+    assert on_trial(user, NOW)
+    assert 1 <= days_left(user, NOW) <= REFERRED_TRIAL_DAYS
+
+
+def test_referred_users_extended_trial_still_ends():
+    user = _user(trial_started_ago_days=REFERRED_TRIAL_DAYS + 1, referred_by=42)
+    assert not has_access(user, NOW)
 
 
 def test_trial_active_grants_access():
