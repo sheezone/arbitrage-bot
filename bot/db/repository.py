@@ -232,6 +232,23 @@ class Repository:
             "alltime_avg_profit": alltime["avg_p"] or 0.0,
         }
 
+    def record_support_message(self, admin_chat_id: int, admin_message_id: int, user_chat_id: int) -> None:
+        """Remembers which user a message forwarded into an admin's chat came from, so a
+        plain Telegram reply to it (see get_support_message_user) can be relayed back."""
+        self._conn.execute(
+            "INSERT OR REPLACE INTO support_messages (admin_chat_id, admin_message_id, user_chat_id, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (admin_chat_id, admin_message_id, user_chat_id, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def get_support_message_user(self, admin_chat_id: int, admin_message_id: int) -> int | None:
+        row = self._conn.execute(
+            "SELECT user_chat_id FROM support_messages WHERE admin_chat_id = ? AND admin_message_id = ?",
+            (admin_chat_id, admin_message_id),
+        ).fetchone()
+        return row["user_chat_id"] if row else None
+
     def close(self) -> None:
         self._conn.close()
 

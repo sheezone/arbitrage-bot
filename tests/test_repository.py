@@ -123,6 +123,18 @@ def test_opportunity_stats_aggregate_logged_entries(tmp_path):
     assert abs(stats["alltime_avg_profit"] - 4.0) < 0.001
 
 
+def test_support_message_round_trips(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.record_support_message(admin_chat_id=99, admin_message_id=555, user_chat_id=1)
+    assert repo.get_support_message_user(99, 555) == 1
+
+
+def test_support_message_lookup_misses_return_none(tmp_path):
+    repo = _repo(tmp_path)
+    assert repo.get_support_message_user(99, 12345) is None
+
+
 def test_opportunity_stats_today_excludes_yesterdays_entries(tmp_path):
     repo = _repo(tmp_path)
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()

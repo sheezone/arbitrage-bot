@@ -28,6 +28,14 @@ CREATE TABLE IF NOT EXISTS opportunity_log (
     profit_pct REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS support_messages (
+    admin_chat_id INTEGER NOT NULL,
+    admin_message_id INTEGER NOT NULL,
+    user_chat_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (admin_chat_id, admin_message_id)
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     chat_id INTEGER NOT NULL,
     plan_id TEXT NOT NULL,

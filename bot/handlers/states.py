@@ -9,3 +9,4 @@ class Settings(StatesGroup):
     waiting_calc_bankroll = State()
     waiting_calc_odds_a = State()
     waiting_calc_odds_b = State()
+    waiting_support_message = State()

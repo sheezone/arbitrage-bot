@@ -17,6 +17,7 @@ Free-text answers include bankroll/threshold amounts and the "🧮 Кальку�
 from __future__ import annotations
 
 import html
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -54,6 +55,7 @@ from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
 _ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -108,6 +110,7 @@ NAV_BANKROLL = "nav:bankroll"
 NAV_THRESHOLD = "nav:threshold"
 NAV_HORIZON = "nav:horizon"
 NAV_CALCULATOR = "nav:calculator"
+NAV_SUPPORT = "nav:support"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
@@ -268,7 +271,14 @@ def _help_view() -> View:
         f"Первые {billing.TRIAL_DAYS} дн. бесплатно (пробный период), дальше — "
         "платная подписка, раздел «👤 Мой профиль» → «💳 Подписка»."
     )
-    return text, _back_keyboard(target=NAV_DASHBOARD)
+    return text, _back_keyboard([_btn("✉️ Написать менеджеру", NAV_SUPPORT)], target=NAV_DASHBOARD)
+
+
+def _support_prompt_view(error: str | None = None) -> View:
+    text = "✉️ <b>НАПИСАТЬ МЕНЕДЖЕРУ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nОпишите вопрос одним сообщением — менеджер ответит прямо в этом чате."
+    if error:
+        text = f"⚠️ {error}\n\n{text}"
+    return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_HELP)
 
 
 def _horizon_view(user: UserSettings) -> View:
@@ -773,6 +783,16 @@ def register_handlers(
         )
         await callback.answer()
 
+    @router.callback_query(F.data == NAV_SUPPORT)
+    async def on_nav_support(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        if not admin_chat_ids:
+            await callback.answer("Поддержка временно недоступна", show_alert=True)
+            return
+        await state.set_state(Settings.waiting_support_message)
+        text, keyboard = _support_prompt_view()
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
     @router.callback_query(F.data == NAV_BANKROLL)
     async def on_nav_bankroll(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_bankroll)
@@ -1027,5 +1047,62 @@ def register_handlers(
         await state.clear()
         text, keyboard = _calculator_result_view(bankroll, odds_a, odds_b)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+
+    @router.message(Settings.waiting_support_message)
+    async def on_support_message(message: Message, state: FSMContext, bot: Bot) -> None:
+        raw = (message.text or "").strip()
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        user = repo.get_user(message.chat.id)
+        if not raw:
+            text, keyboard = _support_prompt_view(error="Сообщение не может быть пустым")
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard)
+            return
+
+        who = f"@{message.from_user.username}" if message.from_user and message.from_user.username else "без username"
+        header = f"✉️ <b>Новое сообщение от пользователя</b>\nchat_id: <code>{message.chat.id}</code> ({html.escape(who)})\n\n"
+        forward_text = header + html.escape(raw) + "\n\n<i>Ответьте на это сообщение, чтобы отправить ответ пользователю.</i>"
+
+        sent_to_any = False
+        for admin_chat_id in admin_chat_ids:
+            try:
+                sent = await bot.send_message(admin_chat_id, forward_text, parse_mode="HTML")
+                repo.record_support_message(admin_chat_id, sent.message_id, message.chat.id)
+                sent_to_any = True
+            except Exception:
+                logger.exception("Failed to forward support message to admin_chat_id=%s", admin_chat_id)
+
+        await state.clear()
+        if sent_to_any:
+            text, keyboard = _help_view()
+            text = "✅ Сообщение отправлено менеджеру. Ответ придёт в этот чат.\n\n" + text
+        else:
+            text, keyboard = _help_view()
+            text = "⚠️ Не удалось отправить сообщение менеджеру, попробуйте позже.\n\n" + text
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_HELP_PATH)
+
+    @router.message(F.reply_to_message, F.chat.id.in_(admin_chat_ids))
+    async def on_support_reply(message: Message, bot: Bot) -> None:
+        """An admin's plain Telegram reply to a forwarded support message (see
+        on_support_message above) -- relayed back to that user as a message from the bot
+        itself, not from the admin's personal account."""
+        user_chat_id = repo.get_support_message_user(message.chat.id, message.reply_to_message.message_id)
+        if user_chat_id is None:
+            return  # a reply to something else entirely -- not ours to handle
+
+        reply_text = message.text or message.caption
+        if not reply_text:
+            await message.reply("⚠️ Можно ответить только текстом.")
+            return
+
+        try:
+            await bot.send_message(user_chat_id, f"✉️ <b>Ответ от менеджера:</b>\n\n{html.escape(reply_text)}", parse_mode="HTML")
+            await message.reply("✅ Отправлено пользователю.")
+        except Exception:
+            logger.exception("Failed to relay support reply to user chat_id=%s", user_chat_id)
+            await message.reply("⚠️ Не удалось отправить пользователю (возможно, заблокировал бота).")
 
     return router
