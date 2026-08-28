@@ -208,18 +208,28 @@ def _format_showcase_message(
 STALE_SOURCE_WARNING_STREAK = 3
 
 
+async def _fetch_one_source(source: OddsProvider, games: list[str]) -> tuple[str, list[SourceQuote]]:
+    name = type(source).__name__
+    try:
+        return name, await source.fetch_quotes(games)
+    except Exception:
+        logger.exception("Source %s failed to fetch quotes", name)
+        return name, []
+
+
 async def _fetch_all_quotes(
     sources: list[OddsProvider], games: list[str], empty_streaks: dict[str, int]
 ) -> list[SourceQuote]:
-    all_quotes: list[SourceQuote] = []
-    for source in sources:
-        name = type(source).__name__
-        try:
-            quotes = await source.fetch_quotes(games)
-        except Exception:
-            logger.exception("Source %s failed to fetch quotes", name)
-            quotes = []
+    # Fetched concurrently, not one after another: OlimpBet's response alone is ~10MB, and
+    # sequentially awaiting every source in turn used to add each one's latency on top of
+    # the last -- confirmed live this pushed a full cycle well past a minute, meaning the
+    # odds shown could already be 1-2 poll intervals stale by the time someone checks them
+    # against the bookmaker's own site. Concurrent fetching caps a cycle at roughly the
+    # slowest single source instead of the sum of all of them.
+    results = await asyncio.gather(*(_fetch_one_source(source, games) for source in sources))
 
+    all_quotes: list[SourceQuote] = []
+    for name, quotes in results:
         if quotes:
             empty_streaks[name] = 0
         else:
@@ -232,7 +242,6 @@ async def _fetch_all_quotes(
                     name,
                     empty_streaks[name],
                 )
-
         all_quotes.extend(quotes)
     return all_quotes
 
