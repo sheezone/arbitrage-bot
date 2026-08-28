@@ -309,7 +309,7 @@ async def _notify_group(
 # less is expected and fine, that's the point of rechecking). Only when the match can't be
 # found on the fresh data at all (fetch failure, or it just vanished) does it fall back to
 # the original numbers rather than skip -- always notify, never silently drop one.
-HIGH_PROFIT_RECHECK_THRESHOLD = 5.0
+HIGH_PROFIT_RECHECK_THRESHOLD = 10.0
 RECHECK_DELAY_SECONDS = 30
 
 
