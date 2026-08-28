@@ -205,6 +205,44 @@ def test_payments_summary_empty_with_no_payments(tmp_path):
     assert repo.get_payments_summary() == []
 
 
+def test_showcase_state_round_trips(tmp_path):
+    repo = _repo(tmp_path)
+    assert repo.get_showcase_state() == (None, None)
+    repo.set_showcase_state("football:A:B:2026-08-29T20:00:00+00:00", "2026-08-29T21:00:00+00:00")
+    assert repo.get_showcase_state() == ("football:A:B:2026-08-29T20:00:00+00:00", "2026-08-29T21:00:00+00:00")
+
+    # A second call overwrites in place, not a second row (single persisted state, id=1).
+    repo.set_showcase_state("football:C:D:2026-08-29T22:00:00+00:00", "2026-08-29T23:00:00+00:00")
+    assert repo.get_showcase_state() == ("football:C:D:2026-08-29T22:00:00+00:00", "2026-08-29T23:00:00+00:00")
+
+
+def test_find_duplicate_showcase_posts_keeps_the_first_of_each_key(tmp_path):
+    repo = _repo(tmp_path)
+    repo.record_showcase_post(100, 1, "match-a")
+    repo.record_showcase_post(100, 2, "match-a")  # duplicate of message 1
+    repo.record_showcase_post(100, 3, "match-b")  # different match, not a duplicate
+    repo.record_showcase_post(100, 4, "match-a")  # another duplicate
+
+    duplicates = repo.find_duplicate_showcase_posts()
+    assert sorted(duplicates) == [(100, 2), (100, 4)]
+
+
+def test_find_duplicate_showcase_posts_empty_when_no_dupes(tmp_path):
+    repo = _repo(tmp_path)
+    repo.record_showcase_post(100, 1, "match-a")
+    repo.record_showcase_post(100, 2, "match-b")
+    assert repo.find_duplicate_showcase_posts() == []
+
+
+def test_delete_showcase_posts_removes_the_given_rows(tmp_path):
+    repo = _repo(tmp_path)
+    repo.record_showcase_post(100, 1, "match-a")
+    repo.record_showcase_post(100, 2, "match-a")
+    repo.delete_showcase_posts(100, [2])
+    duplicates = repo.find_duplicate_showcase_posts()
+    assert duplicates == []  # only one row left for "match-a" now
+
+
 def test_get_recent_users_orders_newest_first(tmp_path):
     repo = _repo(tmp_path)
     repo.upsert_user(1)

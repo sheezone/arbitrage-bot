@@ -37,6 +37,20 @@ CREATE TABLE IF NOT EXISTS support_messages (
     PRIMARY KEY (admin_chat_id, admin_message_id)
 );
 
+CREATE TABLE IF NOT EXISTS showcase_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_key TEXT,
+    last_posted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS showcase_posts (
+    chat_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    showcase_key TEXT NOT NULL,
+    posted_at TEXT NOT NULL,
+    PRIMARY KEY (chat_id, message_id)
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     chat_id INTEGER NOT NULL,
     plan_id TEXT NOT NULL,

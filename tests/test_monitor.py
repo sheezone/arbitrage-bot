@@ -8,11 +8,13 @@ from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
 from bot.core.monitor import (
     EMOJI_ALERT,
     _format_message,
+    _showcase_key,
     format_match_start,
     tg_emoji,
     user_allows_arb,
     within_time_horizon,
 )
+from bot.core.state import MatchSnapshot
 
 
 def test_formats_utc_time_as_moscow_time():
@@ -110,3 +112,25 @@ def test_format_message_still_uses_plain_emoji_not_yet_reintroduced_animated_one
     text = _format_message("football", "Team A", "Team B", arb)
     assert "<tg-emoji" not in text
     assert "🚀 Прибыль" in text
+
+
+def _snapshot(odds_a: float, odds_b: float) -> MatchSnapshot:
+    best_odds = [OutcomeOdds("Team A", "fonbet", odds_a), OutcomeOdds("Team B", "olimpbet", odds_b)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=10.0)
+    return MatchSnapshot("football", "Team A", "Team B", arb, "2026-08-29T20:00:00+00:00")
+
+
+def test_showcase_key_ignores_odds_so_a_price_wiggle_isnt_treated_as_a_new_match():
+    """Confirmed live 2026-08-29: keying on the odds hash made the same match repost
+    every cycle its price shifted by even a cent -- identity here is the match/market
+    only, not the current price."""
+    assert _showcase_key(_snapshot(2.10, 2.05)) == _showcase_key(_snapshot(2.11, 2.06))
+
+
+def test_showcase_key_differs_for_a_different_match():
+    other = MatchSnapshot(
+        "football", "Team C", "Team D",
+        ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.9, profit_pct=10.0),
+        "2026-08-29T20:00:00+00:00",
+    )
+    assert _showcase_key(_snapshot(2.10, 2.05)) != _showcase_key(other)

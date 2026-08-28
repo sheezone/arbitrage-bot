@@ -110,17 +110,16 @@ SEND_RETRY_ATTEMPTS = 3
 SEND_RETRY_DELAY_SECONDS = 3
 
 
-async def _send_message_with_retries(bot: Bot, chat_id: int, text: str, **kwargs) -> None:
+async def _send_message_with_retries(bot: Bot, chat_id: int, text: str, **kwargs):
     """Confirmed live: this VPS's network path to api.telegram.org intermittently stalls
     for 100+ seconds (not a code bug -- a raw `curl` to api.telegram.org reproduced the
     same multi-minute hang). A single failed send used to just drop that notification
     silently; retrying a few times gives a transient stall a chance to clear before we
-    give up on it."""
+    give up on it. Returns the sent Message (some callers need its message_id)."""
     last_error: Exception | None = None
     for attempt in range(1, SEND_RETRY_ATTEMPTS + 1):
         try:
-            await bot.send_message(chat_id, text, **kwargs)
-            return
+            return await bot.send_message(chat_id, text, **kwargs)
         except TelegramNetworkError as e:
             last_error = e
             logger.warning(
@@ -461,7 +460,12 @@ async def _send_expiry_reminders(repo: Repository, bot: Bot, admin_chat_ids: fro
 
 
 def _showcase_key(m: MatchSnapshot) -> str:
-    return f"{m.game}:{m.team_a}:{m.team_b}:{m.start_time_utc}:{_bookmakers_hash(m.arb.best_odds)}"
+    """Deliberately does NOT include the bookmakers/odds hash (unlike _bookmakers_hash-
+    based dedup elsewhere in this file) -- the odds on the same match shift by a cent or
+    two between poll cycles all the time, which used to make this look like a "new" find
+    every time and repost the same match over and over. Identity here is just the match +
+    market itself."""
+    return f"{m.game}:{m.team_a}:{m.team_b}:{m.start_time_utc}"
 
 
 async def _notify_showcase(
@@ -469,14 +473,40 @@ async def _notify_showcase(
     bot: Bot,
     showcase_chat_id: int,
     bot_username: str,
-) -> None:
+) -> int | None:
+    """Returns the sent message_id (for repo.record_showcase_post), or None if it failed
+    to send at all."""
     message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
     try:
-        await _send_message_with_retries(
+        sent = await _send_message_with_retries(
             bot, showcase_chat_id, message, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True)
         )
+        return sent.message_id
     except Exception:
         logger.exception("Failed to post showcase message to chat_id=%s", showcase_chat_id)
+        return None
+
+
+# How often to run the duplicate-showcase-post cleanup sweep -- a safety net on top of
+# set_showcase_state's in-the-loop dedup, in case something still slips through (e.g. two
+# process instances briefly overlapping during a deploy).
+SHOWCASE_CLEANUP_INTERVAL_SECONDS = 3 * 3600
+
+
+async def _cleanup_duplicate_showcase_posts(repo: Repository, bot: Bot, showcase_chat_id: int) -> None:
+    duplicates = repo.find_duplicate_showcase_posts()
+    if not duplicates:
+        return
+    logger.info("Found %d duplicate showcase post(s) to delete", len(duplicates))
+    deleted: list[int] = []
+    for chat_id, message_id in duplicates:
+        try:
+            await bot.delete_message(chat_id, message_id)
+            deleted.append(message_id)
+        except Exception:
+            logger.exception("Failed to delete duplicate showcase message_id=%s", message_id)
+    if deleted:
+        repo.delete_showcase_posts(showcase_chat_id, deleted)
 
 
 async def run_monitor_loop(
@@ -493,11 +523,25 @@ async def run_monitor_loop(
     bot_username: str = "",
 ) -> None:
     empty_streaks: dict[str, int] = {}
-    last_showcase_post = 0.0
-    last_showcase_key: str | None = None
+    # Persisted (not just in-memory) so a process restart -- a deploy, which happens
+    # often -- doesn't reset this and immediately repost whatever's currently the best
+    # find. See Repository.get_showcase_state's docstring for what this fixed live.
+    last_showcase_key, last_showcase_post_iso = repo.get_showcase_state()
+    last_showcase_post = datetime.fromisoformat(last_showcase_post_iso).timestamp() if last_showcase_post_iso else 0.0
     daily_best: MatchSnapshot | None = None
     last_expiry_check = 0.0
+    last_showcase_cleanup = 0.0
     while True:
+        if (
+            showcase_chat_id is not None
+            and time.time() - last_showcase_cleanup >= SHOWCASE_CLEANUP_INTERVAL_SECONDS
+        ):
+            try:
+                await _cleanup_duplicate_showcase_posts(repo, bot, showcase_chat_id)
+            except Exception:
+                logger.exception("Failed to clean up duplicate showcase posts")
+            last_showcase_cleanup = time.time()
+
         if time.time() - last_expiry_check >= EXPIRY_CHECK_INTERVAL_SECONDS:
             try:
                 await _send_expiry_reminders(repo, bot, admin_chat_ids)
@@ -569,9 +613,12 @@ async def run_monitor_loop(
         ):
             key = _showcase_key(daily_best)
             if key != last_showcase_key:
-                await _notify_showcase(daily_best, bot, showcase_chat_id, bot_username)
+                message_id = await _notify_showcase(daily_best, bot, showcase_chat_id, bot_username)
+                if message_id is not None:
+                    repo.record_showcase_post(showcase_chat_id, message_id, key)
                 last_showcase_key = key
             last_showcase_post = time.time()
+            repo.set_showcase_state(last_showcase_key, datetime.fromtimestamp(last_showcase_post, tz=timezone.utc).isoformat())
             daily_best = None
 
         state.matches = found

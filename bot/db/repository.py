@@ -210,6 +210,57 @@ class Repository:
         ).fetchall()
         return [{"provider": r["provider"], "currency": r["currency"], "count": r["c"], "total": r["total"]} for r in rows]
 
+    def get_showcase_state(self) -> tuple[str | None, str | None]:
+        """(last_key, last_posted_at_iso) -- persisted so a process restart (a deploy,
+        which happens often) doesn't reset the showcase throttle/dedup in memory and
+        cause an immediate repost of whatever's currently the best find. Confirmed live
+        2026-08-29: that in-memory-only version reposted the same match repeatedly across
+        a string of same-day deploys."""
+        row = self._conn.execute("SELECT last_key, last_posted_at FROM showcase_state WHERE id = 1").fetchone()
+        return (row["last_key"], row["last_posted_at"]) if row else (None, None)
+
+    def set_showcase_state(self, last_key: str, last_posted_at_iso: str) -> None:
+        self._conn.execute(
+            "INSERT INTO showcase_state (id, last_key, last_posted_at) VALUES (1, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET last_key = excluded.last_key, last_posted_at = excluded.last_posted_at",
+            (last_key, last_posted_at_iso),
+        )
+        self._conn.commit()
+
+    def record_showcase_post(self, chat_id: int, message_id: int, showcase_key: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO showcase_posts (chat_id, message_id, showcase_key, posted_at) VALUES (?, ?, ?, ?)",
+            (chat_id, message_id, showcase_key, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def find_duplicate_showcase_posts(self, lookback_hours: int = 72) -> list[tuple[int, int]]:
+        """[(chat_id, message_id), ...] for every showcase post that shares a showcase_key
+        with an earlier one within the lookback window -- i.e. every duplicate except the
+        first (kept) copy. A safety net on top of set_showcase_state's in-the-loop dedup,
+        for a periodic cleanup pass (see run_monitor_loop's showcase-cleanup check)."""
+        since = (datetime.now(timezone.utc) - timedelta(hours=lookback_hours)).isoformat()
+        rows = self._conn.execute(
+            "SELECT chat_id, message_id, showcase_key, posted_at FROM showcase_posts "
+            "WHERE posted_at >= ? ORDER BY showcase_key, posted_at ASC",
+            (since,),
+        ).fetchall()
+        seen_keys: set[str] = set()
+        duplicates: list[tuple[int, int]] = []
+        for row in rows:
+            if row["showcase_key"] in seen_keys:
+                duplicates.append((row["chat_id"], row["message_id"]))
+            else:
+                seen_keys.add(row["showcase_key"])
+        return duplicates
+
+    def delete_showcase_posts(self, chat_id: int, message_ids: list[int]) -> None:
+        self._conn.executemany(
+            "DELETE FROM showcase_posts WHERE chat_id = ? AND message_id = ?",
+            [(chat_id, mid) for mid in message_ids],
+        )
+        self._conn.commit()
+
     def set_expiry_reminder_sent(self, chat_id: int, access_end_iso: str) -> None:
         self._conn.execute(
             "UPDATE users SET expiry_reminder_sent_for = ? WHERE chat_id = ?", (access_end_iso, chat_id)
