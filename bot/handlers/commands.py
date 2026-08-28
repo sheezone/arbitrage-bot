@@ -1005,7 +1005,7 @@ def register_handlers(
             return
 
         if method == "crypto":
-            await on_sub_pay_crypto(callback, plan)
+            await on_sub_pay_crypto(callback, plan, bot)
             return
 
         if method == "stars":
@@ -1034,7 +1034,7 @@ def register_handlers(
         )
         await callback.answer()
 
-    async def on_sub_pay_crypto(callback: CallbackQuery, plan: billing.Plan) -> None:
+    async def on_sub_pay_crypto(callback: CallbackQuery, plan: billing.Plan, bot: Bot) -> None:
         if crypto_pay_client is None:
             await callback.answer("Оплата криптой пока не подключена", show_alert=True)
             return
