@@ -183,3 +183,35 @@ def test_record_payment_ignores_duplicate_crypto_charge_id(tmp_path):
         "SELECT COUNT(*) FROM payments WHERE telegram_charge_id = ?", ("cryptobot:99",)
     ).fetchone()[0]
     assert count == 1
+
+
+def test_payments_summary_groups_by_provider_and_currency(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.record_payment(1, "7d", "stars", 200, "XTR", "a")
+    repo.record_payment(1, "30d", "stars", 700, "XTR", "b")
+    repo.record_payment(1, "7d", "cryptobot", 3.5, "USDT", "c")
+
+    summary = repo.get_payments_summary()
+    by_key = {(r["provider"], r["currency"]): r for r in summary}
+    assert by_key[("stars", "XTR")]["count"] == 2
+    assert by_key[("stars", "XTR")]["total"] == 900
+    assert by_key[("cryptobot", "USDT")]["count"] == 1
+    assert by_key[("cryptobot", "USDT")]["total"] == 3.5
+
+
+def test_payments_summary_empty_with_no_payments(tmp_path):
+    repo = _repo(tmp_path)
+    assert repo.get_payments_summary() == []
+
+
+def test_get_recent_users_orders_newest_first(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.upsert_user(2)
+    repo._conn.execute("UPDATE users SET trial_started_at = '2020-01-01T00:00:00+00:00' WHERE chat_id = 1")
+    repo._conn.execute("UPDATE users SET trial_started_at = '2026-01-01T00:00:00+00:00' WHERE chat_id = 2")
+    repo._conn.commit()
+
+    recent = repo.get_recent_users(limit=10)
+    assert [u.chat_id for u in recent] == [2, 1]

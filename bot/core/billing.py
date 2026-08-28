@@ -116,3 +116,34 @@ def days_left(user: UserSettings, now: datetime) -> int:
     shows as 1, not 0); 0 once access has actually expired."""
     remaining = (_access_end(user) - now).total_seconds()
     return max(0, math.ceil(remaining / 86400))
+
+
+def user_stats(users: list[UserSettings], now: datetime, admin_chat_ids: frozenset[int]) -> dict:
+    """Aggregate counts for the admin panel (see bot/handlers/commands.py's admin view).
+    Every real (non-admin) user falls into exactly one of on_trial / paying / expired, so
+    those three always sum to total - admin_count."""
+    total = len(users)
+    admin_count = sum(1 for u in users if is_admin(u, admin_chat_ids))
+    paused = sum(1 for u in users if not u.is_active)
+    referred = sum(1 for u in users if u.referred_by is not None)
+
+    on_trial_count = paying_count = expired_count = 0
+    for u in users:
+        if is_admin(u, admin_chat_ids):
+            continue
+        if not has_access(u, now):
+            expired_count += 1
+        elif on_trial(u, now):
+            on_trial_count += 1
+        else:
+            paying_count += 1
+
+    return {
+        "total": total,
+        "admin_count": admin_count,
+        "paused": paused,
+        "referred": referred,
+        "on_trial": on_trial_count,
+        "paying": paying_count,
+        "expired": expired_count,
+    }

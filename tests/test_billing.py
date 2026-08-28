@@ -16,6 +16,7 @@ from bot.core.billing import (
     referral_commission_rub,
     referral_discount,
     to_rub_equivalent,
+    user_stats,
 )
 from bot.db.repository import UserSettings
 
@@ -23,15 +24,19 @@ NOW = datetime.now(timezone.utc)
 
 
 def _user(
-    trial_started_ago_days: float, subscription_expires_in_days: float | None = None, referred_by: int | None = None
+    trial_started_ago_days: float,
+    subscription_expires_in_days: float | None = None,
+    referred_by: int | None = None,
+    chat_id: int = 1,
+    is_active: bool = True,
 ) -> UserSettings:
     sub = (NOW + timedelta(days=subscription_expires_in_days)).isoformat() if subscription_expires_in_days is not None else None
     return UserSettings(
-        chat_id=1,
+        chat_id=chat_id,
         bankroll=100.0,
         min_profit_pct=1.0,
         watched_games=["cs2"],
-        is_active=True,
+        is_active=is_active,
         menu_message_id=None,
         trial_started_at=(NOW - timedelta(days=trial_started_ago_days)).isoformat(),
         subscription_expires_at=sub,
@@ -164,3 +169,22 @@ def test_referral_commission_for_usdt_payment_converts_to_rub():
 def test_every_plan_has_a_usdt_price():
     for plan in PLANS:
         assert plan.price_usdt > 0
+
+
+def test_user_stats_buckets_each_user_correctly():
+    users = [
+        _user(chat_id=1, trial_started_ago_days=1),  # on trial
+        _user(chat_id=2, trial_started_ago_days=TRIAL_DAYS + 1, subscription_expires_in_days=10),  # paying
+        _user(chat_id=3, trial_started_ago_days=TRIAL_DAYS + 1),  # expired
+        _user(chat_id=4, trial_started_ago_days=1, is_active=False),  # on trial, paused
+        _user(chat_id=5, trial_started_ago_days=1, referred_by=1),  # on trial, referred
+        _user(chat_id=99, trial_started_ago_days=TRIAL_DAYS + 1),  # admin -- shouldn't count toward the buckets
+    ]
+    stats = user_stats(users, NOW, admin_chat_ids=frozenset({99}))
+    assert stats["total"] == 6
+    assert stats["admin_count"] == 1
+    assert stats["on_trial"] == 3
+    assert stats["paying"] == 1
+    assert stats["expired"] == 1
+    assert stats["paused"] == 1
+    assert stats["referred"] == 1

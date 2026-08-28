@@ -193,6 +193,23 @@ class Repository:
         rows = self._conn.execute("SELECT * FROM users").fetchall()
         return [_row_to_user(r) for r in rows]
 
+    def get_recent_users(self, limit: int = 10) -> list[UserSettings]:
+        rows = self._conn.execute(
+            "SELECT * FROM users ORDER BY trial_started_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [_row_to_user(r) for r in rows]
+
+    def get_payments_summary(self) -> list[dict]:
+        """One row per (provider, currency) pair actually seen in payments -- e.g.
+        stars/XTR, yookassa/RUB, cryptobot/USDT -- with a count and the raw summed
+        amount in that currency (converting to a common unit is the caller's job, see
+        bot/core/billing.py's to_rub_equivalent)."""
+        rows = self._conn.execute(
+            "SELECT provider, currency, COUNT(*) AS c, SUM(amount) AS total "
+            "FROM payments GROUP BY provider, currency ORDER BY total DESC"
+        ).fetchall()
+        return [{"provider": r["provider"], "currency": r["currency"], "count": r["c"], "total": r["total"]} for r in rows]
+
     def set_expiry_reminder_sent(self, chat_id: int, access_end_iso: str) -> None:
         self._conn.execute(
             "UPDATE users SET expiry_reminder_sent_for = ? WHERE chat_id = ?", (access_end_iso, chat_id)

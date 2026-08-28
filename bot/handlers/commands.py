@@ -194,8 +194,10 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
         [_btn("📊 Статистика", NAV_STATS)],
         [_btn("🤝 Партнёрская программа", NAV_REFERRAL)],
         [_btn("ℹ️ Помощь", NAV_HELP)],
-        [_btn("◀️ Назад", NAV_DASHBOARD)],
     ]
+    if billing.is_admin(user, admin_chat_ids):
+        rows.append([_btn("🛠 Админ-панель", NAV_ADMIN)])
+    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -219,6 +221,64 @@ def _stats_view(repo: Repository) -> View:
         [_btn("◀️ Назад", NAV_PROFILE)],
     ]
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+NAV_ADMIN = "nav:admin"
+
+_PAYMENT_PROVIDER_LABELS = {"stars": "⭐ Stars", "yookassa": "💳 Карта", "cryptobot": "💎 Крипто"}
+
+
+def _admin_view(repo: Repository, admin_chat_ids: frozenset[int]) -> View:
+    now = datetime.now(timezone.utc)
+    users = repo.get_all_users()
+    stats = billing.user_stats(users, now, admin_chat_ids)
+
+    lines = [
+        "🛠 <b>АДМИН-ПАНЕЛЬ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "<b>Пользователи:</b>",
+        f"👥 Всего: <b>{stats['total']}</b> (админов: {stats['admin_count']})",
+        f"⏳ На триале: <b>{stats['on_trial']}</b>",
+        f"💳 С подпиской: <b>{stats['paying']}</b>",
+        f"🚫 Доступ истёк: <b>{stats['expired']}</b>",
+        f"⏸️ На паузе: <b>{stats['paused']}</b>",
+        f"🤝 Пришли по рефералке: <b>{stats['referred']}</b>",
+        "",
+    ]
+
+    payments = repo.get_payments_summary()
+    lines.append("<b>Доход (по всем платежам):</b>")
+    if not payments:
+        lines.append("Пока нет оплат.")
+    else:
+        total_rub = 0.0
+        for p in payments:
+            label = _PAYMENT_PROVIDER_LABELS.get(p["provider"], p["provider"])
+            lines.append(f"{label}: <b>{p['total']:.2f} {p['currency']}</b> ({p['count']} шт.)")
+            total_rub += billing.to_rub_equivalent(p["total"], p["currency"])
+        lines.append(f"💰 Итого (≈₽): <b>{total_rub:.2f}₽</b>")
+    lines.append("")
+
+    recent = repo.get_recent_users(limit=8)
+    lines.append("<b>Последние регистрации:</b>")
+    for u in recent:
+        joined = datetime.fromisoformat(u.trial_started_at).astimezone(MOSCOW_TZ).strftime("%d.%m %H:%M")
+        if billing.is_admin(u, admin_chat_ids):
+            status = "админ"
+        elif not billing.has_access(u, now):
+            status = "истёк"
+        elif billing.on_trial(u, now):
+            status = "триал"
+        else:
+            status = "подписка"
+        lines.append(f"<code>{u.chat_id}</code> — {joined} — {status}")
+
+    rows = [
+        [_btn("🔄 Обновить", NAV_ADMIN)],
+        [_btn("◀️ Назад", NAV_PROFILE)],
+    ]
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _status_banner(user: UserSettings) -> Path:
@@ -823,6 +883,17 @@ def register_handlers(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_STATS_PATH,
         )
+        await callback.answer()
+
+    @router.callback_query(F.data == NAV_ADMIN)
+    async def on_nav_admin(callback: CallbackQuery, bot: Bot) -> None:
+        # Defense in depth: the button is only ever shown to admins in _profile_view, but
+        # callback_data can be replayed/guessed, so check again before showing anything.
+        if callback.message.chat.id not in admin_chat_ids:
+            await callback.answer()
+            return
+        text, keyboard = _admin_view(repo, admin_chat_ids)
+        await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
     @router.callback_query(F.data == NAV_BOOKMAKERS)
