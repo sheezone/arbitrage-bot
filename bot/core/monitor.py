@@ -190,19 +190,18 @@ def _format_message(
 ) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"{tg_emoji(EMOJI_ALERT)} {emoji} <b>Найдена вилка</b> ({game.upper()})",
+        f"💰 {emoji} <b>Найдена вилка</b> ({game.upper()})",
         f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
         lines.append(f"🕒 {match_time}")
-    profit_marker = tg_emoji(EMOJI_HIGH_PROFIT) if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD else "🚀"
-    lines.append(f"{profit_marker} Прибыль: <b>{arb.profit_pct:.2f}%</b>")
+    lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
     if bankroll is not None:
         # The guaranteed profit is the same no matter which leg wins -- that's the whole
         # point of an arb -- so this is a single number, not a per-outcome range.
         profit_amount = bankroll * arb.profit_pct / 100
-        lines.append(f"{tg_emoji(EMOJI_MONEY)} Возможный выигрыш: <b>{profit_amount:.2f}</b>")
+        lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     return "\n".join(lines)
@@ -213,7 +212,7 @@ def _format_showcase_message(
 ) -> str:
     emoji = GAME_EMOJI.get(game, "🏆")
     lines = [
-        f"{tg_emoji(EMOJI_NEW)} {emoji} <b>Вилка</b> ({game.upper()})",
+        f"💰 {emoji} <b>Вилка</b> ({game.upper()})",
         f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)

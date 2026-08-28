@@ -95,19 +95,18 @@ def test_bookmaker_matching_is_case_insensitive():
 
 
 def test_tg_emoji_renders_the_expected_html_tag():
+    # Multi-glyph fallback text (e.g. two emoji in one captured ID) makes Telegram reject
+    # the tag outright (ENTITY_TEXT_INVALID) -- confirmed live 2026-08-28, broke the search
+    # screen in production. tg_emoji() itself is still fine; it's *which* IDs get used
+    # (single-glyph fallback only) that matters. See bot/core/monitor.py's EMOJI_* comment.
     assert tg_emoji(EMOJI_ALERT) == '<tg-emoji emoji-id="5440660757194744323">🚨</tg-emoji>'
 
 
-def test_format_message_includes_the_alert_emoji_tag():
+def test_format_message_still_uses_plain_emoji_not_yet_reintroduced_animated_ones():
+    """Animated emoji were reverted live 2026-08-28 (ENTITY_TEXT_INVALID broke the search
+    screen) -- this guards against silently reintroducing a broken tg-emoji tag into
+    _format_message without it being a deliberate, tested change."""
     arb = ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.95, profit_pct=5.0)
     text = _format_message("football", "Team A", "Team B", arb)
-    assert tg_emoji(EMOJI_ALERT) in text
-
-
-def test_format_message_uses_high_profit_emoji_above_the_recheck_threshold():
-    from bot.core.monitor import EMOJI_HIGH_PROFIT, HIGH_PROFIT_RECHECK_THRESHOLD
-
-    high_arb = ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.8, profit_pct=HIGH_PROFIT_RECHECK_THRESHOLD + 1)
-    text = _format_message("football", "Team A", "Team B", high_arb)
-    assert tg_emoji(EMOJI_HIGH_PROFIT) in text
-    assert "🚀 Прибыль" not in text
+    assert "<tg-emoji" not in text
+    assert "🚀 Прибыль" in text
