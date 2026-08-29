@@ -413,7 +413,6 @@ def _bookmakers_view(user: UserSettings) -> View:
         rows.append([_btn("— Прямые источники —", NAV_NOOP)])
         rows.extend(_bookmaker_rows(direct, selected))
     if aggregator:
-        rows.append([_btn("— Через SureBet —", NAV_NOOP)])
         rows.extend(_bookmaker_rows(aggregator, selected))
     if other:
         rows.append([_btn("— Другие —", NAV_NOOP)])
