@@ -283,7 +283,7 @@ def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, 
             continue
 
         arb = calc_arbitrage(odds_by_outcome)
-        if not arb.is_arbitrage:
+        if not arb.is_arbitrage or arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
             continue
 
         results.append((subgroup[0].game, team_a, team_b, market, arb))
@@ -343,6 +343,12 @@ async def _notify_group(
 # the original numbers rather than skip -- always notify, never silently drop one.
 HIGH_PROFIT_RECHECK_THRESHOLD = 10.0
 RECHECK_DELAY_SECONDS = 30
+
+# A global floor, independent of each user's own (possibly lower) min_profit_pct setting --
+# anything below this is judged too small to be worth surfacing at all (rounding/spread
+# noise more than a real edge), so it never becomes an "opportunity" in the first place:
+# not notified, not shown in search, not logged to stats, not shown to the showcase channel.
+MIN_DISPLAYABLE_PROFIT_PCT = 0.60
 
 
 async def _recheck_and_notify_high_profit(
@@ -581,6 +587,8 @@ async def run_monitor_loop(
                 surebet_matches = []
 
             for game, team_a, team_b, start_time_utc, arb in surebet_matches:
+                if arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
+                    continue
                 if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD:
                     surebet_suspicious.append((game, team_a, team_b, start_time_utc, arb))
                     continue

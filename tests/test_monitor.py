@@ -7,6 +7,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
 from bot.core.monitor import (
     EMOJI_ALERT,
+    MIN_DISPLAYABLE_PROFIT_PCT,
+    _evaluate_group,
     _format_message,
     _showcase_key,
     format_match_start,
@@ -15,6 +17,7 @@ from bot.core.monitor import (
     within_time_horizon,
 )
 from bot.core.state import MatchSnapshot
+from bot.providers.models import SourceQuote
 
 
 def test_formats_utc_time_as_moscow_time():
@@ -134,3 +137,22 @@ def test_showcase_key_differs_for_a_different_match():
         "2026-08-29T20:00:00+00:00",
     )
     assert _showcase_key(_snapshot(2.10, 2.05)) != _showcase_key(other)
+
+
+def _quote_group(odds_a: float, odds_b: float) -> list[SourceQuote]:
+    return [
+        SourceQuote("football", "Team A", "Team B", "2026-08-29T20:00:00+00:00", "fonbet", "Team A", odds_a),
+        SourceQuote("football", "Team A", "Team B", "2026-08-29T20:00:00+00:00", "olimpbet", "Team B", odds_b),
+    ]
+
+
+def test_evaluate_group_drops_arbs_below_the_min_displayable_floor():
+    # ~0.25% profit -- a real arb, just below MIN_DISPLAYABLE_PROFIT_PCT (0.60%)
+    assert _evaluate_group(_quote_group(2.005, 2.005)) == []
+
+
+def test_evaluate_group_keeps_arbs_at_or_above_the_min_displayable_floor():
+    # ~1% profit -- comfortably above the floor
+    results = _evaluate_group(_quote_group(2.02, 2.02))
+    assert len(results) == 1
+    assert results[0][4].profit_pct >= MIN_DISPLAYABLE_PROFIT_PCT
