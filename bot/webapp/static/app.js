@@ -32,10 +32,16 @@
     // captured too early could stay empty for the rest of the page's life.
     const initData = tg ? tg.initData : "";
     if (!initData) {
+      // Deeper diagnostic than just "empty" -- confirmed both Desktop and mobile fail
+      // the same way, so the next question is whether Telegram is putting tgWebAppData
+      // in the URL AT ALL (hash/search below) or unsafeInitData has anything either
+      // (unsigned, never used for auth, but tells us if Telegram sent *something*).
+      const unsafeUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
       throw new Error(
-        `Нет initData от Telegram (tg=${tg ? "есть" : "нет"}, platform=${tg ? tg.platform : "?"}, version=${
+        `Нет initData (tg=${tg ? "есть" : "нет"}, platform=${tg ? tg.platform : "?"}, version=${
           tg ? tg.version : "?"
-        }). Откройте приложение через кнопку у бота, не по прямой ссылке.`
+        }, unsafeUser=${unsafeUser ? "есть id=" + unsafeUser.id : "нет"}, hash_len=${location.hash.length}, ` +
+          `search_len=${location.search.length}, url=${location.href.slice(0, 120)})`
       );
     }
     const resp = await fetch(path, {
