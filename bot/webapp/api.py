@@ -105,6 +105,16 @@ def register_api(repo: Repository, state: LatestState, admin_chat_ids: frozenset
     # no security benefit.
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+    @app.middleware("http")
+    async def _no_cache(request, call_next):
+        # Telegram's in-app WebView is known to cache static assets aggressively by URL
+        # (confirmed live: a JS fix didn't take effect on a reopen of the same Mini App
+        # until this was added) -- there's no build step/hashed filenames here to bust
+        # that cache otherwise, so just refuse to let anything be cached at all.
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return response
+
     @app.get("/api/me")
     async def get_me(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)

@@ -26,9 +26,18 @@
     }
   }
 
-  const initData = tg ? tg.initData : "";
-
   async function api(path, options) {
+    // Read tg.initData fresh on every call rather than once at script load -- some
+    // clients populate it a beat after telegram-web-app.js first runs, so a value
+    // captured too early could stay empty for the rest of the page's life.
+    const initData = tg ? tg.initData : "";
+    if (!initData) {
+      throw new Error(
+        `Нет initData от Telegram (tg=${tg ? "есть" : "нет"}, platform=${tg ? tg.platform : "?"}, version=${
+          tg ? tg.version : "?"
+        }). Откройте приложение через кнопку у бота, не по прямой ссылке.`
+      );
+    }
     const resp = await fetch(path, {
       ...options,
       headers: {
