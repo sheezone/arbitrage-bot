@@ -8,7 +8,7 @@ import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from bot.config import load_config
 from bot.core.monitor import run_monitor_loop
@@ -134,6 +134,21 @@ async def main() -> None:
         await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
     except TelegramNetworkError:
         logger.warning("set_my_commands failed on startup -- non-critical, continuing without it")
+
+    if config.webapp_url:
+        # The reply-keyboard "web_app" button (see commands.py's _main_menu_keyboard)
+        # sends empty initData on at least Telegram Desktop -- confirmed live, the Mini
+        # App loaded but every API call failed with "Missing Telegram init data" even
+        # though the button worked and opened it. The chat menu button (next to the
+        # message input) is Telegram's other, more thoroughly-supported Mini App launch
+        # surface and doesn't have this problem -- set both so every client has one that
+        # actually works, rather than relying on the reply-keyboard button alone.
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="🚀 Вилки", web_app=WebAppInfo(url=config.webapp_url))
+            )
+        except TelegramNetworkError:
+            logger.warning("set_chat_menu_button failed on startup -- non-critical, continuing without it")
 
     try:
         await dp.start_polling(bot)
