@@ -37,11 +37,14 @@
       // in the URL AT ALL (hash/search below) or unsafeInitData has anything either
       // (unsigned, never used for auth, but tells us if Telegram sent *something*).
       const unsafeUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      const hashParams = new URLSearchParams(location.hash.slice(1));
+      const rawTgWebAppData = hashParams.get("tgWebAppData");
       throw new Error(
-        `Нет initData (tg=${tg ? "есть" : "нет"}, platform=${tg ? tg.platform : "?"}, version=${
-          tg ? tg.version : "?"
-        }, unsafeUser=${unsafeUser ? "есть id=" + unsafeUser.id : "нет"}, hash_len=${location.hash.length}, ` +
-          `search_len=${location.search.length}, url=${location.href.slice(0, 120)})`
+        `Нет initData (tg=${tg ? "есть" : "нет"}, version=${tg ? tg.version : "?"}, ` +
+          `unsafeUser=${unsafeUser ? "id=" + unsafeUser.id : "нет"}, hash_len=${location.hash.length}, ` +
+          `tgWebAppData_present=${rawTgWebAppData !== null}, tgWebAppData_len=${
+            rawTgWebAppData ? rawTgWebAppData.length : 0
+          }, hash_keys=${Array.from(hashParams.keys()).join(",")})`
       );
     }
     const resp = await fetch(path, {
