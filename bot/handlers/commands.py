@@ -38,7 +38,6 @@ from aiogram.types import (
     Message,
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
-    WebAppInfo,
 )
 
 from bot.core import billing
@@ -106,25 +105,16 @@ MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     is_persistent=True,
 )
 
-WEBAPP_BUTTON_TEXT = "🚀 Мини-приложение"
-
-
 def _main_menu_keyboard(webapp_url: str) -> ReplyKeyboardMarkup:
-    """webapp_url is only known at runtime (from .env, see bot/config.py's WEBAPP_URL),
-    so unlike MAIN_MENU_KEYBOARD this can't be a module-level constant -- built fresh with
-    whatever register_handlers was actually given. A `web_app` reply-keyboard button opens
-    the Mini App full-screen right in the chat; omitted entirely when WEBAPP_URL is unset
-    (same opt-in pattern as Melbet/crypto pay elsewhere in this file)."""
-    if not webapp_url:
-        return MAIN_MENU_KEYBOARD
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
-            [KeyboardButton(text=WEBAPP_BUTTON_TEXT, web_app=WebAppInfo(url=webapp_url))],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
+    """The Mini App itself is launched via the chat's Menu Button (set in bot/main.py
+    via bot.set_chat_menu_button), not a button here -- confirmed live 2026-08-30: a
+    reply-keyboard KeyboardButton(web_app=...) opened the Mini App but Telegram never
+    attached tgWebAppData to the URL (no initData at all, on both Desktop and mobile),
+    while the Menu Button worked immediately once the app was registered with @BotFather
+    (/newapp). `webapp_url` is accepted for parity with register_handlers/future use but
+    doesn't change this keyboard -- kept as a parameter rather than removed outright in
+    case a reliable reply-keyboard path is worth revisiting later."""
+    return MAIN_MENU_KEYBOARD
 
 TIME_HORIZONS = {1: "До 24 часов", 2: "Более 24 часов"}
 
