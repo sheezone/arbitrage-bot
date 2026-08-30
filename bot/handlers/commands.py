@@ -87,7 +87,6 @@ GAME_LABELS = {
     "volleyball": "Волейбол",
 }
 
-MENU_BUTTON_TEXT = "☰ Меню"
 SEARCH_BUTTON_TEXT = "🔍 Поиск вилок"
 PROFILE_BUTTON_TEXT = "👤 Мой профиль"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
@@ -99,7 +98,7 @@ HELP_BUTTON_TEXT = "ℹ️ Помощь"
 # (pause, subscription, help) live inside "👤 Мой профиль" (see _profile_view).
 MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
+        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -811,12 +810,6 @@ def register_handlers(
         except Exception:
             pass
 
-    @router.message(F.text == MENU_BUTTON_TEXT)
-    async def on_menu_button(message: Message, state: FSMContext, bot: Bot) -> None:
-        await state.clear()
-        await _dismiss(message)
-        await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
-
     @router.message(F.text == SEARCH_BUTTON_TEXT)
     async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -831,7 +824,20 @@ def register_handlers(
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
         text, keyboard = _profile_view(user, admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=_status_banner(user))
+        try:
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=_status_banner(user))
+        except Exception:
+            # _render already falls back to delete+resend on a Telegram-side edit
+            # failure -- this is the next layer down, for anything else (a network
+            # blip, a forbidden/blocked-bot error, ...). Without it, a failure here
+            # left the button looking like it silently did nothing; planting a brand
+            # new message the same way /start does guarantees the tap always shows
+            # something instead of just failing quietly.
+            logger.exception("Failed to render profile for chat_id=%s -- falling back to a fresh message", message.chat.id)
+            sent = await message.answer_photo(
+                FSInputFile(_status_banner(user)), caption=text, reply_markup=keyboard, parse_mode="HTML"
+            )
+            repo.set_menu_message_id(message.chat.id, sent.message_id)
 
     @router.callback_query(F.data == NAV_PROFILE)
     async def on_nav_profile(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
