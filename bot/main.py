@@ -145,7 +145,7 @@ async def main() -> None:
         # actually works, rather than relying on the reply-keyboard button alone.
         try:
             await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="🚀 Вилки", web_app=WebAppInfo(url=config.webapp_url))
+                menu_button=MenuButtonWebApp(text="🚀 Мини-приложение", web_app=WebAppInfo(url=config.webapp_url))
             )
         except TelegramNetworkError:
             logger.warning("set_chat_menu_button failed on startup -- non-critical, continuing without it")
