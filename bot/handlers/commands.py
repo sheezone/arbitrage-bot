@@ -38,6 +38,7 @@ from aiogram.types import (
     Message,
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 
 from bot.core import billing
@@ -104,6 +105,26 @@ MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
     resize_keyboard=True,
     is_persistent=True,
 )
+
+WEBAPP_BUTTON_TEXT = "🚀 Мини-приложение"
+
+
+def _main_menu_keyboard(webapp_url: str) -> ReplyKeyboardMarkup:
+    """webapp_url is only known at runtime (from .env, see bot/config.py's WEBAPP_URL),
+    so unlike MAIN_MENU_KEYBOARD this can't be a module-level constant -- built fresh with
+    whatever register_handlers was actually given. A `web_app` reply-keyboard button opens
+    the Mini App full-screen right in the chat; omitted entirely when WEBAPP_URL is unset
+    (same opt-in pattern as Melbet/crypto pay elsewhere in this file)."""
+    if not webapp_url:
+        return MAIN_MENU_KEYBOARD
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT), KeyboardButton(text=MENU_BUTTON_TEXT)],
+            [KeyboardButton(text=WEBAPP_BUTTON_TEXT, web_app=WebAppInfo(url=webapp_url))],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 TIME_HORIZONS = {1: "До 24 часов", 2: "Более 24 часов"}
 
@@ -728,7 +749,11 @@ def register_handlers(
     bot_username: str = "",
     poll_interval_seconds: int = 150,
     crypto_pay_client: CryptoPayClient | None = None,
+    webapp_url: str = "",
 ) -> Router:
+    main_menu_keyboard = _main_menu_keyboard(webapp_url)
+
+
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
@@ -753,7 +778,7 @@ def register_handlers(
         # NOT deleted: confirmed live that deleting it -- immediately or after a delay --
         # makes the reply keyboard itself disappear on at least one client, contrary to
         # the usual "keyboard survives its carrier message" behavior.
-        await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=MAIN_MENU_KEYBOARD)
+        await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=main_menu_keyboard)
 
         if is_new_user:
             # A one-off exception to the single-message UI: a permanent welcome note

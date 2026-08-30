@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Арбитражный бот</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-title">🔍 Арбитражный бот</div>
+    <button id="refresh-btn" class="icon-btn" title="Обновить">🔄</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="vilki">Вилки</button>
+    <button class="tab" data-tab="settings">Настройки</button>
+    <button class="tab" data-tab="stats">Статистика</button>
+  </nav>
+
+  <main id="content"></main>
+  <div id="toast" class="toast"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

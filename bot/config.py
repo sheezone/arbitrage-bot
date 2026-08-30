@@ -19,6 +19,8 @@ class Config:
     surebet_api_token: str
     yookassa_provider_token: str
     cryptobot_api_token: str
+    webapp_url: str
+    webapp_port: int
     admin_chat_ids: frozenset[int]
     showcase_chat_id: int | None
     showcase_interval_seconds: int
@@ -47,6 +49,8 @@ def load_config() -> Config:
         surebet_api_token=os.environ.get("SUREBET_API_TOKEN", SUREBET_DEFAULT_TEST_TOKEN),
         yookassa_provider_token=os.environ.get("YOOKASSA_PROVIDER_TOKEN", ""),
         cryptobot_api_token=os.environ.get("CRYPTOBOT_API_TOKEN", ""),
+        webapp_url=os.environ.get("WEBAPP_URL", "").rstrip("/"),
+        webapp_port=int(os.environ.get("WEBAPP_PORT", "8000")),
         admin_chat_ids=frozenset(
             int(x) for x in os.environ.get("ADMIN_CHAT_IDS", "").split(",") if x.strip()
         ),

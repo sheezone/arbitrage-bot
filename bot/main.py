@@ -4,6 +4,7 @@ import asyncio
 import logging
 import socket
 
+import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
@@ -26,6 +27,7 @@ from bot.providers.pari import PariProvider
 from bot.providers.surebet import SurebetFinder
 from bot.providers.the_odds_api import TheOddsApiProvider
 from bot.providers.zenit import ZenitProvider
+from bot.webapp.api import register_api
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -97,8 +99,20 @@ async def main() -> None:
             bot_username=me.username or "",
             poll_interval_seconds=config.poll_interval_seconds,
             crypto_pay_client=crypto_pay_client,
+            webapp_url=config.webapp_url,
         )
     )
+
+    # Mini App backend -- bound to 127.0.0.1 only (never exposed on the public interface
+    # directly); reaching it from the outside needs a reverse proxy/tunnel in front (see
+    # bot/webapp/api.py's module docstring and the deploy notes for how this VPS does it
+    # via cloudflared, since there's no domain to put a normal TLS cert on). A no-op,
+    # not an error, when WEBAPP_URL is unset -- same opt-in pattern as Melbet/crypto pay.
+    webapp_task: asyncio.Task | None = None
+    if config.webapp_url:
+        webapp_app = register_api(repo, state, config.admin_chat_ids)
+        uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")
+        webapp_task = asyncio.create_task(uvicorn.Server(uv_config).serve())
 
     monitor_task = asyncio.create_task(
         run_monitor_loop(
@@ -125,6 +139,8 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         monitor_task.cancel()
+        if webapp_task is not None:
+            webapp_task.cancel()
         for source in sources:
             await source.close()
         await surebet_finder.close()
