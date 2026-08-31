@@ -28,20 +28,63 @@ html, body {
   overflow-x: hidden;
 }
 
-#app { display: flex; flex-direction: column; min-height: 100vh; position: relative; }
+#app { display: flex; flex-direction: column; min-height: 100vh; position: relative; z-index: 1; }
 
-/* Soft ambient glow behind the header -- purely decorative, fixed so it doesn't scroll */
-#app::before {
-  content: "";
+/* Slowly drifting colored blobs behind everything -- fixed (doesn't scroll with content),
+   GPU-cheap (transform/opacity only, each blob pre-blurred via its own gradient falloff
+   rather than an expensive filter:blur over a large area). prefers-reduced-motion below
+   freezes them in place instead of removing the color entirely. */
+.bg-anim {
   position: fixed;
-  top: -120px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 480px;
-  height: 260px;
-  background: radial-gradient(closest-side, rgba(70, 211, 155, 0.16), transparent 70%);
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
   z-index: 0;
+}
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.5;
+  will-change: transform;
+}
+.blob-1 {
+  top: -18%;
+  left: -10%;
+  width: 65vmax;
+  height: 65vmax;
+  background: radial-gradient(closest-side, rgba(70, 211, 155, 0.22), transparent 72%);
+  animation: drift-1 26s ease-in-out infinite;
+}
+.blob-2 {
+  bottom: -25%;
+  right: -15%;
+  width: 70vmax;
+  height: 70vmax;
+  background: radial-gradient(closest-side, rgba(53, 184, 224, 0.16), transparent 72%);
+  animation: drift-2 32s ease-in-out infinite;
+}
+.blob-3 {
+  top: 35%;
+  left: 55%;
+  width: 50vmax;
+  height: 50vmax;
+  background: radial-gradient(closest-side, rgba(244, 192, 74, 0.09), transparent 72%);
+  animation: drift-3 22s ease-in-out infinite;
+}
+@keyframes drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vw, 8vh) scale(1.12); }
+}
+@keyframes drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-7vw, -6vh) scale(1.08); }
+}
+@keyframes drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+  50% { transform: translate(-5vw, 5vh) scale(0.92); opacity: 0.7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .blob { animation: none; }
 }
 
 .topbar {
