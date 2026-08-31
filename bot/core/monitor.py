@@ -285,6 +285,8 @@ def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, 
         arb = calc_arbitrage(odds_by_outcome)
         if not arb.is_arbitrage or arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
             continue
+        if arb.profit_pct > MAX_DISPLAYABLE_PROFIT_PCT:
+            continue
 
         # The len(...)>=2 check above only guarantees the raw cluster mentions 2+
         # bookmakers somewhere -- find_best_odds still independently picks the single
@@ -355,10 +357,12 @@ async def _notify_group(
 # A profit this high is more often a stale/mispriced quote from a scraped source than a
 # genuine opportunity that big -- confirmed live seeing implausible one-off percentages.
 # Rather than trust it immediately, wait RECHECK_DELAY_SECONDS and re-fetch, then notify
-# with whatever the fresh data says now -- even if the profit dropped a lot (30% -> 10% or
-# less is expected and fine, that's the point of rechecking). Only when the match can't be
-# found on the fresh data at all (fetch failure, or it just vanished) does it fall back to
-# the original numbers rather than skip -- always notify, never silently drop one.
+# with whatever the fresh data says now -- even if the profit dropped some (that's the
+# point of rechecking). Only when the match can't be found on the fresh data at all (fetch
+# failure, or it just vanished) does it fall back to the original numbers rather than skip
+# -- always notify, never silently drop one. Note this only ever fires for the (10%, 15%]
+# band now -- anything above MAX_DISPLAYABLE_PROFIT_PCT (15%) is dropped outright before
+# it ever reaches this, see that constant below.
 HIGH_PROFIT_RECHECK_THRESHOLD = 10.0
 RECHECK_DELAY_SECONDS = 30
 
@@ -367,6 +371,14 @@ RECHECK_DELAY_SECONDS = 30
 # noise more than a real edge), so it never becomes an "opportunity" in the first place:
 # not notified, not shown in search, not logged to stats, not shown to the showcase channel.
 MIN_DISPLAYABLE_PROFIT_PCT = 0.60
+
+# A ceiling on the other end: real cross-bookmaker arbitrage margins this big essentially
+# never happen (see the same-bookmaker guard in _evaluate_group for one confirmed-live
+# example of exactly this -- a "78% profit" vilka that turned out to be a data artifact,
+# not real). Rather than trust the recheck/same-bookmaker guard alone to catch every such
+# case, anything above this is dropped outright, no exceptions -- at the user's explicit
+# request after that incident.
+MAX_DISPLAYABLE_PROFIT_PCT = 15.0
 
 
 async def _recheck_and_notify_high_profit(
@@ -605,7 +617,7 @@ async def run_monitor_loop(
                 surebet_matches = []
 
             for game, team_a, team_b, start_time_utc, arb in surebet_matches:
-                if arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
+                if arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT or arb.profit_pct > MAX_DISPLAYABLE_PROFIT_PCT:
                     continue
                 if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD:
                     surebet_suspicious.append((game, team_a, team_b, start_time_utc, arb))
