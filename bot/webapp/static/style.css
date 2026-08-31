@@ -286,6 +286,25 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .leg-row a:active { opacity: 0.6; }
 .leg-stake { color: var(--hint); font-size: 13px; font-variant-numeric: tabular-nums; }
 
+.news-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.news-row {
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.news-row a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.35;
+  display: block;
+  transition: color 0.15s ease;
+}
+.news-row a:active { color: var(--accent); }
+.news-meta { color: var(--hint); font-size: 12px; margin-top: 5px; }
+.news-empty { color: var(--hint); font-size: 13px; padding: 4px 2px; }
+
 .empty-state { text-align: center; color: var(--hint); padding: 70px 20px 40px; animation: rise-in 0.4s ease both; }
 .empty-state .empty-icon { font-size: 40px; display: block; margin-bottom: 14px; animation: float 3s ease-in-out infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }

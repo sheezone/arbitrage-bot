@@ -87,6 +87,7 @@
 
   const skeletons = {
     vilki: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
+    news: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     settings: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
     stats: `<div class="stat-grid"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div>`,
   };
@@ -114,6 +115,7 @@
     if (manual) refreshBtn.classList.add("spinning");
     try {
       if (tab === "vilki") await renderVilki();
+      else if (tab === "news") await renderNews();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
     } catch (e) {
@@ -182,6 +184,53 @@
     const d = document.createElement("div");
     d.textContent = s == null ? "" : String(s);
     return d.innerHTML;
+  }
+
+  // ---------- Новости ----------
+  // Real headlines for a few popular matches -- deliberately NOT win-probability
+  // predictions/percentages, see bot/webapp/news.py's module docstring for why.
+
+  function fmtNewsTime(ts) {
+    if (!ts) return "";
+    try {
+      return new Date(ts * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  async function renderNews() {
+    const data = await api("/api/news");
+
+    if (!data.matches.length) {
+      content.innerHTML = `<div class="empty-state"><span class="empty-icon">📰</span>Пока нет данных для новостной сводки.</div>`;
+      return;
+    }
+
+    const cards = data.matches.map((m, i) => {
+      const headlines = m.headlines.length
+        ? m.headlines
+            .map(
+              (h) => `
+          <div class="news-row">
+            <a href="${esc(h.link)}" target="_blank" rel="noopener">${esc(h.title)}</a>
+            <div class="news-meta">${esc(h.source || "")}${h.published_at ? " · " + fmtNewsTime(h.published_at) : ""}</div>
+          </div>`
+            )
+            .join("")
+        : `<div class="news-empty">За последние 24 часа свежих новостей не нашлось.</div>`;
+      return `
+        <div class="card" style="animation-delay:${Math.min(i * 45, 360)}ms">
+          <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
+          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
+          ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
+          <div class="news-list">${headlines}</div>
+        </div>`;
+    });
+
+    content.innerHTML = `
+      <div class="meta-line">Новости по популярным матчам — без прогнозов и процентов, только факты для собственного анализа.</div>
+      ${cards.join("")}`;
   }
 
   // ---------- Настройки ----------

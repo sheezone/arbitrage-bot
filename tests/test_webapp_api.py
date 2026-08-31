@@ -167,3 +167,57 @@ def test_vilki_endpoint_filters_and_shapes_matches(setup):
     assert m["profit_amount"] == 50.0
     assert m["legs"][0]["bookmaker"] == "FONBET"
     assert m["legs"][0]["bookmaker_url"]
+
+
+def test_news_endpoint_requires_auth(setup):
+    app, _, _ = setup
+    resp = _run(_get(app, "/api/news"))
+    assert resp.status_code == 401
+
+
+def test_news_endpoint_returns_headlines_for_picked_matches(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+    from email.utils import format_datetime
+    from datetime import datetime, timezone
+
+    best_odds = [OutcomeOdds("Реал Мадрид", "fonbet", 2.1), OutcomeOdds("Барселона", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Реал Мадрид", "Барселона", arb, "2026-08-29T20:00:00+00:00")]
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return [{"title": "Травма перед матчем", "link": "https://example.com/x", "source": "Example", "published_at": 0}]
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+
+    resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["matches"]) == 1
+    assert body["matches"][0]["team_a"] == "Реал Мадрид"
+    assert body["matches"][0]["headlines"][0]["title"] == "Травма перед матчем"
+
+
+def test_news_endpoint_caches_across_calls(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Реал Мадрид", "fonbet", 2.1), OutcomeOdds("Барселона", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Реал Мадрид", "Барселона", arb, "2026-08-29T20:00:00+00:00")]
+
+    call_count = 0
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        nonlocal call_count
+        call_count += 1
+        return []
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+
+    _run(_get(app, "/api/news", headers=_auth_header(1)))
+    calls_after_first = call_count
+    _run(_get(app, "/api/news", headers=_auth_header(1)))
+    assert call_count == calls_after_first  # second call served from cache, no new requests

@@ -7,9 +7,11 @@ one is rejected outright rather than falling back to some anonymous/demo mode.""
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,8 +31,17 @@ from bot.handlers.commands import (
     _DIRECT_BOOKMAKERS,
 )
 from bot.webapp.auth import validate_init_data
+from bot.webapp.news import fetch_team_news, pick_popular_matches
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# Google News RSS is a live web search, not a fast local lookup -- 3 matches x 1 request
+# each on every /api/news call would be slow and needlessly hammer it. News doesn't
+# change second-to-second, so a short server-side cache is the right trade here. Lives as
+# a local inside register_api (see below), NOT a module-level global -- a global would be
+# shared across every register_api() call (e.g. each test's own app instance), leaking
+# cached state between them instead of each app owning its own.
+NEWS_CACHE_TTL_SECONDS = 600
 
 
 def _bot_token() -> str:
@@ -105,6 +116,8 @@ def register_api(repo: Repository, state: LatestState, admin_chat_ids: frozenset
     # no security benefit.
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+    news_cache: dict = {"at": 0.0, "payload": None}
+
     @app.middleware("http")
     async def _no_cache(request, call_next):
         # Telegram's in-app WebView is known to cache static assets aggressively by URL
@@ -162,6 +175,35 @@ def register_api(repo: Repository, state: LatestState, admin_chat_ids: frozenset
     async def get_stats(authorization: str | None = Header(default=None)):
         _auth(authorization)
         return repo.get_opportunity_stats()
+
+    @app.get("/api/news")
+    async def get_news(authorization: str | None = Header(default=None)):
+        """Real headlines for up to 3 "popular" matches -- deliberately NOT win-probability
+        predictions/percentages. See bot/webapp/news.py's module docstring for why."""
+        _auth(authorization)
+
+        if news_cache["payload"] is not None and time.time() - news_cache["at"] < NEWS_CACHE_TTL_SECONDS:
+            return news_cache["payload"]
+
+        picked = pick_popular_matches(state.matches, limit=3)
+        async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
+            entries = []
+            for m in picked:
+                headlines = await fetch_team_news(client, m.team_a, m.team_b)
+                entries.append({
+                    "game": m.game,
+                    "game_label": GAME_LABELS.get(m.game, m.game.upper()),
+                    "game_emoji": GAME_EMOJI.get(m.game, "🏆"),
+                    "team_a": m.team_a,
+                    "team_b": m.team_b,
+                    "start_time_label": format_match_start(m.start_time_utc),
+                    "headlines": headlines,
+                })
+
+        payload = {"matches": entries}
+        news_cache["payload"] = payload
+        news_cache["at"] = time.time()
+        return payload
 
     @app.get("/api/vilki")
     async def get_vilki(authorization: str | None = Header(default=None)):
