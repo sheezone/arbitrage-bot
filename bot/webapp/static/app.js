@@ -81,14 +81,32 @@
   const HIGH_PROFIT_THRESHOLD = 10;
   const BANKROLL_PRESETS = [500, 1000, 5000, 10000];
 
+  function haptic(style) {
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || "light");
+  }
+
+  const skeletons = {
+    vilki: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
+    settings: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
+    stats: `<div class="stat-grid"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div>`,
+  };
+
   document.querySelectorAll(".tab").forEach((btn) => {
-    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    btn.addEventListener("click", () => {
+      if (btn.dataset.tab === currentTab) return;
+      haptic("light");
+      switchTab(btn.dataset.tab);
+    });
   });
-  refreshBtn.addEventListener("click", () => loadTab(currentTab, true));
+  refreshBtn.addEventListener("click", () => {
+    haptic("light");
+    loadTab(currentTab, true);
+  });
 
   function switchTab(tab) {
     currentTab = tab;
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    content.innerHTML = skeletons[tab] || "";
     loadTab(tab);
   }
 
@@ -123,12 +141,14 @@
     if (!data.matches.length) {
       content.innerHTML = `
         <div class="meta-line">Данные на ${checkedAt}</div>
-        <div class="empty-state">Сейчас подходящих вилок нет.<br>Загляните чуть позже.</div>`;
+        <div class="empty-state"><span class="empty-icon">🔍</span>Сейчас подходящих вилок нет.<br>Загляните чуть позже.</div>`;
       return;
     }
 
-    const cards = data.matches.map((m) => {
-      const profitClass = m.profit_pct > HIGH_PROFIT_THRESHOLD ? "match-profit high" : "match-profit";
+    const cards = data.matches.map((m, i) => {
+      const isHigh = m.profit_pct > HIGH_PROFIT_THRESHOLD;
+      const profitClass = isHigh ? "match-profit high" : "match-profit";
+      const profitEmoji = isHigh ? "‼️" : "🚀";
       const legs = m.legs
         .map(
           (leg) => `
@@ -143,11 +163,11 @@
         )
         .join("");
       return `
-        <div class="card">
+        <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span>${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
           <div class="match-teams">⚔️ ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time">🕒 ${esc(m.start_time_label)}</div>` : ""}
-          <div class="${profitClass}">🚀 Прибыль: ${m.profit_pct.toFixed(2)}%</div>
+          <div class="${profitClass}">${profitEmoji} Прибыль: ${m.profit_pct.toFixed(2)}%</div>
           <div class="match-amount">💸 Возможный выигрыш: ${m.profit_amount.toFixed(2)}</div>
           <div class="legs">${legs}</div>
         </div>`;
@@ -231,12 +251,14 @@
 
     document.querySelectorAll(".preset-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        haptic("light");
         document.getElementById("bankroll-input").value = btn.dataset.preset;
       });
     });
     document.getElementById("bk-grid").addEventListener("click", (e) => {
       const chip = e.target.closest(".chip");
       if (!chip) return;
+      haptic("light");
       chip.classList.toggle("selected");
     });
     document.getElementById("save-settings-btn").addEventListener("click", saveSettings);
@@ -267,34 +289,52 @@
           muted,
         }),
       });
-      toast("Настройки сохранены");
+      toast("Настройки сохранены ✅");
       if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     } catch (e) {
       toast("Не удалось сохранить: " + e.message);
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
     }
   }
 
   // ---------- Статистика ----------
+
+  function animateValue(el, target, suffix, decimals) {
+    const duration = 500;
+    const start = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out-cubic
+      const current = target * eased;
+      el.textContent = (decimals ? current.toFixed(decimals) : Math.round(current)) + suffix;
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
 
   async function renderStats() {
     const s = await api("/api/stats");
     content.innerHTML = `
       <div class="section-title">Сегодня</div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-value">${s.today_count}</div><div class="stat-label">Найдено вилок</div></div>
-        <div class="stat-card"><div class="stat-value">${s.today_avg_profit.toFixed(2)}%</div><div class="stat-label">Средняя прибыль</div></div>
-        <div class="stat-card"><div class="stat-value">${s.today_best_profit.toFixed(2)}%</div><div class="stat-label">Лучшая прибыль</div></div>
+        <div class="stat-card" style="animation-delay:0ms"><div class="stat-value" data-v="${s.today_count}" data-suf="" data-dec="0">0</div><div class="stat-label">Найдено вилок</div></div>
+        <div class="stat-card" style="animation-delay:40ms"><div class="stat-value" data-v="${s.today_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Средняя прибыль</div></div>
+        <div class="stat-card" style="animation-delay:80ms"><div class="stat-value" data-v="${s.today_best_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Лучшая прибыль</div></div>
       </div>
       <div class="section-title">За всё время</div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-value">${s.alltime_count}</div><div class="stat-label">Найдено вилок</div></div>
-        <div class="stat-card"><div class="stat-value">${s.alltime_avg_profit.toFixed(2)}%</div><div class="stat-label">Средняя прибыль</div></div>
+        <div class="stat-card" style="animation-delay:120ms"><div class="stat-value" data-v="${s.alltime_count}" data-suf="" data-dec="0">0</div><div class="stat-label">Найдено вилок</div></div>
+        <div class="stat-card" style="animation-delay:160ms"><div class="stat-value" data-v="${s.alltime_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Средняя прибыль</div></div>
       </div>
     `;
+    content.querySelectorAll(".stat-value").forEach((el) => {
+      animateValue(el, parseFloat(el.dataset.v) || 0, el.dataset.suf, Number(el.dataset.dec));
+    });
   }
 
   // ---------- init ----------
 
+  content.innerHTML = skeletons.vilki;
   loadTab("vilki");
   refreshTimer = setInterval(() => {
     if (currentTab === "vilki") loadTab("vilki");
