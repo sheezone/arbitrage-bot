@@ -100,14 +100,27 @@ html, body {
   -webkit-backdrop-filter: blur(10px);
   z-index: 10;
 }
+/* Shared by every "shimmering" green/gold text below (title, profit numbers, stat
+   values) -- a slowly sliding gradient clipped to text ("переливается", not a one-shot
+   shine sweep). background-size/position only, so it's as GPU-cheap as the drifting
+   .blob background; each element below sets its own gradient colors and reuses this. */
+@keyframes shimmer-text {
+  to { background-position: -300% center; }
+}
+
 .topbar-title {
   font-weight: 800;
   font-size: 17px;
-  background: linear-gradient(90deg, var(--text), var(--accent) 140%);
+  letter-spacing: 0.01em;
+  background: linear-gradient(90deg, var(--text), var(--accent), var(--accent-2), var(--text));
+  background-size: 300% auto;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  letter-spacing: 0.01em;
+  animation: shimmer-text 6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .topbar-title { animation: none; background-position: 0 center; }
 }
 .icon-btn {
   background: none;
@@ -178,12 +191,26 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .match-profit {
   font-size: 16px;
   font-weight: 800;
-  color: var(--accent);
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent));
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 5s linear infinite;
 }
-.match-profit.high { color: var(--gold); }
+.match-profit.high {
+  background: linear-gradient(90deg, var(--gold), #ffe08a, var(--gold));
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .match-profit { animation: none; background-position: 0 center; }
+}
 .match-amount { font-size: 13px; color: var(--hint); margin-bottom: 10px; }
 
 .legs { background: rgba(255, 255, 255, 0.035); border-radius: 12px; padding: 10px 12px; }
@@ -326,11 +353,16 @@ input:checked + .slider::before { transform: translateX(19px); background: #0c0f
 .stat-value {
   font-size: 25px;
   font-weight: 800;
-  background: linear-gradient(120deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent));
+  background-size: 300% auto;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   font-variant-numeric: tabular-nums;
+  animation: shimmer-text 5s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-value { animation: none; background-position: 0 center; }
 }
 .stat-label { font-size: 12px; color: var(--hint); margin-top: 5px; }
 
