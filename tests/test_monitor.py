@@ -156,3 +156,20 @@ def test_evaluate_group_keeps_arbs_at_or_above_the_min_displayable_floor():
     results = _evaluate_group(_quote_group(2.02, 2.02))
     assert len(results) == 1
     assert results[0][4].profit_pct >= MIN_DISPLAYABLE_PROFIT_PCT
+
+
+def test_evaluate_group_drops_arb_where_every_leg_is_the_same_bookmaker():
+    """Confirmed live 2026-08-31: a Greece-vs-Spain basketball "78% profit" vilka with
+    both legs tagged the same bookmaker (Marathon) -- a data/parsing artifact, not a real
+    opportunity (a single bookmaker pricing an internal arbitrage against its own book
+    essentially never happens). The raw-cluster "2+ distinct bookmakers" check alone
+    doesn't catch this: find_best_odds can still independently land both best-per-outcome
+    picks on the same one even when a second bookmaker is present in the wider group."""
+    group = [
+        SourceQuote("basketball", "Greece", "Spain", "2026-08-31T16:00:00+00:00", "marathon", "Greece", 2.16),
+        SourceQuote("basketball", "Greece", "Spain", "2026-08-31T16:00:00+00:00", "marathon", "Spain", 10.25),
+        # A second bookmaker present in the cluster (satisfies the raw >=2-bookmaker
+        # check) but not competitive on either leg, so find_best_odds never picks it.
+        SourceQuote("basketball", "Greece", "Spain", "2026-08-31T16:00:00+00:00", "fonbet", "Spain", 1.56),
+    ]
+    assert _evaluate_group(group) == []

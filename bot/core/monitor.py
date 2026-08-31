@@ -286,6 +286,24 @@ def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, 
         if not arb.is_arbitrage or arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
             continue
 
+        # The len(...)>=2 check above only guarantees the raw cluster mentions 2+
+        # bookmakers somewhere -- find_best_odds still independently picks the single
+        # best price per outcome, which CAN land on the same bookmaker for every leg.
+        # Confirmed live (2026-08-31): a Greece-vs-Spain basketball "78% profit" vilka
+        # with both legs tagged the same bookmaker (Marathon), one leg's price standing
+        # far outside anything that bookmaker (or any other source) was actually quoting
+        # moments later on repeated direct re-checks -- a data/parsing artifact, not a
+        # real opportunity. A single real bookmaker pricing itself into an internal
+        # arbitrage against its own book essentially never happens, so treat an all-
+        # same-bookmaker result as a red flag and drop it rather than surface it.
+        if len({o.bookmaker for o in arb.best_odds}) < 2:
+            logger.warning(
+                "Dropping %s %s vs %s (%s): every leg priced by the same bookmaker (%s) -- "
+                "likely a data/matching artifact, not a real arb",
+                subgroup[0].game, team_a, team_b, market, arb.best_odds[0].bookmaker,
+            )
+            continue
+
         results.append((subgroup[0].game, team_a, team_b, market, arb))
     return results
 
