@@ -212,6 +212,59 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
   .match-profit { animation: none; background-position: 0 center; }
 }
 .match-amount { font-size: 13px; color: var(--hint); margin-bottom: 10px; }
+.amount-value { color: var(--red); font-weight: 800; font-size: 14px; }
+
+/* Animated emoji -- display:inline-block so transforms actually apply, each on its own
+   loop/timing so a card doesn't read as one single blinking mass. Frozen (not removed)
+   under prefers-reduced-motion, same policy as every other animation on this page. */
+.emoji-bounce, .emoji-pulse, .emoji-shake, .emoji-tick, .emoji-wiggle, .emoji-clash {
+  display: inline-block;
+  /* Reset any shimmering-text gradient-clip inherited from a parent like .match-profit --
+     without this the emoji glyph gets clipped to (and hidden by) the parent's text
+     gradient instead of showing its normal colorful self. */
+  -webkit-text-fill-color: initial;
+  background: none;
+}
+.emoji-bounce { animation: emoji-bounce 1.6s ease-in-out infinite; }
+@keyframes emoji-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.emoji-pulse { animation: emoji-pulse 1.8s ease-in-out infinite; }
+@keyframes emoji-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+.emoji-shake { animation: emoji-shake 1.1s ease-in-out infinite; transform-origin: center; }
+@keyframes emoji-shake {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-12deg) scale(1.1); }
+  40% { transform: rotate(10deg) scale(1.1); }
+  60% { transform: rotate(-8deg) scale(1.05); }
+  80% { transform: rotate(6deg) scale(1.05); }
+}
+.emoji-tick { animation: emoji-tick 2s steps(1) infinite; transform-origin: 50% 60%; }
+@keyframes emoji-tick {
+  0%, 91% { transform: rotate(0deg); }
+  95% { transform: rotate(15deg); }
+  100% { transform: rotate(0deg); }
+}
+.emoji-wiggle { animation: emoji-wiggle 3s ease-in-out infinite; transform-origin: 60% 60%; }
+@keyframes emoji-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(8deg); }
+}
+.emoji-clash { animation: emoji-clash 2.2s ease-in-out infinite; }
+@keyframes emoji-clash {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.15) rotate(-6deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .emoji-bounce, .emoji-pulse, .emoji-shake, .emoji-tick, .emoji-wiggle, .emoji-clash {
+    animation: none;
+  }
+}
 
 .legs { background: rgba(255, 255, 255, 0.035); border-radius: 12px; padding: 10px 12px; }
 .leg-row {

@@ -148,7 +148,7 @@
     const cards = data.matches.map((m, i) => {
       const isHigh = m.profit_pct > HIGH_PROFIT_THRESHOLD;
       const profitClass = isHigh ? "match-profit high" : "match-profit";
-      const profitEmoji = isHigh ? "‼️" : "🚀";
+      const profitEmoji = isHigh ? `<span class="emoji-shake">‼️</span>` : `<span class="emoji-pulse">🚀</span>`;
       const legs = m.legs
         .map(
           (leg) => `
@@ -164,11 +164,11 @@
         .join("");
       return `
         <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
-          <div class="match-header"><span>${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
-          <div class="match-teams">⚔️ ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
-          ${m.start_time_label ? `<div class="match-time">🕒 ${esc(m.start_time_label)}</div>` : ""}
+          <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
+          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
+          ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="${profitClass}">${profitEmoji} Прибыль: ${m.profit_pct.toFixed(2)}%</div>
-          <div class="match-amount">💸 Возможный выигрыш: ${m.profit_amount.toFixed(2)}</div>
+          <div class="match-amount"><span class="emoji-bounce">💸</span> Возможный выигрыш: <span class="amount-value">${m.profit_amount.toFixed(2)}</span></div>
           <div class="legs">${legs}</div>
         </div>`;
     });
