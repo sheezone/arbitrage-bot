@@ -336,7 +336,8 @@
       <div class="section-title">Порог прибыли</div>
       <div class="field">
         <label>Минимальный % прибыли для показа вилки</label>
-        <input type="number" id="threshold-input" value="${me.min_profit_pct}" min="0" step="0.1">
+        <input type="number" id="threshold-input" value="${me.min_profit_pct}" min="0" step="0.1" placeholder="например, 0.6">
+        <div class="field-hint">Можно указать дробное значение, например 0.6</div>
       </div>
 
       <div class="section-title">Период</div>
