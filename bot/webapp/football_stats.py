@@ -17,11 +17,32 @@ adds one more real data point (H2H record + score history) to look at alongside 
 headlines, nothing that predicts the outcome."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import httpx
 
 API_BASE = "https://v3.football.api-sports.io"
 H2H_LOOKBACK_MATCHES = 8
 _REQUEST_TIMEOUT = 10.0
+
+# Well-known leagues, ranked by how "anticipated" a match in them generally is -- used to
+# pick the 3 most notable upcoming fixtures out of a day's several hundred (2026-09-02
+# live check: /fixtures?date=... returned 206 results for one day, worldwide, everything
+# from top divisions to reserve/youth leagues). Lower value = shown first. IDs are
+# API-Football's own (confirmed live).
+LEAGUE_PRIORITY = {
+    2: 0,    # UEFA Champions League
+    3: 1,    # UEFA Europa League
+    848: 2,  # UEFA Europa Conference League
+    39: 3,   # Premier League
+    140: 4,  # La Liga
+    135: 5,  # Serie A
+    78: 6,   # Bundesliga
+    61: 7,   # Ligue 1
+    235: 8,  # Russian Premier League
+    88: 9,   # Eredivisie
+    94: 10,  # Primeira Liga
+}
 
 # API-Football's team search is Latin-name based -- our own team names come from
 # Russian bookmakers, so a Cyrillic "Спартак" needs mapping to what the API actually
@@ -68,6 +89,27 @@ TEAM_NAME_EN = {
     "португалия": "Portugal",
     "италия": "Italy",
 }
+
+
+# Best-effort reverse of TEAM_NAME_EN, for display -- e.g. "Real Madrid" -> "Реал
+# Мадрид". A team not in the curated map just keeps its API-Football (English/Latin)
+# name rather than showing nothing. TEAM_NAME_EN has some English values with more than
+# one Cyrillic key pointing at them (e.g. both "реал" and "реал мадрид" -> "Real
+# Madrid", so search hits on either) -- keep the LONGEST Cyrillic form for display
+# rather than whichever happens to be last in dict order, so "Реал Мадрид" wins over
+# the bare "Реал".
+_TEAM_NAME_RU: dict[str, str] = {}
+for _cyrillic, _english in TEAM_NAME_EN.items():
+    _key = _english.lower()
+    if _key not in _TEAM_NAME_RU or len(_cyrillic) > len(_TEAM_NAME_RU[_key]):
+        _TEAM_NAME_RU[_key] = _cyrillic
+
+
+def display_team_name(api_name: str) -> str:
+    cyrillic = _TEAM_NAME_RU.get(api_name.lower())
+    if cyrillic is None:
+        return api_name
+    return " ".join(word.capitalize() for word in cyrillic.split())
 
 
 def resolve_search_name(team_name: str) -> str:
@@ -167,3 +209,81 @@ async def get_match_h2h(client: httpx.AsyncClient, team_a: str, team_b: str, api
     if team_a_id is None or team_b_id is None:
         return None
     return await get_head_to_head(client, team_a_id, team_b_id, api_key)
+
+
+async def get_popular_upcoming_fixtures(
+    client: httpx.AsyncClient, api_key: str, hours: int = 24, limit: int = 3
+) -> list[dict]:
+    """Real not-yet-started fixtures, kicking off within the next `hours`, from
+    well-known leagues (see LEAGUE_PRIORITY) -- independent of
+    bot/core/state.LatestState (which only ever holds matches an arb was actually found
+    for, see news.py's module docstring). This answers "what are the most anticipated
+    matches in the next 24h" for real, rather than "whatever happens to have a live arb
+    right now".
+
+    Uses the free tier's date-based /fixtures query -- confirmed live (2026-09-02) this
+    does NOT hit the season-restriction error that blocks team+season/last queries (see
+    the module docstring above). [] on any failure or if nothing in the priority leagues
+    falls in the window, same "just don't show this section" convention as the rest of
+    this module."""
+    if not api_key:
+        return []
+
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(hours=hours)
+    # The window can span two UTC calendar dates (e.g. checking at 23:00 UTC) -- the API
+    # only takes a single `date`, so query every distinct date the window touches.
+    dates = sorted({now.date().isoformat(), cutoff.date().isoformat()})
+
+    fixtures: list[dict] = []
+    for date_str in dates:
+        try:
+            resp = await client.get(
+                f"{API_BASE}/fixtures",
+                params={"date": date_str},
+                headers={"x-apisports-key": api_key},
+                timeout=_REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except (httpx.HTTPError, ValueError):
+            continue
+        fixtures.extend(data.get("response") or [])
+
+    candidates = []
+    for f in fixtures:
+        if f.get("fixture", {}).get("status", {}).get("short") != "NS":  # not yet started
+            continue
+        ts = f.get("fixture", {}).get("timestamp")
+        if not ts:
+            continue
+        kickoff = datetime.fromtimestamp(ts, tz=timezone.utc)
+        if not (now <= kickoff <= cutoff):
+            continue
+        league_id = f.get("league", {}).get("id")
+        priority = LEAGUE_PRIORITY.get(league_id)
+        if priority is None:
+            continue
+        candidates.append((priority, kickoff, f))
+    candidates.sort(key=lambda c: (c[0], c[1]))
+
+    seen_pairs: set[tuple[str, str]] = set()
+    out = []
+    for _, kickoff, f in candidates:
+        home = f.get("teams", {}).get("home", {}).get("name")
+        away = f.get("teams", {}).get("away", {}).get("name")
+        if not home or not away:
+            continue
+        pair = (home, away)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        out.append({
+            "team_a": display_team_name(home),
+            "team_b": display_team_name(away),
+            "start_time_utc": kickoff.isoformat(),
+            "league": f.get("league", {}).get("name"),
+        })
+        if len(out) >= limit:
+            break
+    return out

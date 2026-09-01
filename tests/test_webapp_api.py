@@ -270,6 +270,63 @@ def _football_state(state):
     state.matches = [MatchSnapshot("football", "Реал Мадрид", "Барселона", arb, "2026-08-29T20:00:00+00:00")]
 
 
+def test_news_endpoint_prefers_real_upcoming_fixtures_over_arb_pool(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    # An arb-derived match that would show under the old behavior -- should be pushed
+    # out once a real upcoming fixture is available.
+    best_odds = [OutcomeOdds("Old Arb Team A", "fonbet", 2.1), OutcomeOdds("Old Arb Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Old Arb Team A", "Old Arb Team B", arb, "2026-08-29T20:00:00+00:00")]
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return []
+
+    async def fake_get_popular_upcoming_fixtures(client, api_key, limit=3):
+        assert api_key == "test-football-key"
+        return [{"team_a": "Реал Мадрид", "team_b": "Барселона", "start_time_utc": "2026-09-02T20:00:00+00:00", "league": "La Liga"}]
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+    monkeypatch.setattr("bot.webapp.api.get_popular_upcoming_fixtures", fake_get_popular_upcoming_fixtures)
+
+    from bot.webapp.api import register_api
+
+    app = register_api(repo, state, admin_chat_ids=frozenset({99}), api_football_key="test-football-key")
+    resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
+    body = resp.json()
+    assert body["matches"][0]["team_a"] == "Реал Мадрид"
+    assert body["matches"][0]["can_analyze"] is True
+
+
+def test_news_endpoint_pads_with_arb_pool_when_fewer_than_3_real_fixtures(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("tennis", "Team A", "Team B", arb, "2026-08-29T20:00:00+00:00")]
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return []
+
+    async def fake_get_popular_upcoming_fixtures(client, api_key, limit=3):
+        return [{"team_a": "Реал Мадрид", "team_b": "Барселона", "start_time_utc": "2026-09-02T20:00:00+00:00", "league": "La Liga"}]
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+    monkeypatch.setattr("bot.webapp.api.get_popular_upcoming_fixtures", fake_get_popular_upcoming_fixtures)
+
+    from bot.webapp.api import register_api
+
+    app = register_api(repo, state, admin_chat_ids=frozenset({99}), api_football_key="test-football-key")
+    resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
+    teams = [(m["team_a"], m["team_b"]) for m in resp.json()["matches"]]
+    assert ("Реал Мадрид", "Барселона") in teams
+    assert ("Team A", "Team B") in teams
+
+
 def test_analysis_endpoint_requires_auth(setup):
     app, _, _ = setup
     resp = _run(_get(app, "/api/analysis?team_a=A&team_b=B"))

@@ -123,6 +123,77 @@ def test_get_match_h2h_returns_none_without_api_key():
     assert _run(go()) is None
 
 
+def test_display_team_name_maps_known_team_to_cyrillic():
+    assert fs.display_team_name("Real Madrid") == "Реал Мадрид"
+    assert fs.display_team_name("Spartak Moscow") == "Спартак"
+
+
+def test_display_team_name_passes_through_unknown_team():
+    assert fs.display_team_name("FC Unknown Club") == "FC Unknown Club"
+
+
+def _upcoming_fixture(league_id, home, away, minutes_from_now, status="NS"):
+    kickoff = fs.datetime.now(fs.timezone.utc) + fs.timedelta(minutes=minutes_from_now)
+    return {
+        "fixture": {"status": {"short": status}, "timestamp": int(kickoff.timestamp()), "date": kickoff.isoformat()},
+        "teams": {"home": {"name": home}, "away": {"name": away}},
+        "league": {"id": league_id, "name": "Test League"},
+    }
+
+
+def test_get_popular_upcoming_fixtures_returns_empty_without_api_key():
+    async def go():
+        async with httpx.AsyncClient() as client:
+            return await fs.get_popular_upcoming_fixtures(client, "")
+
+    assert _run(go()) == []
+
+
+def test_get_popular_upcoming_fixtures_filters_and_ranks_by_league():
+    fixtures = [
+        _upcoming_fixture(39, "Real Madrid", "Barcelona", 60),  # Premier League id but real teams, priority 3
+        _upcoming_fixture(2, "Bayern Munich", "Juventus", 120),  # Champions League, priority 0 -> first
+        _upcoming_fixture(9999, "Nobody FC", "Nobody Else FC", 30),  # unknown league -> excluded
+        _upcoming_fixture(39, "Team X", "Team Y", 90, status="FT"),  # already finished -> excluded
+    ]
+
+    def handler(request):
+        return httpx.Response(200, json={"response": fixtures})
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.get_popular_upcoming_fixtures(client, "key123", limit=3)
+
+    result = _run(go())
+    assert len(result) == 2
+    assert result[0]["team_a"] == "Бавария"  # Champions League ranks first, name mapped to Cyrillic
+    assert result[1]["team_a"] == "Реал Мадрид"  # longest Cyrillic form preferred for display
+
+
+def test_get_popular_upcoming_fixtures_excludes_matches_outside_the_window():
+    fixtures = [_upcoming_fixture(39, "Team A", "Team B", 60 * 30)]  # 30h out, outside default 24h window
+
+    def handler(request):
+        return httpx.Response(200, json={"response": fixtures})
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.get_popular_upcoming_fixtures(client, "key123")
+
+    assert _run(go()) == []
+
+
+def test_get_popular_upcoming_fixtures_returns_empty_on_http_error():
+    def handler(request):
+        return httpx.Response(500)
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.get_popular_upcoming_fixtures(client, "key123")
+
+    assert _run(go()) == []
+
+
 def test_get_match_h2h_returns_none_when_a_team_is_not_found():
     def handler(request):
         if "Real" in request.url.params.get("search", ""):

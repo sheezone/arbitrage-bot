@@ -31,7 +31,7 @@ from bot.handlers.commands import (
     _DIRECT_BOOKMAKERS,
 )
 from bot.webapp.auth import validate_init_data
-from bot.webapp.football_stats import get_match_h2h
+from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures
 from bot.webapp.news import fetch_team_news, pick_popular_matches
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -43,6 +43,12 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 # shared across every register_api() call (e.g. each test's own app instance), leaking
 # cached state between them instead of each app owning its own.
 NEWS_CACHE_TTL_SECONDS = 600
+
+# Separate, much longer cache for the real-fixtures lookup (get_popular_upcoming_fixtures)
+# -- it costs 1-2 API-Football requests against the free tier's 100/day cap, so refreshing
+# it on the same 10-minute cadence as headlines (up to 144x/day) would blow through the
+# quota fast. An hour is plenty fresh for "what's kicking off in the next 24h".
+FIXTURES_CACHE_TTL_SECONDS = 3600
 
 
 def _bot_token() -> str:
@@ -121,6 +127,7 @@ def register_api(
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
     news_cache: dict = {"at": 0.0, "payload": None}
+    fixtures_cache: dict = {"at": 0.0, "payload": None}
 
     @app.middleware("http")
     async def _no_cache(request, call_next):
@@ -183,30 +190,61 @@ def register_api(
     @app.get("/api/news")
     async def get_news(authorization: str | None = Header(default=None)):
         """Real headlines for up to 3 "popular" matches -- deliberately NOT win-probability
-        predictions/percentages. See bot/webapp/news.py's module docstring for why."""
+        predictions/percentages. See bot/webapp/news.py's module docstring for why.
+
+        Football matches come from real upcoming fixtures (next 24h, well-known leagues),
+        NOT from bot/core/state.LatestState (which only ever holds matches an arb was
+        actually found for) -- see get_popular_upcoming_fixtures's docstring. Other sports
+        still fall back to the arb-derived pool, since there's no equivalent free
+        fixture-calendar source for them."""
         _auth(authorization)
 
         if news_cache["payload"] is not None and time.time() - news_cache["at"] < NEWS_CACHE_TTL_SECONDS:
             return news_cache["payload"]
 
-        picked = pick_popular_matches(state.matches, limit=3)
+        if fixtures_cache["payload"] is None or time.time() - fixtures_cache["at"] >= FIXTURES_CACHE_TTL_SECONDS:
+            async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
+                fixtures_cache["payload"] = await get_popular_upcoming_fixtures(client, api_football_key, limit=3)
+            fixtures_cache["at"] = time.time()
+        football_fixtures = fixtures_cache["payload"] or []
+
         async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
             entries = []
-            for m in picked:
-                headlines = await fetch_team_news(client, m.team_a, m.team_b)
+            for fx in football_fixtures:
+                headlines = await fetch_team_news(client, fx["team_a"], fx["team_b"])
                 entries.append({
-                    "game": m.game,
-                    "game_label": GAME_LABELS.get(m.game, m.game.upper()),
-                    "game_emoji": GAME_EMOJI.get(m.game, "🏆"),
-                    "team_a": m.team_a,
-                    "team_b": m.team_b,
-                    "start_time_label": format_match_start(m.start_time_utc),
+                    "game": "football",
+                    "game_label": "Футбол",
+                    "game_emoji": GAME_EMOJI.get("football", "⚽"),
+                    "team_a": fx["team_a"],
+                    "team_b": fx["team_b"],
+                    "start_time_label": format_match_start(fx["start_time_utc"]),
                     "headlines": headlines,
                     # H2H (the heavier part -- extra API-Football requests, rate-limited
                     # to 1/day/user) is deliberately NOT fetched here for all 3 matches on
                     # every page load -- see /api/analysis, fetched only on click.
-                    "can_analyze": m.game == "football",
+                    "can_analyze": True,
                 })
+
+            existing_pairs = {(e["team_a"], e["team_b"]) for e in entries}
+            remaining = 3 - len(entries)
+            if remaining > 0:
+                for m in pick_popular_matches(state.matches, limit=remaining + len(entries)):
+                    if len(entries) >= 3:
+                        break
+                    if (m.team_a, m.team_b) in existing_pairs:
+                        continue
+                    headlines = await fetch_team_news(client, m.team_a, m.team_b)
+                    entries.append({
+                        "game": m.game,
+                        "game_label": GAME_LABELS.get(m.game, m.game.upper()),
+                        "game_emoji": GAME_EMOJI.get(m.game, "🏆"),
+                        "team_a": m.team_a,
+                        "team_b": m.team_b,
+                        "start_time_label": format_match_start(m.start_time_utc),
+                        "headlines": headlines,
+                        "can_analyze": m.game == "football",
+                    })
 
         payload = {"matches": entries}
         news_cache["payload"] = payload
@@ -228,12 +266,19 @@ def register_api(
         if user.last_analysis_date == today:
             raise HTTPException(status_code=429, detail="Дневной лимит анализа исчерпан (1 в день)")
 
-        picked = pick_popular_matches(state.matches, limit=3)
-        match = next((m for m in picked if m.team_a == team_a and m.team_b == team_b), None)
-        if match is None:
-            raise HTTPException(status_code=404, detail="Матч больше не в списке популярных")
-        if match.game != "football":
-            raise HTTPException(status_code=400, detail="Анализ пока доступен только для футбола")
+        # A valid pair is either one of the real upcoming fixtures currently cached (see
+        # /api/news) or, for non-football, one from the arb-derived pool -- mirrors
+        # exactly what /api/news is currently showing as analyzable.
+        in_fixtures = any(
+            fx["team_a"] == team_a and fx["team_b"] == team_b for fx in (fixtures_cache["payload"] or [])
+        )
+        if not in_fixtures:
+            picked = pick_popular_matches(state.matches, limit=3)
+            match = next((m for m in picked if m.team_a == team_a and m.team_b == team_b), None)
+            if match is None:
+                raise HTTPException(status_code=404, detail="Матч больше не в списке популярных")
+            if match.game != "football":
+                raise HTTPException(status_code=400, detail="Анализ пока доступен только для футбола")
 
         async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
             h2h = await get_match_h2h(client, team_a, team_b, api_football_key)
