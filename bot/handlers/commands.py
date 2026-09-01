@@ -649,6 +649,7 @@ def _search_view(user: UserSettings, latest_state: LatestState, poll_interval_se
         block.append("")
         quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
         block.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
+        block.append("⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.")
         block.append("")
         blocks.append("\n".join(block))
 

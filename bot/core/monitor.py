@@ -203,6 +203,8 @@ def _format_message(
         lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
+    lines.append("")
+    lines.append("⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.")
     return "\n".join(lines)
 
 

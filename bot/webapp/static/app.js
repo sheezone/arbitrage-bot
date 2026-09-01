@@ -172,6 +172,7 @@
           <div class="${profitClass}">${profitEmoji} Прибыль: ${m.profit_pct.toFixed(2)}%</div>
           <div class="match-amount"><span class="emoji-bounce">💸</span> Возможный выигрыш: <span class="amount-value">${m.profit_amount.toFixed(2)}</span></div>
           <div class="legs">${legs}</div>
+          <div class="odds-warning">⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.</div>
         </div>`;
     });
 
