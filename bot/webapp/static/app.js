@@ -219,11 +219,27 @@
             )
             .join("")
         : `<div class="news-empty">За последние 24 часа свежих новостей не нашлось.</div>`;
+
+      // Real head-to-head record from API-Football, when available -- just the score
+      // history, no verdict/percentage drawn from it. See football_stats.py.
+      const h2h = m.h2h
+        ? `<div class="h2h-block">
+            <div class="h2h-title">📊 Личные встречи (последние ${m.h2h.matches.length})</div>
+            <div class="h2h-record">${esc(m.team_a)} ${m.h2h.team_a_wins} — ${m.h2h.draws} — ${m.h2h.team_b_wins} ${esc(m.team_b)} <span class="h2h-total">(всего встреч: ${m.h2h.total})</span></div>
+            <div class="h2h-matches">${m.h2h.matches
+              .map(
+                (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`
+              )
+              .join("")}</div>
+          </div>`
+        : "";
+
       return `
         <div class="card" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
+          ${h2h}
           <div class="news-list">${headlines}</div>
         </div>`;
     });

@@ -221,3 +221,51 @@ def test_news_endpoint_caches_across_calls(setup, monkeypatch):
     calls_after_first = call_count
     _run(_get(app, "/api/news", headers=_auth_header(1)))
     assert call_count == calls_after_first  # second call served from cache, no new requests
+
+
+def test_news_endpoint_includes_h2h_for_football_when_available(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Реал Мадрид", "fonbet", 2.1), OutcomeOdds("Барселона", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Реал Мадрид", "Барселона", arb, "2026-08-29T20:00:00+00:00")]
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return []
+
+    async def fake_get_match_h2h(client, team_a, team_b, api_key):
+        assert api_key == "test-football-key"
+        return {"total": 3, "team_a_wins": 1, "team_b_wins": 1, "draws": 1, "matches": []}
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fake_get_match_h2h)
+
+    from bot.webapp.api import register_api
+
+    app = register_api(repo, state, admin_chat_ids=frozenset({99}), api_football_key="test-football-key")
+    resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
+    assert resp.json()["matches"][0]["h2h"]["total"] == 3
+
+
+def test_news_endpoint_skips_h2h_for_non_football_matches(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("tennis", "Team A", "Team B", arb, "2026-08-29T20:00:00+00:00")]
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return []
+
+    async def fail_get_match_h2h(client, team_a, team_b, api_key):
+        raise AssertionError("should not be called for non-football matches")
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fail_get_match_h2h)
+
+    resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
+    assert resp.json()["matches"][0]["h2h"] is None

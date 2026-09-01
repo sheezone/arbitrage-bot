@@ -110,7 +110,7 @@ async def main() -> None:
     # not an error, when WEBAPP_URL is unset -- same opt-in pattern as Melbet/crypto pay.
     webapp_task: asyncio.Task | None = None
     if config.webapp_url:
-        webapp_app = register_api(repo, state, config.admin_chat_ids)
+        webapp_app = register_api(repo, state, config.admin_chat_ids, api_football_key=config.api_football_key)
         uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")
         webapp_task = asyncio.create_task(uvicorn.Server(uv_config).serve())
 

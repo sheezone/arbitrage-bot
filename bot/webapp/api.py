@@ -31,6 +31,7 @@ from bot.handlers.commands import (
     _DIRECT_BOOKMAKERS,
 )
 from bot.webapp.auth import validate_init_data
+from bot.webapp.football_stats import get_match_h2h
 from bot.webapp.news import fetch_team_news, pick_popular_matches
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -95,7 +96,9 @@ class SettingsIn(BaseModel):
     muted: bool | None = None
 
 
-def register_api(repo: Repository, state: LatestState, admin_chat_ids: frozenset[int]) -> FastAPI:
+def register_api(
+    repo: Repository, state: LatestState, admin_chat_ids: frozenset[int], api_football_key: str = ""
+) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
     NOT a module-level singleton mutated in place. Call this once from bot/main.py with
     the same instances the bot's aiogram handlers and monitor loop use (one shared source
@@ -190,6 +193,12 @@ def register_api(repo: Repository, state: LatestState, admin_chat_ids: frozenset
             entries = []
             for m in picked:
                 headlines = await fetch_team_news(client, m.team_a, m.team_b)
+                # Only football has any hope of a hit in API-Football's own database --
+                # skip the two extra requests entirely for other sports rather than
+                # burning free-tier quota (100/day) on a lookup that can't succeed.
+                h2h = None
+                if m.game == "football":
+                    h2h = await get_match_h2h(client, m.team_a, m.team_b, api_football_key)
                 entries.append({
                     "game": m.game,
                     "game_label": GAME_LABELS.get(m.game, m.game.upper()),
@@ -198,6 +207,7 @@ def register_api(repo: Repository, state: LatestState, admin_chat_ids: frozenset
                     "team_b": m.team_b,
                     "start_time_label": format_match_start(m.start_time_utc),
                     "headlines": headlines,
+                    "h2h": h2h,
                 })
 
         payload = {"matches": entries}

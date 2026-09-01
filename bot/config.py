@@ -16,6 +16,7 @@ class Config:
     odds_api_key: str
     odds_api_base_url: str
     the_odds_api_key: str
+    api_football_key: str
     surebet_api_token: str
     yookassa_provider_token: str
     cryptobot_api_token: str
@@ -46,6 +47,7 @@ def load_config() -> Config:
         odds_api_key=os.environ.get("ODDS_API_KEY", ""),
         odds_api_base_url=os.environ.get("ODDS_API_BASE_URL", "https://api.oddspapi.io"),
         the_odds_api_key=os.environ.get("THE_ODDS_API_KEY", ""),
+        api_football_key=os.environ.get("API_FOOTBALL_KEY", ""),
         surebet_api_token=os.environ.get("SUREBET_API_TOKEN", SUREBET_DEFAULT_TEST_TOKEN),
         yookassa_provider_token=os.environ.get("YOOKASSA_PROVIDER_TOKEN", ""),
         cryptobot_api_token=os.environ.get("CRYPTOBOT_API_TOKEN", ""),
