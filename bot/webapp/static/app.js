@@ -127,6 +127,12 @@
 
   // ---------- Вилки ----------
 
+  // Space-grouped thousands, period decimal (matches format_amount on the bot side) --
+  // a bankroll of 1 000 000 (a real preset) otherwise renders as one unbroken digit run.
+  function fmtMoney(n) {
+    return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, " ");
+  }
+
   function fmtMoscowTime(iso) {
     if (!iso) return "";
     try {
@@ -160,7 +166,7 @@
               ? `<a href="${esc(leg.bookmaker_url)}" target="_blank" rel="noopener">${esc(leg.bookmaker)}</a>`
               : esc(leg.bookmaker)
           }</span>
-          <span class="leg-stake">${leg.stake.toFixed(2)}</span>
+          <span class="leg-stake">${fmtMoney(leg.stake)}</span>
         </div>`
         )
         .join("");
@@ -170,7 +176,7 @@
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="${profitClass}">${profitEmoji} Прибыль: ${m.profit_pct.toFixed(2)}%</div>
-          <div class="match-amount"><span class="emoji-bounce">💸</span> Возможный выигрыш: <span class="amount-value">${m.profit_amount.toFixed(2)}</span></div>
+          <div class="match-amount"><span class="emoji-bounce">💸</span> Возможный выигрыш: <span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
           <div class="legs">${legs}</div>
           <div class="odds-warning">⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.</div>
         </div>`;
@@ -426,7 +432,7 @@
     const s = await api("/api/stats");
     content.innerHTML = `
       <div class="section-title">Сегодня</div>
-      <div class="stat-grid">
+      <div class="stat-grid stat-grid-3">
         <div class="stat-card" style="animation-delay:0ms"><div class="stat-value" data-v="${s.today_count}" data-suf="" data-dec="0">0</div><div class="stat-label">Найдено вилок</div></div>
         <div class="stat-card" style="animation-delay:40ms"><div class="stat-value" data-v="${s.today_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Средняя прибыль</div></div>
         <div class="stat-card" style="animation-delay:80ms"><div class="stat-value" data-v="${s.today_best_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Лучшая прибыль</div></div>

@@ -45,6 +45,7 @@ from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.monitor import (
     BOOKMAKER_URLS,
     GAME_EMOJI,
+    format_amount,
     format_match_start,
     format_odds_lines,
     format_stakes_lines,
@@ -550,18 +551,18 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
     lines = [
         _CALCULATOR_HEADER.rstrip(),
         "",
-        f"💰 Банкролл: <b>{bankroll:.2f}</b>",
+        f"💰 Банкролл: <b>{format_amount(bankroll)}</b>",
         "<blockquote>" + "\n".join(odds_lines) + "</blockquote>",
     ]
     if arb.is_arbitrage:
         profit_amount = bankroll * arb.profit_pct / 100
         lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
-        lines.append(f"💸 Гарантированный выигрыш: <b>{profit_amount:.2f}</b>")
+        lines.append(f"💸 Гарантированный выигрыш: <b>{format_amount(profit_amount)}</b>")
         lines.append("")
         lines.append("💵 <b>Ставки:</b>")
         stake_lines = [
-            f"▫️ На {outcome_a}: <b>{stakes[outcome_a]:.2f}</b>",
-            f"▫️ На {outcome_b}: <b>{stakes[outcome_b]:.2f}</b>",
+            f"▫️ На {outcome_a}: <b>{format_amount(stakes[outcome_a])}</b>",
+            f"▫️ На {outcome_b}: <b>{format_amount(stakes[outcome_b])}</b>",
         ]
         lines.append("<blockquote>" + "\n".join(stake_lines) + "</blockquote>")
     else:
@@ -645,7 +646,7 @@ def _search_view(user: UserSettings, latest_state: LatestState, poll_interval_se
             block.append(f"🕒 {match_time}")
         block.append(f"🚀 Прибыль: <b>{m.arb.profit_pct:.2f}%</b>")
         profit_amount = user.bankroll * m.arb.profit_pct / 100
-        block.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
+        block.append(f"💸 Возможный выигрыш: <b>{format_amount(profit_amount)}</b>")
         block.append("")
         quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
         block.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")

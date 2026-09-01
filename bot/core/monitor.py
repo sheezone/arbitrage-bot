@@ -168,6 +168,15 @@ def user_allows_arb(allowed_bookmakers: list[str], best_odds: list[OutcomeOdds])
     return all(o.bookmaker.lower() in allowed for o in best_odds)
 
 
+def format_amount(value: float) -> str:
+    """Space-grouped thousands, e.g. 1234567.8 -> "1 234 567.80" -- a bankroll of
+    1,000,000 (a real preset, see BANKROLL_PRESETS/commands.py) otherwise renders as one
+    unbroken run of digits everywhere an amount is shown (notifications, search screen,
+    calculator, Mini App). Keeps the period decimal separator used everywhere else in
+    this codebase (odds, profit %) rather than switching to a Russian-style comma."""
+    return f"{value:,.2f}".replace(",", " ")
+
+
 def format_odds_lines(best_odds: list[OutcomeOdds]) -> list[str]:
     lines = []
     for i, outcome in enumerate(best_odds):
@@ -181,7 +190,7 @@ def format_odds_lines(best_odds: list[OutcomeOdds]) -> list[str]:
 
 
 def format_stakes_lines(stakes: dict) -> list[str]:
-    return [f"    ▫️ {html.escape(outcome_name)}: <b>{stake:.2f}</b>" for outcome_name, stake in stakes.items()]
+    return [f"    ▫️ {html.escape(outcome_name)}: <b>{format_amount(stake)}</b>" for outcome_name, stake in stakes.items()]
 
 
 def _format_message(
@@ -200,7 +209,7 @@ def _format_message(
         # The guaranteed profit is the same no matter which leg wins -- that's the whole
         # point of an arb -- so this is a single number, not a per-outcome range.
         profit_amount = bankroll * arb.profit_pct / 100
-        lines.append(f"💸 Возможный выигрыш: <b>{profit_amount:.2f}</b>")
+        lines.append(f"💸 Возможный выигрыш: <b>{format_amount(profit_amount)}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     lines.append("")

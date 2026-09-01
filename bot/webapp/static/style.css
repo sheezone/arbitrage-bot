@@ -314,23 +314,29 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .h2h-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
 .h2h-record { font-size: 13px; color: var(--text); margin-bottom: 8px; }
 .h2h-total { color: var(--hint); font-size: 12px; }
-.h2h-matches { display: flex; flex-direction: column; gap: 3px; }
-.h2h-row { color: var(--hint); font-size: 12px; }
-.h2h-date { color: var(--hint); opacity: 0.75; margin-right: 6px; }
+.h2h-matches { display: flex; flex-direction: column; gap: 4px; }
+/* Score is the actual content of this row -- was var(--hint) (the same dim gray used
+   for metadata like dates), which made it nearly unreadable against the card
+   background (confirmed live). Only the date prefix should stay muted. */
+.h2h-row { color: var(--text); font-size: 12px; }
+.h2h-date { color: var(--hint); margin-right: 6px; font-variant-numeric: tabular-nums; }
 
 .analyze-btn {
   width: 100%;
   margin-top: 10px;
-  padding: 10px;
+  padding: 11px;
   border: none;
   border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--button-text);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 8px 18px rgba(70, 211, 155, 0.2);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.analyze-btn:disabled { background: rgba(255, 255, 255, 0.08); color: var(--hint); cursor: default; }
+.analyze-btn:active { transform: scale(0.98); box-shadow: 0 5px 12px rgba(70, 211, 155, 0.16); }
+.analyze-btn:disabled { background: rgba(255, 255, 255, 0.08); color: var(--hint); cursor: default; box-shadow: none; }
 
 .empty-state { text-align: center; color: var(--hint); padding: 70px 20px 40px; animation: rise-in 0.4s ease both; }
 .empty-state .empty-icon { font-size: 40px; display: block; margin-bottom: 14px; animation: float 3s ease-in-out infinite; }
@@ -357,9 +363,10 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
   margin-top: 10px;
   padding: 8px 10px;
   border-radius: 10px;
+  border-left: 3px solid rgba(244, 192, 74, 0.5);
   background: rgba(255, 180, 60, 0.1);
   color: #e0a94a;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 .field input[type="number"] {
@@ -451,6 +458,9 @@ input:checked + .slider::before { transform: translateX(19px); background: #0c0f
 .save-btn:active { transform: scale(0.98); box-shadow: 0 6px 16px rgba(70, 211, 155, 0.18); }
 
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* 3 tiles don't divide evenly into a 2-column grid -- push the odd one out to its own
+   full-width row instead of leaving it stranded next to empty space. */
+.stat-grid-3 > :nth-child(3) { grid-column: 1 / -1; }
 .stat-card {
   background: linear-gradient(160deg, var(--card-bg-hi), var(--card-bg));
   border: 1px solid var(--border);
