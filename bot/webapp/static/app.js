@@ -159,14 +159,22 @@
       const profitEmoji = isHigh ? `<span class="emoji-shake">‼️</span>` : `<span class="emoji-pulse">🚀</span>`;
       const legs = m.legs
         .map(
+          // Outcome name (e.g. a double-chance "Team A или Team B") gets its own line,
+          // however long -- odds/bookmaker/stake always stay together on one line below
+          // it. Previously all of it was one flex row with the stake pinned to the
+          // right; a long name wrapping pushed "odds @ bookmaker" onto its own visual
+          // line with the stake next to it, which read like a separate 3rd bet.
           (leg) => `
         <div class="leg-row">
-          <span>${esc(leg.outcome_name)}: <b>${leg.odds}</b> @ ${
-            leg.bookmaker_url
-              ? `<a href="${esc(leg.bookmaker_url)}" target="_blank" rel="noopener">${esc(leg.bookmaker)}</a>`
-              : esc(leg.bookmaker)
-          }</span>
-          <span class="leg-stake">${fmtMoney(leg.stake)}</span>
+          <div class="leg-outcome">${esc(leg.outcome_name)}</div>
+          <div class="leg-details">
+            <span><b>${leg.odds}</b> @ ${
+              leg.bookmaker_url
+                ? `<a href="${esc(leg.bookmaker_url)}" target="_blank" rel="noopener">${esc(leg.bookmaker)}</a>`
+                : esc(leg.bookmaker)
+            }</span>
+            <span class="leg-stake">${fmtMoney(leg.stake)}</span>
+          </div>
         </div>`
         )
         .join("");

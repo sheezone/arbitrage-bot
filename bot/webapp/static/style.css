@@ -268,14 +268,16 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 
 .legs { background: rgba(255, 255, 255, 0.035); border-radius: 12px; padding: 10px 12px; }
 .leg-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
+  padding: 7px 0;
   font-size: 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 .leg-row:last-child { border-bottom: none; }
+/* Outcome name (can be long, e.g. a double-chance "Team A или Team B") always gets its
+   own line and wraps freely -- odds/bookmaker/stake below it stay one visual unit on
+   their own line regardless, so a long name can never be mistaken for an extra bet. */
+.leg-outcome { font-weight: 600; margin-bottom: 3px; }
+.leg-details { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .leg-row a {
   color: var(--link);
   text-decoration: none;
@@ -284,7 +286,7 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
   transition: opacity 0.15s ease;
 }
 .leg-row a:active { opacity: 0.6; }
-.leg-stake { color: var(--hint); font-size: 13px; font-variant-numeric: tabular-nums; }
+.leg-stake { color: var(--hint); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .news-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .news-row {
