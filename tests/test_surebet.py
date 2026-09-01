@@ -126,6 +126,53 @@ def test_football_accepts_win_plus_double_chance_since_it_covers_the_draw():
     assert results[0][0] == "football"
 
 
+def test_draw_plus_double_chance_gets_readable_russian_labels():
+    # Confirmed live: without explicit labels for these kinds, users saw the raw API
+    # strings "draw" and "_12" as the outcome name instead of something readable.
+    data = {
+        "records": [
+            _record(
+                "Football",
+                ["Spartak", "Zenit"],
+                {"value": 3.05, "type": {"type": "draw"}},
+                {"value": 1.51, "type": {"type": "_12"}},
+            )
+        ]
+    }
+    results = parse_records(data)
+    assert len(results) == 1
+    names = {o.outcome_name for o in results[0][4].best_odds}
+    assert names == {"Ничья", "Spartak или Zenit"}
+
+
+def test_win_plus_double_chance_1x_and_x2_get_readable_labels():
+    data_1x = {
+        "records": [
+            _record(
+                "Football",
+                ["Arsenal", "Chelsea"],
+                {"value": 1.8, "type": {"type": "win2"}},
+                {"value": 2.3, "type": {"type": "_1x"}},
+            )
+        ]
+    }
+    names_1x = {o.outcome_name for o in parse_records(data_1x)[0][4].best_odds}
+    assert names_1x == {"Chelsea", "Arsenal или ничья"}
+
+    data_x2 = {
+        "records": [
+            _record(
+                "Football",
+                ["Arsenal", "Chelsea"],
+                {"value": 2.3, "type": {"type": "win1"}},
+                {"value": 1.8, "type": {"type": "_x2"}},
+            )
+        ]
+    }
+    names_x2 = {o.outcome_name for o in parse_records(data_x2)[0][4].best_odds}
+    assert names_x2 == {"Arsenal", "Chelsea или ничья"}
+
+
 def test_hockey_rejects_pure_win1_win2_pair_since_a_draw_would_lose_both():
     data = {
         "records": [

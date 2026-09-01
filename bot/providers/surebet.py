@@ -185,6 +185,19 @@ def _describe_outcome(prong: dict) -> str:
         return teams[0]
     if kind in ("win2", "2", "winOnly2"):
         return teams[1]
+    # Draw-only and double-chance kinds -- these are exactly what pairs with a plain
+    # win1/win2 to cover the draw (see the _DRAW_POSSIBLE_GAMES comment above), so they
+    # show up in real football/hockey arbs. Without explicit labels these fell through
+    # to the raw API kind string (confirmed live: users were seeing literal "draw" and
+    # "_12" as the outcome name instead of a readable label).
+    if kind in ("draw", "x", "X"):
+        return "Ничья"
+    if kind in ("_1x", "1x", "1X"):
+        return f"{teams[0]} или ничья"
+    if kind in ("_x2", "x2", "X2"):
+        return f"{teams[1]} или ничья"
+    if kind in ("_12", "12"):
+        return f"{teams[0]} или {teams[1]}"
     return f"{kind or 'Исход'} {condition}{period_label}".strip()
 
 
