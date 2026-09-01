@@ -11,6 +11,7 @@ import hmac
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -223,7 +224,7 @@ def test_news_endpoint_caches_across_calls(setup, monkeypatch):
     assert call_count == calls_after_first  # second call served from cache, no new requests
 
 
-def test_news_endpoint_includes_h2h_for_football_when_available(setup, monkeypatch):
+def test_news_endpoint_flags_football_matches_as_analyzable_without_fetching_h2h(setup, monkeypatch):
     app, repo, state = setup
     from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
     from bot.core.state import MatchSnapshot
@@ -235,21 +236,19 @@ def test_news_endpoint_includes_h2h_for_football_when_available(setup, monkeypat
     async def fake_fetch_team_news(client, team_a, team_b):
         return []
 
-    async def fake_get_match_h2h(client, team_a, team_b, api_key):
-        assert api_key == "test-football-key"
-        return {"total": 3, "team_a_wins": 1, "team_b_wins": 1, "draws": 1, "matches": []}
+    async def fail_get_match_h2h(client, team_a, team_b, api_key):
+        raise AssertionError("/api/news must not fetch H2H -- that's gated behind /api/analysis")
 
     monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
-    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fake_get_match_h2h)
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fail_get_match_h2h)
 
-    from bot.webapp.api import register_api
-
-    app = register_api(repo, state, admin_chat_ids=frozenset({99}), api_football_key="test-football-key")
     resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
-    assert resp.json()["matches"][0]["h2h"]["total"] == 3
+    body = resp.json()
+    assert body["matches"][0]["can_analyze"] is True
+    assert "h2h" not in body["matches"][0]
 
 
-def test_news_endpoint_skips_h2h_for_non_football_matches(setup, monkeypatch):
+def test_news_endpoint_flags_non_football_matches_as_not_analyzable(setup):
     app, repo, state = setup
     from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
     from bot.core.state import MatchSnapshot
@@ -258,14 +257,77 @@ def test_news_endpoint_skips_h2h_for_non_football_matches(setup, monkeypatch):
     arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
     state.matches = [MatchSnapshot("tennis", "Team A", "Team B", arb, "2026-08-29T20:00:00+00:00")]
 
-    async def fake_fetch_team_news(client, team_a, team_b):
-        return []
-
-    async def fail_get_match_h2h(client, team_a, team_b, api_key):
-        raise AssertionError("should not be called for non-football matches")
-
-    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
-    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fail_get_match_h2h)
-
     resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
-    assert resp.json()["matches"][0]["h2h"] is None
+    assert resp.json()["matches"][0]["can_analyze"] is False
+
+
+def _football_state(state):
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Реал Мадрид", "fonbet", 2.1), OutcomeOdds("Барселона", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Реал Мадрид", "Барселона", arb, "2026-08-29T20:00:00+00:00")]
+
+
+def test_analysis_endpoint_requires_auth(setup):
+    app, _, _ = setup
+    resp = _run(_get(app, "/api/analysis?team_a=A&team_b=B"))
+    assert resp.status_code == 401
+
+
+def test_analysis_endpoint_returns_h2h_and_consumes_daily_quota(setup, monkeypatch):
+    app, repo, state = setup
+    _football_state(state)
+
+    async def fake_get_match_h2h(client, team_a, team_b, api_key):
+        assert api_key == "test-football-key"
+        return {"total": 3, "team_a_wins": 1, "team_b_wins": 1, "draws": 1, "matches": []}
+
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fake_get_match_h2h)
+
+    from bot.webapp.api import register_api
+
+    app = register_api(repo, state, admin_chat_ids=frozenset({99}), api_football_key="test-football-key")
+    resp = _run(
+        _get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(1))
+    )
+    assert resp.status_code == 200
+    assert resp.json()["h2h"]["total"] == 3
+    assert repo.get_user(1).last_analysis_date == datetime.now(timezone.utc).date().isoformat()
+
+
+def test_analysis_endpoint_rejects_a_second_call_same_day(setup, monkeypatch):
+    app, repo, state = setup
+    _football_state(state)
+
+    async def fake_get_match_h2h(client, team_a, team_b, api_key):
+        return {"total": 1, "team_a_wins": 1, "team_b_wins": 0, "draws": 0, "matches": []}
+
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fake_get_match_h2h)
+
+    resp1 = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(1)))
+    assert resp1.status_code == 200
+    resp2 = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(1)))
+    assert resp2.status_code == 429
+
+
+def test_analysis_endpoint_rejects_a_match_not_currently_popular(setup):
+    app, repo, state = setup
+    _football_state(state)
+
+    resp = _run(_get(app, "/api/analysis?team_a=Unknown&team_b=Nobody", headers=_auth_header(1)))
+    assert resp.status_code == 404
+
+
+def test_analysis_endpoint_rejects_non_football(setup):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("tennis", "Team A", "Team B", arb, "2026-08-29T20:00:00+00:00")]
+
+    resp = _run(_get(app, "/api/analysis?team_a=Team A&team_b=Team B", headers=_auth_header(1)))
+    assert resp.status_code == 400

@@ -318,6 +318,20 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .h2h-row { color: var(--hint); font-size: 12px; }
 .h2h-date { color: var(--hint); opacity: 0.75; margin-right: 6px; }
 
+.analyze-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.analyze-btn:disabled { background: rgba(255, 255, 255, 0.08); color: var(--hint); cursor: default; }
+
 .empty-state { text-align: center; color: var(--hint); padding: 70px 20px 40px; animation: rise-in 0.4s ease both; }
 .empty-state .empty-icon { font-size: 40px; display: block; margin-bottom: 14px; animation: float 3s ease-in-out infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }

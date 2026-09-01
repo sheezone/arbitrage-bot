@@ -85,6 +85,7 @@ def _user_out(user: UserSettings, admin_chat_ids: frozenset[int]) -> dict:
         "has_access": billing.has_access(user, now, admin_chat_ids),
         "on_trial": billing.on_trial(user, now),
         "days_left": billing.days_left(user, now),
+        "analysis_available": user.last_analysis_date != now.date().isoformat(),
     }
 
 
@@ -193,12 +194,6 @@ def register_api(
             entries = []
             for m in picked:
                 headlines = await fetch_team_news(client, m.team_a, m.team_b)
-                # Only football has any hope of a hit in API-Football's own database --
-                # skip the two extra requests entirely for other sports rather than
-                # burning free-tier quota (100/day) on a lookup that can't succeed.
-                h2h = None
-                if m.game == "football":
-                    h2h = await get_match_h2h(client, m.team_a, m.team_b, api_football_key)
                 entries.append({
                     "game": m.game,
                     "game_label": GAME_LABELS.get(m.game, m.game.upper()),
@@ -207,13 +202,44 @@ def register_api(
                     "team_b": m.team_b,
                     "start_time_label": format_match_start(m.start_time_utc),
                     "headlines": headlines,
-                    "h2h": h2h,
+                    # H2H (the heavier part -- extra API-Football requests, rate-limited
+                    # to 1/day/user) is deliberately NOT fetched here for all 3 matches on
+                    # every page load -- see /api/analysis, fetched only on click.
+                    "can_analyze": m.game == "football",
                 })
 
         payload = {"matches": entries}
         news_cache["payload"] = payload
         news_cache["at"] = time.time()
         return payload
+
+    @app.get("/api/analysis")
+    async def get_analysis(
+        team_a: str, team_b: str, authorization: str | None = Header(default=None)
+    ):
+        """On-demand H2H analysis for one of the 3 currently-popular matches -- gated to
+        once per user per UTC day (see last_analysis_date) so a click doesn't become an
+        unlimited way to burn API-Football's 100-req/day free quota. Deliberately not part
+        of /api/news's payload for that reason -- see the docstring there."""
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        if user.last_analysis_date == today:
+            raise HTTPException(status_code=429, detail="Дневной лимит анализа исчерпан (1 в день)")
+
+        picked = pick_popular_matches(state.matches, limit=3)
+        match = next((m for m in picked if m.team_a == team_a and m.team_b == team_b), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Матч больше не в списке популярных")
+        if match.game != "football":
+            raise HTTPException(status_code=400, detail="Анализ пока доступен только для футбола")
+
+        async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
+            h2h = await get_match_h2h(client, team_a, team_b, api_football_key)
+
+        repo.set_last_analysis_date(chat_id, today)
+        return {"team_a": team_a, "team_b": team_b, "h2h": h2h}
 
     @app.get("/api/vilki")
     async def get_vilki(authorization: str | None = Header(default=None)):

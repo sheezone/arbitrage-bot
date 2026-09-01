@@ -199,8 +199,54 @@
     }
   }
 
+  function renderH2hBlock(h2h, teamA, teamB) {
+    if (!h2h) return `<div class="news-empty">Личных встреч в базе не нашлось.</div>`;
+    return `<div class="h2h-block">
+        <div class="h2h-title">📊 Личные встречи (последние ${h2h.matches.length})</div>
+        <div class="h2h-record">${esc(teamA)} ${h2h.team_a_wins} — ${h2h.draws} — ${h2h.team_b_wins} ${esc(teamB)} <span class="h2h-total">(всего встреч: ${h2h.total})</span></div>
+        <div class="h2h-matches">${h2h.matches
+          .map(
+            (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`
+          )
+          .join("")}</div>
+      </div>`;
+  }
+
+  // Gated to 1 analysis/day/user (see /api/analysis) -- deliberately not fetched for
+  // all 3 matches up front, only for the one the user actually clicks on.
+  async function onAnalyzeClick(btn) {
+    const teamA = btn.dataset.teamA;
+    const teamB = btn.dataset.teamB;
+    const slot = document.getElementById(btn.dataset.slotId);
+    haptic("light");
+    btn.disabled = true;
+    btn.textContent = "Загрузка…";
+    try {
+      const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
+      slot.innerHTML = renderH2hBlock(result.h2h, teamA, teamB);
+      btn.remove();
+      if (meCache) meCache.analysis_available = false;
+      document.querySelectorAll(".analyze-btn").forEach((b) => {
+        if (b !== btn) {
+          b.disabled = true;
+          b.textContent = "Лимит на сегодня исчерпан";
+        }
+      });
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "🔍 Проанализировать";
+      toast("Ошибка: " + e.message);
+    }
+  }
+
+  content.addEventListener("click", (e) => {
+    const btn = e.target.closest(".analyze-btn");
+    if (btn) onAnalyzeClick(btn);
+  });
+
   async function renderNews() {
-    const data = await api("/api/news");
+    const [data, me] = await Promise.all([api("/api/news"), api("/api/me")]);
+    meCache = me;
 
     if (!data.matches.length) {
       content.innerHTML = `<div class="empty-state"><span class="empty-icon">📰</span>Пока нет данных для новостной сводки.</div>`;
@@ -220,32 +266,29 @@
             .join("")
         : `<div class="news-empty">За последние 24 часа свежих новостей не нашлось.</div>`;
 
-      // Real head-to-head record from API-Football, when available -- just the score
-      // history, no verdict/percentage drawn from it. See football_stats.py.
-      const h2h = m.h2h
-        ? `<div class="h2h-block">
-            <div class="h2h-title">📊 Личные встречи (последние ${m.h2h.matches.length})</div>
-            <div class="h2h-record">${esc(m.team_a)} ${m.h2h.team_a_wins} — ${m.h2h.draws} — ${m.h2h.team_b_wins} ${esc(m.team_b)} <span class="h2h-total">(всего встреч: ${m.h2h.total})</span></div>
-            <div class="h2h-matches">${m.h2h.matches
-              .map(
-                (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`
-              )
-              .join("")}</div>
-          </div>`
-        : "";
+      // Full analysis (H2H) is fetched only on click, gated to 1/day/user -- see
+      // /api/analysis and onAnalyzeClick above.
+      const slotId = `analysis-slot-${i}`;
+      let analyzeBlock = "";
+      if (m.can_analyze) {
+        analyzeBlock = me.analysis_available
+          ? `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}" data-slot-id="${slotId}">🔍 Проанализировать</button>`
+          : `<button type="button" class="analyze-btn" disabled>Лимит на сегодня исчерпан</button>`;
+      }
 
       return `
         <div class="card" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
-          ${h2h}
           <div class="news-list">${headlines}</div>
+          ${analyzeBlock}
+          <div id="${slotId}"></div>
         </div>`;
     });
 
     content.innerHTML = `
-      <div class="meta-line">Новости по популярным матчам — без прогнозов и процентов, только факты для собственного анализа.</div>
+      <div class="meta-line">Новости по популярным матчам — без прогнозов и процентов, только факты для собственного анализа. Анализ (личные встречи) — 1 раз в день.</div>
       ${cards.join("")}`;
   }
 

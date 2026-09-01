@@ -25,6 +25,7 @@ class UserSettings:
     expiry_reminder_sent_for: str | None
     allowed_bookmakers: list[str]
     muted: bool
+    last_analysis_date: str | None = None
 
 
 class Repository:
@@ -77,6 +78,12 @@ class Repository:
             # sends them, just silently (disable_notification) -- so someone can keep
             # getting vilki without a ping for every one.
             self._conn.execute("ALTER TABLE users ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
+        if "last_analysis_date" not in columns:
+            # "YYYY-MM-DD" (UTC) of the user's last on-demand match analysis -- see
+            # /api/analysis in bot/webapp/api.py. NULL means never used. Compared against
+            # today's date, not a rolling 24h window, so the daily quota resets at UTC
+            # midnight rather than exactly 24h after first use.
+            self._conn.execute("ALTER TABLE users ADD COLUMN last_analysis_date TEXT")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None) -> None:
         """`referred_by` only ever takes effect for a genuinely new row -- ON CONFLICT DO
@@ -267,6 +274,12 @@ class Repository:
         )
         self._conn.commit()
 
+    def set_last_analysis_date(self, chat_id: int, date_str: str) -> None:
+        self._conn.execute(
+            "UPDATE users SET last_analysis_date = ? WHERE chat_id = ?", (date_str, chat_id)
+        )
+        self._conn.commit()
+
     def set_allowed_bookmakers(self, chat_id: int, bookmakers: list[str]) -> None:
         self._conn.execute(
             "UPDATE users SET allowed_bookmakers = ? WHERE chat_id = ?", (",".join(bookmakers), chat_id)
@@ -353,6 +366,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         expiry_reminder_sent_for=row["expiry_reminder_sent_for"],
         allowed_bookmakers=[b for b in row["allowed_bookmakers"].split(",") if b],
         muted=bool(row["muted"]),
+        last_analysis_date=row["last_analysis_date"],
     )
 
 
