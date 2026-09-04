@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
 from bot.core.monitor import (
     EMOJI_ALERT,
-    MAX_DISPLAYABLE_PROFIT_PCT,
     MIN_DISPLAYABLE_PROFIT_PCT,
     _evaluate_group,
     _format_message,
@@ -176,15 +175,13 @@ def test_evaluate_group_drops_arb_where_every_leg_is_the_same_bookmaker():
     assert _evaluate_group(group) == []
 
 
-def test_evaluate_group_drops_arbs_above_the_max_displayable_ceiling():
-    # ~25% profit -- a real arb by the math, but a margin that big essentially never
-    # happens for real (see MAX_DISPLAYABLE_PROFIT_PCT's docstring) -- dropped outright,
-    # at the user's explicit request after the same-bookmaker incident above.
-    assert _evaluate_group(_quote_group(2.5, 2.5)) == []
-
-
-def test_evaluate_group_keeps_arbs_at_or_below_the_max_displayable_ceiling():
-    # ~12% profit -- comfortably inside (MIN, MAX], should still surface
-    results = _evaluate_group(_quote_group(2.24, 2.24))
+def test_evaluate_group_no_longer_caps_high_profit_arbs():
+    # ~25% profit across two different bookmakers -- there used to be an unconditional
+    # MAX_DISPLAYABLE_PROFIT_PCT=15% ceiling dropping this outright (added after the
+    # same-bookmaker incident above), removed again at the user's request 2026-09-02.
+    # The same-bookmaker guard above still independently catches that specific case;
+    # this is a different-bookmaker arb, which should surface (still subject to
+    # HIGH_PROFIT_RECHECK_THRESHOLD's recheck-before-notify, handled elsewhere).
+    results = _evaluate_group(_quote_group(2.5, 2.5))
     assert len(results) == 1
-    assert results[0][4].profit_pct <= MAX_DISPLAYABLE_PROFIT_PCT
+    assert results[0][4].profit_pct > 15.0
