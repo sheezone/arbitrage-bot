@@ -296,6 +296,8 @@ def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, 
         arb = calc_arbitrage(odds_by_outcome)
         if not arb.is_arbitrage or arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
             continue
+        if arb.profit_pct > MAX_DISPLAYABLE_PROFIT_PCT:
+            continue
 
         # The len(...)>=2 check above only guarantees the raw cluster mentions 2+
         # bookmakers somewhere -- find_best_odds still independently picks the single
@@ -369,11 +371,9 @@ async def _notify_group(
 # with whatever the fresh data says now -- even if the profit dropped some (that's the
 # point of rechecking). Only when the match can't be found on the fresh data at all (fetch
 # failure, or it just vanished) does it fall back to the original numbers rather than skip
-# -- always notify, never silently drop one. This is now the ONLY guard against
-# implausible profit numbers (no unconditional ceiling above it -- removed at the user's
-# request 2026-09-02, reversing the MAX_DISPLAYABLE_PROFIT_PCT=15% hard cap added the day
-# before after the Greece-vs-Spain incident; the same-bookmaker guard in _evaluate_group
-# still independently catches that specific case).
+# -- always notify, never silently drop one. Note this only ever fires for the (10%, 15%]
+# band now -- anything above MAX_DISPLAYABLE_PROFIT_PCT (15%) is dropped outright before
+# it ever reaches this, see that constant below.
 HIGH_PROFIT_RECHECK_THRESHOLD = 10.0
 RECHECK_DELAY_SECONDS = 30
 
@@ -382,6 +382,13 @@ RECHECK_DELAY_SECONDS = 30
 # noise more than a real edge), so it never becomes an "opportunity" in the first place:
 # not notified, not shown in search, not logged to stats, not shown to the showcase channel.
 MIN_DISPLAYABLE_PROFIT_PCT = 0.60
+
+# A ceiling on the other end: real cross-bookmaker arbitrage margins this big essentially
+# never happen (see the same-bookmaker guard in _evaluate_group for one confirmed-live
+# example of exactly this -- a "78% profit" vilka that turned out to be a data artifact,
+# not real). Re-added 2026-09-02 at the user's request (briefly removed the same day) --
+# anything above this is dropped outright, no exceptions.
+MAX_DISPLAYABLE_PROFIT_PCT = 15.0
 
 
 async def _recheck_and_notify_high_profit(
@@ -620,7 +627,7 @@ async def run_monitor_loop(
                 surebet_matches = []
 
             for game, team_a, team_b, start_time_utc, arb in surebet_matches:
-                if arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT:
+                if arb.profit_pct < MIN_DISPLAYABLE_PROFIT_PCT or arb.profit_pct > MAX_DISPLAYABLE_PROFIT_PCT:
                     continue
                 if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD:
                     surebet_suspicious.append((game, team_a, team_b, start_time_utc, arb))
