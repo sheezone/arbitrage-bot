@@ -166,7 +166,7 @@
           // line with the stake next to it, which read like a separate 3rd bet.
           (leg) => `
         <div class="leg-row">
-          <div class="leg-outcome">${esc(leg.outcome_name)}</div>
+          <div class="leg-outcome">${copyable(leg.outcome_name)}</div>
           <div class="leg-details">
             <span><b>${leg.odds}</b> @ ${
               leg.bookmaker_url
@@ -181,7 +181,7 @@
       return `
         <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
-          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
+          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${copyable(m.team_a)} vs ${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="${profitClass}">${profitEmoji} Прибыль: ${m.profit_pct.toFixed(2)}%</div>
           <div class="match-amount"><span class="emoji-bounce">💸</span> Возможный выигрыш: <span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
@@ -199,6 +199,39 @@
     const d = document.createElement("div");
     d.textContent = s == null ? "" : String(s);
     return d.innerHTML;
+  }
+
+  // Team/outcome names are highlighted and tap-to-copy -- handy for pasting into a
+  // bookmaker's own search box. data-copy carries the raw text (HTML-escaped as an
+  // attribute); the visible text is separately esc()'d same as everywhere else.
+  function copyable(text) {
+    // esc() alone doesn't escape " -- fine for element content but not for a quoted
+    // attribute value, so quotes get an extra pass here.
+    const attr = esc(text).replace(/"/g, "&quot;");
+    return `<span class="copyable" data-copy="${attr}">${esc(text)}</span>`;
+  }
+
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      // Clipboard API can be unavailable/blocked in some WebView contexts -- fall back
+      // to the classic hidden-textarea + execCommand trick rather than just failing.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    }
   }
 
   // ---------- Новости ----------
@@ -257,6 +290,15 @@
   content.addEventListener("click", (e) => {
     const btn = e.target.closest(".analyze-btn");
     if (btn) onAnalyzeClick(btn);
+
+    const copyEl = e.target.closest(".copyable");
+    if (copyEl) {
+      const text = copyEl.dataset.copy;
+      copyToClipboard(text).then((ok) => {
+        haptic(ok ? "light" : "medium");
+        toast(ok ? `Скопировано: ${text}` : "Не удалось скопировать");
+      });
+    }
   });
 
   async function renderNews() {
@@ -294,7 +336,7 @@
       return `
         <div class="card" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
-          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${esc(m.team_a)} vs ${esc(m.team_b)}</div>
+          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${copyable(m.team_a)} vs ${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="news-list">${headlines}</div>
           ${analyzeBlock}

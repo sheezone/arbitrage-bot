@@ -187,6 +187,16 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 
 .match-header { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 6px; }
 .match-teams { font-weight: 600; margin-bottom: 4px; }
+
+/* Team/outcome names -- tap to copy (see copyToClipboard in app.js), handy for pasting
+   into a bookmaker's own search. Underline marks it as tappable without looking like a
+   real link (no color change -- these aren't navigation). */
+.copyable {
+  cursor: pointer;
+  border-bottom: 1px dashed color-mix(in srgb, var(--text) 40%, transparent);
+  transition: opacity 0.12s ease;
+}
+.copyable:active { opacity: 0.6; }
 .match-time { color: var(--hint); font-size: 13px; margin-bottom: 8px; }
 .match-profit {
   font-size: 16px;
