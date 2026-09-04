@@ -273,13 +273,17 @@
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
       slot.innerHTML = renderH2hBlock(result.h2h, teamA, teamB);
       btn.remove();
-      if (meCache) meCache.analysis_available = false;
-      document.querySelectorAll(".analyze-btn").forEach((b) => {
-        if (b !== btn) {
-          b.disabled = true;
-          b.textContent = "Лимит на сегодня исчерпан";
-        }
-      });
+      // Admins have no daily quota server-side (see /api/analysis) -- leave every other
+      // button clickable for them instead of locking the rest of the page.
+      if (!meCache || !meCache.is_admin) {
+        if (meCache) meCache.analysis_available = false;
+        document.querySelectorAll(".analyze-btn").forEach((b) => {
+          if (b !== btn) {
+            b.disabled = true;
+            b.textContent = "Лимит на сегодня исчерпан";
+          }
+        });
+      }
     } catch (e) {
       btn.disabled = false;
       btn.textContent = "🔍 Проанализировать";

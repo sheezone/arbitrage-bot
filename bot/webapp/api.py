@@ -91,7 +91,8 @@ def _user_out(user: UserSettings, admin_chat_ids: frozenset[int]) -> dict:
         "has_access": billing.has_access(user, now, admin_chat_ids),
         "on_trial": billing.on_trial(user, now),
         "days_left": billing.days_left(user, now),
-        "analysis_available": user.last_analysis_date != now.date().isoformat(),
+        # Admins bypass the 1/day analysis quota entirely -- always "available".
+        "analysis_available": billing.is_admin(user, admin_chat_ids) or user.last_analysis_date != now.date().isoformat(),
     }
 
 
@@ -258,12 +259,14 @@ def register_api(
         """On-demand H2H analysis for one of the 3 currently-popular matches -- gated to
         once per user per UTC day (see last_analysis_date) so a click doesn't become an
         unlimited way to burn API-Football's 100-req/day free quota. Deliberately not part
-        of /api/news's payload for that reason -- see the docstring there."""
+        of /api/news's payload for that reason -- see the docstring there. Admins bypass
+        the quota entirely (unlimited analyses), at the user's request."""
         chat_id = _auth(authorization)
         user = _get_user(repo, chat_id)
+        is_admin = billing.is_admin(user, admin_chat_ids)
 
         today = datetime.now(timezone.utc).date().isoformat()
-        if user.last_analysis_date == today:
+        if not is_admin and user.last_analysis_date == today:
             raise HTTPException(status_code=429, detail="Дневной лимит анализа исчерпан (1 в день)")
 
         # A valid pair is either one of the real upcoming fixtures currently cached (see
@@ -283,7 +286,8 @@ def register_api(
         async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
             h2h = await get_match_h2h(client, team_a, team_b, api_football_key)
 
-        repo.set_last_analysis_date(chat_id, today)
+        if not is_admin:
+            repo.set_last_analysis_date(chat_id, today)
         return {"team_a": team_a, "team_b": team_b, "h2h": h2h}
 
     @app.get("/api/vilki")

@@ -369,6 +369,32 @@ def test_analysis_endpoint_rejects_a_second_call_same_day(setup, monkeypatch):
     assert resp2.status_code == 429
 
 
+def test_analysis_endpoint_lets_admins_bypass_the_daily_quota(setup, monkeypatch):
+    app, repo, state = setup  # setup's admin_chat_ids = frozenset({99})
+    _football_state(state)
+
+    async def fake_get_match_h2h(client, team_a, team_b, api_key):
+        return {"total": 1, "team_a_wins": 1, "team_b_wins": 0, "draws": 0, "matches": []}
+
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fake_get_match_h2h)
+
+    resp1 = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(99)))
+    assert resp1.status_code == 200
+    resp2 = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(99)))
+    assert resp2.status_code == 200  # a normal user would get 429 here, see the test above
+    assert repo.get_user(99).last_analysis_date is None  # never recorded for an admin
+
+
+def test_me_reports_analysis_available_for_admin_even_after_use(setup):
+    app, repo, state = setup
+    repo.upsert_user(99)
+    from datetime import datetime, timezone
+
+    repo.set_last_analysis_date(99, datetime.now(timezone.utc).date().isoformat())
+    resp = _run(_get(app, "/api/me", headers=_auth_header(99)))
+    assert resp.json()["analysis_available"] is True
+
+
 def test_analysis_endpoint_rejects_a_match_not_currently_popular(setup):
     app, repo, state = setup
     _football_state(state)
