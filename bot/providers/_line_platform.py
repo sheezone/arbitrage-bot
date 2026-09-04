@@ -111,6 +111,16 @@ def parse_line_dump(
         team_a, team_b = event.get("team1"), event.get("team2")
         if not team_a or not team_b:
             continue
+        # Stat-prop "matches" (offsides, corners, cards, etc.) reuse the same 930/931
+        # total factor slot as real goal/puck totals, but with the prop name appended in
+        # parens on both team names -- e.g. "Крылья Советов (офсайды)" (confirmed live
+        # 2026-09-04). A real plausible-looking line (unlike the implausible-line case
+        # above) can slip through PLAUSIBLE_TOTAL_LINE_RANGE otherwise, showing a fake
+        # "match" between two prop labels. No legitimate team name in this feed carries
+        # parens, so skip rather than try to enumerate every prop type -- same "skip
+        # rather than guess" policy as the implausible-line guard.
+        if "(" in team_a or "(" in team_b:
+            continue
 
         factors = factors_by_event.get(event["id"], {})
         start_time_utc = _unix_to_iso(event.get("startTime"))

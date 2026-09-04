@@ -140,3 +140,27 @@ def test_football_rejects_implausible_total_line():
         raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
     )
     assert quotes == []
+
+
+def test_football_rejects_stat_prop_matches_with_a_plausible_line():
+    # Confirmed live 2026-09-04: an offsides-count prop reuses the same 930/931 total
+    # factor slot as real goal totals, with a real-looking line, but team1/team2 are
+    # "<Team> (офсайды)" -- a plausible line alone doesn't catch this, only the parens.
+    raw = _raw(
+        sports=[{"id": 400, "kind": "segment", "parentId": 1, "sportCategoryId": None, "name": "RPL"}],
+        events=[
+            {
+                "id": 8,
+                "sportId": 400,
+                "team1": "Крылья Советов (офсайды)",
+                "team2": "Краснодар (офсайды)",
+                "place": "line",
+                "startTime": 0,
+            }
+        ],
+        custom_factors=[{"e": 8, "factors": [{"f": 930, "v": 1.85, "pt": "3.5"}, {"f": 931, "v": 1.9, "pt": "3.5"}]}],
+    )
+    quotes = parse_line_dump(
+        raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
+    )
+    assert quotes == []
