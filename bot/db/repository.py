@@ -26,6 +26,7 @@ class UserSettings:
     allowed_bookmakers: list[str]
     muted: bool
     last_analysis_date: str | None = None
+    acquisition_source: str | None = None
 
 
 class Repository:
@@ -84,15 +85,22 @@ class Repository:
             # today's date, not a rolling 24h window, so the daily quota resets at UTC
             # midnight rather than exactly 24h after first use.
             self._conn.execute("ALTER TABLE users ADD COLUMN last_analysis_date TEXT")
+        if "acquisition_source" not in columns:
+            # Free-text tag from a /start deep-link payload that isn't a numeric referrer
+            # chat_id (e.g. t.me/<bot>?start=telega_ads1) -- lets a paid post/campaign be
+            # tagged so signups from it can be counted later (see
+            # get_acquisition_source_counts). NULL for anyone who just pressed /start
+            # cold or came via a numeric referral link.
+            self._conn.execute("ALTER TABLE users ADD COLUMN acquisition_source TEXT")
 
-    def upsert_user(self, chat_id: int, referred_by: int | None = None) -> None:
-        """`referred_by` only ever takes effect for a genuinely new row -- ON CONFLICT DO
-        NOTHING means an existing user's referrer can never be silently overwritten by a
-        later /start with a different referral link."""
+    def upsert_user(self, chat_id: int, referred_by: int | None = None, acquisition_source: str | None = None) -> None:
+        """`referred_by`/`acquisition_source` only ever take effect for a genuinely new
+        row -- ON CONFLICT DO NOTHING means an existing user's referrer/source can never
+        be silently overwritten by a later /start with a different link."""
         self._conn.execute(
-            "INSERT INTO users (chat_id, trial_started_at, referred_by) VALUES (?, ?, ?) "
+            "INSERT INTO users (chat_id, trial_started_at, referred_by, acquisition_source) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(chat_id) DO NOTHING",
-            (chat_id, datetime.now(timezone.utc).isoformat(), referred_by),
+            (chat_id, datetime.now(timezone.utc).isoformat(), referred_by, acquisition_source),
         )
         self._conn.commit()
 
@@ -205,6 +213,17 @@ class Repository:
             "SELECT * FROM users ORDER BY trial_started_at DESC LIMIT ?", (limit,)
         ).fetchall()
         return [_row_to_user(r) for r in rows]
+
+    def get_acquisition_source_counts(self) -> list[dict]:
+        """Signup counts grouped by acquisition_source (see upsert_user) -- lets a paid
+        post/campaign tagged via a distinct t.me/<bot>?start=<tag> link be measured
+        against the others. Rows with no tag (organic /start, or a numeric referral
+        link) are grouped under source=None, sorted last."""
+        rows = self._conn.execute(
+            "SELECT acquisition_source, COUNT(*) AS c FROM users "
+            "GROUP BY acquisition_source ORDER BY acquisition_source IS NULL, c DESC"
+        ).fetchall()
+        return [{"source": r["acquisition_source"], "count": r["c"]} for r in rows]
 
     def get_payments_summary(self) -> list[dict]:
         """One row per (provider, currency) pair actually seen in payments -- e.g.
@@ -367,6 +386,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         allowed_bookmakers=[b for b in row["allowed_bookmakers"].split(",") if b],
         muted=bool(row["muted"]),
         last_analysis_date=row["last_analysis_date"],
+        acquisition_source=row["acquisition_source"],
     )
 
 

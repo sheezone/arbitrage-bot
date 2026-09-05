@@ -21,6 +21,37 @@ def test_new_user_starts_trial_immediately(tmp_path):
     assert (datetime.now(timezone.utc) - started).total_seconds() < 5
 
 
+def test_acquisition_source_round_trips_on_new_user(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(42, acquisition_source="telega_ads1")
+    assert repo.get_user(42).acquisition_source == "telega_ads1"
+
+
+def test_acquisition_source_is_none_by_default(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(42)
+    assert repo.get_user(42).acquisition_source is None
+
+
+def test_acquisition_source_never_overwritten_on_existing_user(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(42, acquisition_source="telega_ads1")
+    repo.upsert_user(42, acquisition_source="some_other_campaign")  # e.g. re-pressing /start
+    assert repo.get_user(42).acquisition_source == "telega_ads1"
+
+
+def test_acquisition_source_counts_groups_and_sorts_by_count(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1, acquisition_source="telega_ads1")
+    repo.upsert_user(2, acquisition_source="telega_ads1")
+    repo.upsert_user(3, acquisition_source="tgstat_post")
+    repo.upsert_user(4)  # organic, no tag
+    counts = repo.get_acquisition_source_counts()
+    assert counts[0] == {"source": "telega_ads1", "count": 2}
+    assert counts[1] == {"source": "tgstat_post", "count": 1}
+    assert counts[-1] == {"source": None, "count": 1}  # untagged sorted last
+
+
 def test_extend_subscription_from_no_prior_subscription(tmp_path):
     repo = _repo(tmp_path)
     repo.upsert_user(1)

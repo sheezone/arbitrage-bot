@@ -751,16 +751,24 @@ def register_handlers(
         is_new_user = repo.get_user(message.chat.id) is None
 
         referred_by = None
+        acquisition_source = None
         if is_new_user:
-            # Deep-link referral payload: t.me/<bot>?start=<referrer_chat_id>. Self-
-            # referral and a payload pointing at a chat_id that isn't a real user are
-            # both silently ignored rather than guessed at.
+            # Deep-link payload: t.me/<bot>?start=<payload>. A numeric payload is a
+            # referrer chat_id (self-referral and a payload pointing at a chat_id that
+            # isn't a real user are both silently ignored rather than guessed at); any
+            # other payload is treated as a free-text campaign tag for tracking where a
+            # signup came from (see acquisition_source/get_acquisition_source_counts) --
+            # e.g. a distinct link per paid ad post, t.me/<bot>?start=telega_ads1.
             parts = (message.text or "").split(maxsplit=1)
-            if len(parts) == 2 and parts[1].strip().lstrip("-").isdigit():
-                candidate = int(parts[1].strip())
-                if candidate != message.chat.id and repo.get_user(candidate) is not None:
-                    referred_by = candidate
-        repo.upsert_user(message.chat.id, referred_by=referred_by)
+            if len(parts) == 2:
+                payload = parts[1].strip()
+                if payload.lstrip("-").isdigit():
+                    candidate = int(payload)
+                    if candidate != message.chat.id and repo.get_user(candidate) is not None:
+                        referred_by = candidate
+                elif payload:
+                    acquisition_source = payload[:64]
+        repo.upsert_user(message.chat.id, referred_by=referred_by, acquisition_source=acquisition_source)
         user = repo.get_user(message.chat.id)
 
         # Re-attach the persistent bottom menu on every /start, not just for new users --
