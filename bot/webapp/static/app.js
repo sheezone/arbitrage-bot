@@ -90,6 +90,7 @@
     news: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     settings: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
     stats: `<div class="stat-grid"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div>`,
+    admin: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
   };
 
   document.querySelectorAll(".tab").forEach((btn) => {
@@ -118,6 +119,7 @@
       else if (tab === "news") await renderNews();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
+      else if (tab === "admin") await renderAdmin();
     } catch (e) {
       toast("Ошибка: " + e.message);
     } finally {
@@ -502,6 +504,73 @@
     });
   }
 
+  // ---------- Админ ----------
+
+  function fmtDate(iso) {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  async function renderAdmin() {
+    const s = await api("/api/admin/stats");
+
+    const paymentsRows = s.payments.length
+      ? s.payments
+          .map(
+            (p) =>
+              `<div class="admin-row"><span>${esc(p.provider)} · ${esc(p.currency)}</span><span>${p.count} шт · ${fmtMoney(p.total)}</span></div>`
+          )
+          .join("")
+      : `<div class="news-empty">Платежей ещё не было.</div>`;
+
+    const sourcesRows = s.acquisition_sources.length
+      ? s.acquisition_sources
+          .map(
+            (a) => `<div class="admin-row"><span>${esc(a.source || "органика / без метки")}</span><span>${a.count}</span></div>`
+          )
+          .join("")
+      : `<div class="news-empty">Нет данных.</div>`;
+
+    const usersRows = s.recent_users.length
+      ? s.recent_users
+          .map(
+            (u) => `<div class="admin-row">
+              <span>${u.chat_id}${u.acquisition_source ? ` <span class="admin-tag">${esc(u.acquisition_source)}</span>` : ""}</span>
+              <span>${u.has_access ? "✅" : "⛔"} ${fmtDate(u.trial_started_at)}</span>
+            </div>`
+          )
+          .join("")
+      : `<div class="news-empty">Пользователей ещё нет.</div>`;
+
+    content.innerHTML = `
+      <div class="section-title">Пользователи</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">Всего</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.on_trial}" data-suf="" data-dec="0">0</div><div class="stat-label">На пробном</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.has_access}" data-suf="" data-dec="0">0</div><div class="stat-label">С доступом</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.expired}" data-suf="" data-dec="0">0</div><div class="stat-label">Доступ истёк</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.active_notifications}" data-suf="" data-dec="0">0</div><div class="stat-label">Уведомления вкл</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.referred_count}" data-suf="" data-dec="0">0</div><div class="stat-label">По рефералке</div></div>
+      </div>
+
+      <div class="section-title">Оплаты</div>
+      <div class="card">${paymentsRows}</div>
+
+      <div class="section-title">Источники регистраций</div>
+      <div class="card">${sourcesRows}</div>
+
+      <div class="section-title">Последние пользователи</div>
+      <div class="card">${usersRows}</div>
+    `;
+    content.querySelectorAll(".stat-value").forEach((el) => {
+      animateValue(el, parseFloat(el.dataset.v) || 0, el.dataset.suf, Number(el.dataset.dec));
+    });
+  }
+
   // ---------- init ----------
 
   content.innerHTML = skeletons.vilki;
@@ -509,4 +578,13 @@
   refreshTimer = setInterval(() => {
     if (currentTab === "vilki") loadTab("vilki");
   }, 20000);
+
+  // Admin tab is hidden in the markup by default -- only unhidden once /api/me confirms
+  // is_admin, so a non-admin never even sees the tab exist.
+  api("/api/me")
+    .then((me) => {
+      meCache = me;
+      if (me.is_admin) document.getElementById("admin-tab").hidden = false;
+    })
+    .catch(() => {});
 })();

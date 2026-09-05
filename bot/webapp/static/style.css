@@ -412,6 +412,28 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 
 .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); }
 .toggle-row:last-child { border-bottom: none; }
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-variant-numeric: tabular-nums;
+}
+.admin-row:last-child { border-bottom: none; }
+.admin-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: rgba(70, 211, 155, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  font-variant-numeric: normal;
+}
 .switch { position: relative; width: 44px; height: 25px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider {

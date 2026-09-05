@@ -414,3 +414,35 @@ def test_analysis_endpoint_rejects_non_football(setup):
 
     resp = _run(_get(app, "/api/analysis?team_a=Team A&team_b=Team B", headers=_auth_header(1)))
     assert resp.status_code == 400
+
+
+def test_admin_stats_requires_auth(setup):
+    app, _, _ = setup
+    resp = _run(_get(app, "/api/admin/stats"))
+    assert resp.status_code == 401
+
+
+def test_admin_stats_rejects_non_admin(setup):
+    app, _, _ = setup
+    resp = _run(_get(app, "/api/admin/stats", headers=_auth_header(1)))
+    assert resp.status_code == 403
+
+
+def test_admin_stats_returns_aggregate_counts(setup):
+    app, repo, state = setup  # setup's admin_chat_ids = frozenset({99})
+    repo.upsert_user(1, acquisition_source="telega_ads1")
+    repo.upsert_user(2)
+    repo.upsert_user(3, referred_by=1)
+    repo.set_active(2, False)
+
+    resp = _run(_get(app, "/api/admin/stats", headers=_auth_header(99)))
+    assert resp.status_code == 200
+    body = resp.json()
+    # +1 for the admin's own row, created by _get_user during _auth
+    assert body["total_users"] == 4
+    assert body["on_trial"] == 4
+    assert body["active_notifications"] == 3
+    assert body["referred_count"] == 1
+    assert {"source": "telega_ads1", "count": 1} in body["acquisition_sources"]
+    assert body["payments"] == []
+    assert any(u["chat_id"] == 1 and u["acquisition_source"] == "telega_ads1" for u in body["recent_users"])

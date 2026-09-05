@@ -333,5 +333,41 @@ def register_api(
             "matches": [_match_out(m) for m in matches],
         }
 
+    @app.get("/api/admin/stats")
+    async def get_admin_stats(authorization: str | None = Header(default=None)):
+        """Admin-only aggregate view -- 403 for anyone not in admin_chat_ids, same check
+        as _user_out's is_admin flag. Reuses existing Repository/billing helpers rather
+        than any new aggregation logic, so this stays consistent with what those same
+        numbers mean everywhere else in the bot."""
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        if not billing.is_admin(user, admin_chat_ids):
+            raise HTTPException(status_code=403, detail="Только для администраторов")
+
+        now = datetime.now(timezone.utc)
+        all_users = repo.get_all_users()
+        has_access_count = sum(1 for u in all_users if billing.has_access(u, now, admin_chat_ids))
+
+        return {
+            "total_users": len(all_users),
+            "on_trial": sum(1 for u in all_users if billing.on_trial(u, now)),
+            "has_access": has_access_count,
+            "expired": len(all_users) - has_access_count,
+            "active_notifications": sum(1 for u in all_users if u.is_active),
+            "referred_count": sum(1 for u in all_users if u.referred_by is not None),
+            "payments": repo.get_payments_summary(),
+            "acquisition_sources": repo.get_acquisition_source_counts(),
+            "opportunities": repo.get_opportunity_stats(),
+            "recent_users": [
+                {
+                    "chat_id": u.chat_id,
+                    "trial_started_at": u.trial_started_at,
+                    "has_access": billing.has_access(u, now, admin_chat_ids),
+                    "acquisition_source": u.acquisition_source,
+                }
+                for u in repo.get_recent_users(limit=10)
+            ],
+        }
+
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app
