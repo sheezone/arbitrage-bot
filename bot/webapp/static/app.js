@@ -57,7 +57,9 @@
     });
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}));
-      throw new Error(body.detail || `HTTP ${resp.status}`);
+      const err = new Error(body.detail || `HTTP ${resp.status}`);
+      err.status = resp.status;
+      throw err;
     }
     return resp.json();
   }
@@ -95,6 +97,11 @@
       tab_stats: "Статистика",
       tab_admin: "Админ",
       topbar_title: "🔍 Арбитражный бот",
+      gate_title: "🔒 Доступ ограничен",
+      gate_text: "Чтобы пользоваться ботом и мини-приложением, подпишитесь на канал",
+      gate_subscribe: "📢 Подписаться",
+      gate_check: "✅ Проверить подписку",
+      gate_not_yet: "Вы ещё не подписались",
       data_at: "Данные на ",
       msk: " МСК",
       no_vilki: "Сейчас подходящих вилок нет.",
@@ -163,6 +170,11 @@
       tab_stats: "Омор",
       tab_admin: "Админ",
       topbar_title: "🔍 Боти арбитражӣ",
+      gate_title: "🔒 Дастрасӣ маҳдуд аст",
+      gate_text: "Барои истифодаи бот ва мини-барнома ба канал обуна шавед",
+      gate_subscribe: "📢 Обуна шудан",
+      gate_check: "✅ Санҷидани обуна",
+      gate_not_yet: "Шумо ҳанӯз обуна нашудаед",
       data_at: "Маълумот аз соати ",
       msk: " МСК",
       no_vilki: "Ҳоло вилкаҳои мувофиқ нест.",
@@ -301,6 +313,21 @@
       else if (tab === "stats") await renderStats();
       else if (tab === "admin") await renderAdmin();
     } catch (e) {
+      // Subscription revoked mid-session (or the gate was just turned on) -- re-check
+      // via /api/me rather than just toasting a raw 403, so the gate screen (with its
+      // own subscribe/check buttons) takes over instead of leaving a broken tab up.
+      if (e.status === 403) {
+        try {
+          const me = await api("/api/me");
+          meCache = me;
+          if (me.channel_required && !me.is_subscribed) {
+            renderSubscriptionGate(me.channel_username);
+            return;
+          }
+        } catch (e2) {
+          // fall through to the generic toast below
+        }
+      }
       toast(t("error_prefix") + e.message);
     } finally {
       if (manual) refreshBtn.classList.remove("spinning");
@@ -838,20 +865,75 @@
     });
   }
 
+  // ---------- Subscription gate ----------
+  // Mirrors the button bot UI's SubscriptionGateMiddleware (see
+  // handlers/commands.py) -- /api/me reports channel_required/is_subscribed, and every
+  // OTHER endpoint independently 403s server-side if not subscribed (see
+  // _require_subscribed in webapp/api.py), so this is UX, not the actual enforcement.
+
+  function renderSubscriptionGate(channelUsername) {
+    document.querySelectorAll(".tab").forEach((b) => (b.disabled = true));
+    content.innerHTML = `
+      <div class="empty-state gate-state">
+        <span class="empty-icon">🔒</span>
+        <div class="gate-title">${t("gate_title")}</div>
+        <div class="gate-text">${t("gate_text")} <b>@${esc(channelUsername)}</b></div>
+        <a class="save-btn gate-link-btn" href="https://t.me/${esc(channelUsername)}" target="_blank" rel="noopener">${t("gate_subscribe")}</a>
+        <button class="gate-check-btn" id="gate-check-btn">${t("gate_check")}</button>
+      </div>`;
+    document.getElementById("gate-check-btn").addEventListener("click", async () => {
+      haptic("light");
+      const btn = document.getElementById("gate-check-btn");
+      btn.disabled = true;
+      btn.textContent = t("loading");
+      try {
+        const me = await api("/api/me");
+        meCache = me;
+        if (me.is_subscribed) {
+          boot();
+        } else {
+          toast(t("gate_not_yet"));
+          btn.disabled = false;
+          btn.textContent = t("gate_check");
+        }
+      } catch (e) {
+        toast(t("error_prefix") + e.message);
+        btn.disabled = false;
+        btn.textContent = t("gate_check");
+      }
+    });
+  }
+
   // ---------- init ----------
 
-  content.innerHTML = skeletons.vilki;
-  loadTab("vilki");
-  refreshTimer = setInterval(() => {
-    if (currentTab === "vilki") loadTab("vilki");
-  }, 20000);
+  async function boot() {
+    document.querySelectorAll(".tab").forEach((b) => (b.disabled = false));
+    let me;
+    try {
+      me = await api("/api/me");
+    } catch (e) {
+      toast(t("error_prefix") + e.message);
+      content.innerHTML = skeletons.vilki;
+      loadTab("vilki"); // best effort -- lets a real endpoint error surface normally
+      return;
+    }
+    meCache = me;
+    if (me.channel_required && !me.is_subscribed) {
+      renderSubscriptionGate(me.channel_username);
+      return;
+    }
+    // Admin tab is hidden in the markup by default -- only unhidden once /api/me
+    // confirms is_admin, so a non-admin never even sees the tab exist.
+    if (me.is_admin) document.getElementById("admin-tab").hidden = false;
 
-  // Admin tab is hidden in the markup by default -- only unhidden once /api/me confirms
-  // is_admin, so a non-admin never even sees the tab exist.
-  api("/api/me")
-    .then((me) => {
-      meCache = me;
-      if (me.is_admin) document.getElementById("admin-tab").hidden = false;
-    })
-    .catch(() => {});
+    content.innerHTML = skeletons.vilki;
+    loadTab("vilki");
+    if (!refreshTimer) {
+      refreshTimer = setInterval(() => {
+        if (currentTab === "vilki") loadTab("vilki");
+      }, 20000);
+    }
+  }
+
+  boot();
 })();

@@ -446,3 +446,99 @@ def test_admin_stats_returns_aggregate_counts(setup):
     assert {"source": "telega_ads1", "count": 1} in body["acquisition_sources"]
     assert body["payments"] == []
     assert any(u["chat_id"] == 1 and u["acquisition_source"] == "telega_ads1" for u in body["recent_users"])
+
+
+class _FakeMember:
+    def __init__(self, status: str):
+        self.status = status
+
+
+class _FakeGateBot:
+    """Membership is keyed by chat_id -- "member" unless explicitly overridden to
+    "left", so tests can flip individual users without a real Bot/network call."""
+
+    def __init__(self):
+        self.statuses: dict[int, str] = {}
+
+    async def get_chat_member(self, channel_id, user_chat_id):
+        return _FakeMember(self.statuses.get(user_chat_id, "member"))
+
+
+def _gated_app(tmp_path, monkeypatch, admin_chat_ids=frozenset({99}), bot=None):
+    monkeypatch.setenv("BOT_TOKEN", BOT_TOKEN)
+    from bot.core.state import LatestState
+    from bot.db.repository import Repository
+    from bot.webapp.api import register_api
+
+    repo = Repository(str(tmp_path / "gated.sqlite3"))
+    state = LatestState()
+    app = register_api(
+        repo,
+        state,
+        admin_chat_ids=admin_chat_ids,
+        bot=bot or _FakeGateBot(),
+        required_channel_id=-1009999,
+        required_channel_username="testchan",
+    )
+    return app, repo, state
+
+
+def test_me_reports_channel_required_and_subscribed_when_gate_is_off(setup):
+    app, _, _ = setup  # setup's app has no bot/required_channel_id -- gate off
+    resp = _run(_get(app, "/api/me", headers=_auth_header(1)))
+    body = resp.json()
+    assert body["channel_required"] is False
+    assert body["is_subscribed"] is True
+
+
+def test_me_reports_not_subscribed_when_gate_is_on_and_user_left(tmp_path, monkeypatch):
+    bot = _FakeGateBot()
+    bot.statuses[1] = "left"
+    app, _, _ = _gated_app(tmp_path, monkeypatch, bot=bot)
+
+    resp = _run(_get(app, "/api/me", headers=_auth_header(1)))
+    body = resp.json()
+    assert body["channel_required"] is True
+    assert body["is_subscribed"] is False
+    assert body["channel_username"] == "testchan"
+
+
+def test_me_reports_subscribed_when_gate_is_on_and_user_is_a_member(tmp_path, monkeypatch):
+    app, _, _ = _gated_app(tmp_path, monkeypatch)  # default _FakeGateBot -> everyone "member"
+    resp = _run(_get(app, "/api/me", headers=_auth_header(1)))
+    assert resp.json()["is_subscribed"] is True
+
+
+def test_vilki_endpoint_403s_when_not_subscribed(tmp_path, monkeypatch):
+    bot = _FakeGateBot()
+    bot.statuses[1] = "left"
+    app, _, _ = _gated_app(tmp_path, monkeypatch, bot=bot)
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    assert resp.status_code == 403
+
+
+def test_vilki_endpoint_works_when_subscribed(tmp_path, monkeypatch):
+    app, _, _ = _gated_app(tmp_path, monkeypatch)
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    assert resp.status_code == 200
+
+
+def test_admins_bypass_the_gate_even_when_not_subscribed(tmp_path, monkeypatch):
+    bot = _FakeGateBot()
+    bot.statuses[99] = "left"  # the admin themself hasn't subscribed
+    app, _, _ = _gated_app(tmp_path, monkeypatch, admin_chat_ids=frozenset({99}), bot=bot)
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(99)))
+    assert resp.status_code == 200
+    me = _run(_get(app, "/api/me", headers=_auth_header(99))).json()
+    assert me["is_subscribed"] is True  # reported as subscribed too, not just bypassed
+
+
+def test_settings_endpoint_403s_when_not_subscribed(tmp_path, monkeypatch):
+    bot = _FakeGateBot()
+    bot.statuses[1] = "left"
+    app, _, _ = _gated_app(tmp_path, monkeypatch, bot=bot)
+
+    resp = _run(_post(app, "/api/settings", headers=_auth_header(1), json_body={"bankroll": 500}))
+    assert resp.status_code == 403

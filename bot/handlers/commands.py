@@ -20,9 +20,10 @@ import html
 import logging
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Any, Awaitable, Callable
 from pathlib import Path
 
-from aiogram import Bot, F, Router
+from aiogram import BaseMiddleware, Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -38,10 +39,12 @@ from aiogram.types import (
     Message,
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
+    TelegramObject,
 )
 
 from bot.core import billing
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
+from bot.core.subscription import is_subscribed
 from bot.core.monitor import (
     BOOKMAKER_URLS,
     GAME_EMOJI,
@@ -133,12 +136,77 @@ NAV_TOGGLE_MUTED = "nav:toggle_muted"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
 NAV_REFERRAL = "nav:referral"
+NAV_CHECK_CHANNEL_SUB = "nav:check_channel_sub"
 
 View = tuple[str, InlineKeyboardMarkup | None]
 
 
 def _btn(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
+
+
+def _subscription_gate_view(channel_username: str) -> View:
+    text = (
+        "🔒 <b>Доступ ограничен</b>\n\n"
+        f"Чтобы пользоваться ботом (и мини-приложением), подпишитесь на канал "
+        f"@{channel_username}, затем нажмите «Проверить подписку»."
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📢 Подписаться", url=f"https://t.me/{channel_username}")],
+            [InlineKeyboardButton(text="✅ Проверить подписку", callback_data=NAV_CHECK_CHANNEL_SUB)],
+        ]
+    )
+    return text, keyboard
+
+
+class SubscriptionGateMiddleware(BaseMiddleware):
+    """Blocks every message/callback except /start and the check-subscription callback
+    itself when the user isn't currently a member of the required channel. /start is
+    deliberately let through untouched -- it handles its own gating inline (see
+    cmd_start) so a brand-new user's referral/acquisition-source deep-link payload still
+    gets captured on their very first /start even if they haven't subscribed yet;
+    blocking it here first would lose that payload entirely."""
+
+    def __init__(
+        self, admin_chat_ids: frozenset[int], required_channel_id: int, required_channel_username: str
+    ) -> None:
+        self._admin_chat_ids = admin_chat_ids
+        self._required_channel_id = required_channel_id
+        self._required_channel_username = required_channel_username
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        if isinstance(event, Message):
+            if event.text and event.text.startswith("/start"):
+                return await handler(event, data)
+            chat_id = event.chat.id
+        elif isinstance(event, CallbackQuery):
+            if event.data == NAV_CHECK_CHANNEL_SUB:
+                return await handler(event, data)
+            chat_id = event.message.chat.id if event.message else event.from_user.id
+        else:
+            return await handler(event, data)
+
+        if chat_id in self._admin_chat_ids:
+            return await handler(event, data)
+
+        bot: Bot = data["bot"]
+        if await is_subscribed(bot, self._required_channel_id, chat_id):
+            return await handler(event, data)
+
+        text, keyboard = _subscription_gate_view(self._required_channel_username)
+        if isinstance(event, CallbackQuery):
+            await event.answer("Сначала подпишитесь на канал", show_alert=True)
+            if event.message:
+                await event.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await event.answer(text, reply_markup=keyboard, parse_mode="HTML")
+        return None
 
 
 def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
@@ -741,8 +809,37 @@ def register_handlers(
     poll_interval_seconds: int = 150,
     crypto_pay_client: CryptoPayClient | None = None,
     webapp_url: str = "",
+    required_channel_id: int | None = None,
+    required_channel_username: str = "",
 ) -> Router:
     main_menu_keyboard = _main_menu_keyboard(webapp_url)
+
+    @router.callback_query(F.data == NAV_CHECK_CHANNEL_SUB)
+    async def on_check_channel_subscription(callback: CallbackQuery, bot: Bot) -> None:
+        if required_channel_id is None or callback.message is None:
+            await callback.answer()
+            return
+
+        if not await is_subscribed(bot, required_channel_id, callback.message.chat.id):
+            await callback.answer("❌ Вы ещё не подписались на канал", show_alert=True)
+            return
+
+        await callback.answer("✅ Подписка подтверждена!")
+        chat_id = callback.message.chat.id
+        user = repo.get_user(chat_id)
+        if user is None:
+            repo.upsert_user(chat_id)
+            user = repo.get_user(chat_id)
+
+        text, keyboard = _dashboard_view(user, admin_chat_ids)
+        sent = await callback.message.answer_photo(
+            FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
+        )
+        repo.set_menu_message_id(chat_id, sent.message_id)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
 
 
     @router.message(Command("start"))
@@ -778,6 +875,17 @@ def register_handlers(
         # makes the reply keyboard itself disappear on at least one client, contrary to
         # the usual "keyboard survives its carrier message" behavior.
         await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=main_menu_keyboard)
+
+        # Gated here, inline, rather than by the blanket SubscriptionGateMiddleware --
+        # that middleware deliberately lets /start straight through so the referral/
+        # acquisition-source capture above (which only ever happens on a brand-new
+        # user's very first /start) isn't lost behind the gate. Admins bypass, same as
+        # everywhere else billing.is_admin-style checks apply.
+        if required_channel_id is not None and message.chat.id not in admin_chat_ids:
+            if not await is_subscribed(bot, required_channel_id, message.chat.id):
+                text, keyboard = _subscription_gate_view(required_channel_username)
+                await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+                return
 
         if is_new_user:
             # A one-off exception to the single-message UI: a permanent welcome note
@@ -1454,5 +1562,10 @@ def register_handlers(
         except Exception:
             logger.exception("Failed to relay support reply to user chat_id=%s", user_chat_id)
             await message.reply("⚠️ Не удалось отправить пользователю (возможно, заблокировал бота).")
+
+    if required_channel_id is not None:
+        gate = SubscriptionGateMiddleware(admin_chat_ids, required_channel_id, required_channel_username)
+        router.message.middleware(gate)
+        router.callback_query.middleware(gate)
 
     return router

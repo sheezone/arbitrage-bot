@@ -25,6 +25,8 @@ class Config:
     admin_chat_ids: frozenset[int]
     showcase_chat_id: int | None
     showcase_interval_seconds: int
+    required_channel_id: int | None
+    required_channel_username: str
     poll_interval_seconds: int
     default_min_profit_pct: float
     db_path: str
@@ -60,6 +62,13 @@ def load_config() -> Config:
             int(os.environ["SHOWCASE_CHAT_ID"]) if os.environ.get("SHOWCASE_CHAT_ID", "").strip() else None
         ),
         showcase_interval_seconds=int(os.environ.get("SHOWCASE_INTERVAL_SECONDS", "600")),
+        # Mandatory-subscription gate (bot/core/subscription.py) -- off by default (None)
+        # same opt-in pattern as SHOWCASE_CHAT_ID/WEBAPP_URL; set both to turn it on.
+        # required_channel_username has no leading @ (used to build the t.me/<...> link).
+        required_channel_id=(
+            int(os.environ["REQUIRED_CHANNEL_ID"]) if os.environ.get("REQUIRED_CHANNEL_ID", "").strip() else None
+        ),
+        required_channel_username=os.environ.get("REQUIRED_CHANNEL_USERNAME", "").lstrip("@"),
         poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "150")),
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),
         db_path=os.environ.get("DB_PATH", "arbitrage_bot.sqlite3"),

@@ -160,6 +160,7 @@ html, body {
 }
 .tab:active { transform: scale(0.96); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:disabled { opacity: 0.35; cursor: default; }
 
 main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1; }
 
@@ -443,6 +444,34 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .empty-state { text-align: center; color: var(--hint); padding: 70px 20px 40px; animation: rise-in 0.4s ease both; }
 .empty-state .empty-icon { font-size: 40px; display: block; margin-bottom: 14px; animation: float 3s ease-in-out infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+.gate-state { padding-top: 50px; max-width: 320px; margin: 0 auto; }
+.gate-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.gate-text { margin-bottom: 18px; line-height: 1.4; }
+.gate-text b { color: var(--text); }
+.gate-link-btn { display: block; box-sizing: border-box; text-decoration: none; }
+/* Same look as .analyze-btn, but deliberately NOT that class -- app.js delegates a
+   click listener to any ".analyze-btn" inside #content (for the news-tab analysis
+   flow), which would otherwise also fire on this button and stomp its own click
+   handler's result (confirmed live: it briefly showed "🔍 Проанализировать" instead of
+   this button's own text after a failed check). */
+.gate-check-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--button-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(70, 211, 155, 0.2);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-sizing: border-box;
+}
+.gate-check-btn:active { transform: scale(0.98); box-shadow: 0 5px 12px rgba(70, 211, 155, 0.16); }
+.gate-check-btn:disabled { background: rgba(255, 255, 255, 0.08); color: var(--hint); cursor: default; box-shadow: none; }
 
 .meta-line { color: var(--hint); font-size: 13px; margin-bottom: 12px; animation: rise-in 0.3s ease both; }
 .meta-line b { color: var(--text); }

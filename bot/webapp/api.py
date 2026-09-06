@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+from aiogram import Bot
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +22,7 @@ from bot.core import billing
 from bot.core.arbitrage import calc_stakes
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
+from bot.core.subscription import is_subscribed
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.commands import (
     BANKROLL_PRESETS,
@@ -77,8 +79,20 @@ def _get_user(repo: Repository, chat_id: int) -> UserSettings:
     return user
 
 
-def _user_out(user: UserSettings, admin_chat_ids: frozenset[int]) -> dict:
+async def _user_out(
+    user: UserSettings,
+    admin_chat_ids: frozenset[int],
+    bot: Bot | None,
+    required_channel_id: int | None,
+    required_channel_username: str,
+) -> dict:
     now = datetime.now(timezone.utc)
+    is_admin = billing.is_admin(user, admin_chat_ids)
+    subscribed = (
+        True
+        if required_channel_id is None or is_admin or bot is None
+        else await is_subscribed(bot, required_channel_id, user.chat_id)
+    )
     return {
         "chat_id": user.chat_id,
         "bankroll": user.bankroll,
@@ -87,12 +101,18 @@ def _user_out(user: UserSettings, admin_chat_ids: frozenset[int]) -> dict:
         "allowed_bookmakers": user.allowed_bookmakers,
         "is_active": user.is_active,
         "muted": user.muted,
-        "is_admin": billing.is_admin(user, admin_chat_ids),
+        "is_admin": is_admin,
         "has_access": billing.has_access(user, now, admin_chat_ids),
         "on_trial": billing.on_trial(user, now),
         "days_left": billing.days_left(user, now),
         # Admins bypass the 1/day analysis quota entirely -- always "available".
-        "analysis_available": billing.is_admin(user, admin_chat_ids) or user.last_analysis_date != now.date().isoformat(),
+        "analysis_available": is_admin or user.last_analysis_date != now.date().isoformat(),
+        # Mandatory-subscription gate (bot/core/subscription.py) -- mirrors the button
+        # bot UI's gate. channel_required tells the frontend whether to even show a gate
+        # screen at all; channel_username is what it links "📢 Подписаться" to.
+        "channel_required": required_channel_id is not None,
+        "is_subscribed": subscribed,
+        "channel_username": required_channel_username,
     }
 
 
@@ -105,7 +125,13 @@ class SettingsIn(BaseModel):
 
 
 def register_api(
-    repo: Repository, state: LatestState, admin_chat_ids: frozenset[int], api_football_key: str = ""
+    repo: Repository,
+    state: LatestState,
+    admin_chat_ids: frozenset[int],
+    api_football_key: str = "",
+    bot: Bot | None = None,
+    required_channel_id: int | None = None,
+    required_channel_username: str = "",
 ) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
     NOT a module-level singleton mutated in place. Call this once from bot/main.py with
@@ -130,6 +156,24 @@ def register_api(
     news_cache: dict = {"at": 0.0, "payload": None}
     fixtures_cache: dict = {"at": 0.0, "payload": None}
 
+    async def _require_subscribed(chat_id: int) -> None:
+        """Mirrors the button bot UI's SubscriptionGateMiddleware (see
+        handlers/commands.py) -- called right after _auth() on every endpoint except
+        /api/me (which must always succeed so the frontend can read channel_required/
+        is_subscribed and show its own gate screen instead of erroring out). A no-op
+        when the gate isn't configured, bot wasn't passed in (e.g. most tests), or the
+        caller is an admin."""
+        if required_channel_id is None or bot is None:
+            return
+        # chat_id in admin_chat_ids is billing.is_admin's entire check -- doesn't need a
+        # real UserSettings row, so this must NOT go through repo.get_user first (an
+        # admin's very first request, before any row exists yet, would otherwise fall
+        # through to the real subscription check and get wrongly 403'd).
+        if chat_id in admin_chat_ids:
+            return
+        if not await is_subscribed(bot, required_channel_id, chat_id):
+            raise HTTPException(status_code=403, detail="Требуется подписка на канал")
+
     @app.middleware("http")
     async def _no_cache(request, call_next):
         # Telegram's in-app WebView is known to cache static assets aggressively by URL
@@ -144,11 +188,12 @@ def register_api(
     async def get_me(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
         user = _get_user(repo, chat_id)
-        return _user_out(user, admin_chat_ids)
+        return await _user_out(user, admin_chat_ids, bot, required_channel_id, required_channel_username)
 
     @app.post("/api/settings")
     async def post_settings(body: SettingsIn, authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
         _get_user(repo, chat_id)  # ensures the row exists
 
         if body.bankroll is not None:
@@ -173,11 +218,12 @@ def register_api(
         if body.muted is not None:
             repo.set_muted(chat_id, body.muted)
 
-        return _user_out(_get_user(repo, chat_id), admin_chat_ids)
+        return await _user_out(_get_user(repo, chat_id), admin_chat_ids, bot, required_channel_id, required_channel_username)
 
     @app.get("/api/bookmakers")
     async def get_bookmakers(authorization: str | None = Header(default=None)):
-        _auth(authorization)  # any authenticated user may read the static list
+        chat_id = _auth(authorization)  # any authenticated + subscribed user may read the static list
+        await _require_subscribed(chat_id)
         def _row(key: str) -> dict:
             category = "direct" if key in _DIRECT_BOOKMAKERS else "aggregator" if key in _AGGREGATOR_BOOKMAKERS else "other"
             return {"key": key, "label": key.upper(), "url": BOOKMAKER_URLS.get(key), "category": category}
@@ -185,7 +231,8 @@ def register_api(
 
     @app.get("/api/stats")
     async def get_stats(authorization: str | None = Header(default=None)):
-        _auth(authorization)
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
         return repo.get_opportunity_stats()
 
     @app.get("/api/news")
@@ -198,7 +245,8 @@ def register_api(
         actually found for) -- see get_popular_upcoming_fixtures's docstring. Other sports
         still fall back to the arb-derived pool, since there's no equivalent free
         fixture-calendar source for them."""
-        _auth(authorization)
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
 
         if news_cache["payload"] is not None and time.time() - news_cache["at"] < NEWS_CACHE_TTL_SECONDS:
             return news_cache["payload"]
@@ -262,6 +310,7 @@ def register_api(
         of /api/news's payload for that reason -- see the docstring there. Admins bypass
         the quota entirely (unlimited analyses), at the user's request."""
         chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
         is_admin = billing.is_admin(user, admin_chat_ids)
 
@@ -293,6 +342,7 @@ def register_api(
     @app.get("/api/vilki")
     async def get_vilki(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
         now = datetime.now(timezone.utc)
 
