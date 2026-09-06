@@ -108,6 +108,7 @@
       no_h2h: "Личных встреч в базе не нашлось.",
       h2h_title: "Личные встречи (последние ",
       h2h_total: "всего встреч: ",
+      recent_meeting_events: "Последняя встреча — что произошло",
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
       analyze_btn: "🔍 Проанализировать",
@@ -174,6 +175,7 @@
       no_h2h: "Дар пойгоҳи додаҳо вохӯриҳои шахсӣ ёфт нашуданд.",
       h2h_title: "Вохӯриҳои шахсӣ (охирин ",
       h2h_total: "ҳамагӣ вохӯриҳо: ",
+      recent_meeting_events: "Вохӯрии охирин — чӣ рӯй дод",
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
       analyze_btn: "🔍 Таҳлил кардан",
@@ -427,6 +429,19 @@
 
   function renderH2hBlock(h2h, teamA, teamB) {
     if (!h2h) return `<div class="news-empty">${t("no_h2h")}</div>`;
+
+    const eventsBlock = h2h.recent_meeting_events && h2h.recent_meeting_events.length
+      ? `<div class="h2h-events">
+          <div class="h2h-events-title">${t("recent_meeting_events")}</div>
+          ${h2h.recent_meeting_events
+            .map(
+              (ev) =>
+                `<div class="h2h-event-row"><span class="h2h-event-minute">${ev.minute}'</span> ${ev.emoji} ${esc(ev.player || "")} ${esc(ev.detail || "")} — ${esc(ev.team || "")}</div>`
+            )
+            .join("")}
+        </div>`
+      : "";
+
     return `<div class="h2h-block">
         <div class="h2h-title">📊 ${t("h2h_title")}${h2h.matches.length})</div>
         <div class="h2h-record">${esc(teamA)} ${h2h.team_a_wins} — ${h2h.draws} — ${h2h.team_b_wins} ${esc(teamB)} <span class="h2h-total">(${t("h2h_total")}${h2h.total})</span></div>
@@ -435,6 +450,7 @@
             (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`
           )
           .join("")}</div>
+        ${eventsBlock}
       </div>`;
   }
 

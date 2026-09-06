@@ -205,3 +205,66 @@ def test_get_match_h2h_returns_none_when_a_team_is_not_found():
             return await fs.get_match_h2h(client, "Real Madrid", "Nobody FC", "key123")
 
     assert _run(go()) is None
+
+
+def test_get_fixture_events_returns_sorted_goals_and_cards():
+    events = [
+        {"time": {"elapsed": 45}, "type": "Card", "detail": "Yellow Card", "team": {"name": "Real Madrid"}, "player": {"name": "Modric"}},
+        {"time": {"elapsed": 10}, "type": "Goal", "detail": "Normal Goal", "team": {"name": "Barcelona"}, "player": {"name": "Lewandowski"}},
+        {"time": {"elapsed": None}, "type": "Var", "detail": "Goal Disallowed"},  # no minute -- excluded
+    ]
+
+    def handler(request):
+        return httpx.Response(200, json={"response": events})
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.get_fixture_events(client, 12345, "key123")
+
+    result = _run(go())
+    assert len(result) == 2
+    assert result[0]["minute"] == 10
+    assert result[0]["emoji"] == "⚽"
+    assert result[0]["player"] == "Lewandowski"
+    assert result[1]["minute"] == 45
+    assert result[1]["emoji"] == "🟨"
+
+
+def test_get_fixture_events_returns_empty_on_http_error():
+    def handler(request):
+        return httpx.Response(500)
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.get_fixture_events(client, 12345, "key123")
+
+    assert _run(go()) == []
+
+
+def test_get_match_h2h_attaches_recent_meeting_events():
+    def handler(request):
+        path = request.url.path
+        if path == "/teams":
+            team = "541" if "Real" in request.url.params.get("search", "") else "529"
+            return httpx.Response(200, json={"response": [{"team": {"id": int(team)}}]})
+        if path == "/fixtures/headtohead":
+            return httpx.Response(200, json={"response": [{
+                "fixture": {"id": 999, "status": {"short": "FT"}, "timestamp": 100, "date": "2024-01-01T20:00:00+00:00"},
+                "teams": {"home": {"id": 541, "name": "Real Madrid"}, "away": {"id": 529, "name": "Barcelona"}},
+                "goals": {"home": 2, "away": 1},
+            }]})
+        if path == "/fixtures/events":
+            assert request.url.params.get("fixture") == "999"
+            return httpx.Response(200, json={"response": [
+                {"time": {"elapsed": 30}, "type": "Goal", "detail": "Normal Goal", "team": {"name": "Real Madrid"}, "player": {"name": "Vinicius"}},
+            ]})
+        raise AssertionError(f"unexpected path {path}")
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.get_match_h2h(client, "Real Madrid", "Barcelona", "key123")
+
+    result = _run(go())
+    assert result["recent_meeting_events"] == [
+        {"minute": 30, "emoji": "⚽", "team": "Real Madrid", "player": "Vinicius", "detail": "Normal Goal"}
+    ]

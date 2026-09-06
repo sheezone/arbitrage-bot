@@ -333,6 +333,11 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .h2h-row { color: var(--text); font-size: 12px; }
 .h2h-date { color: var(--hint); margin-right: 6px; font-variant-numeric: tabular-nums; }
 
+.h2h-events { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 5px; }
+.h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 3px; }
+.h2h-event-minute { color: var(--hint); font-variant-numeric: tabular-nums; margin-right: 4px; }
+
 .analyze-btn {
   width: 100%;
   margin-top: 10px;

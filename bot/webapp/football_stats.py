@@ -11,10 +11,22 @@ tier. Checked live against the account's own free key (2026-08-31):
 - `fixtures/headtohead?h2h=<idA>-<idB>` -- no season restriction at all, returned 51 real
   historical meetings between Real Madrid/Barcelona going back to 2018. This is the only
   piece that's both current-relevant and actually within the free tier's limits.
+- `fixtures/events?fixture=<id>` -- also NOT season-restricted (confirmed live
+  2026-09-06), works for any already-played fixture regardless of season. Used to show
+  what actually happened (goals/cards, who/when) in the most recent H2H meeting, one
+  extra request rather than per-match to stay well under the 100/day quota.
+- `fixtures/lineups`, `fixtures/statistics`, and `predictions` also work unrestricted for
+  already-played fixtures, but weren't wired in: lineups/statistics don't exist yet for a
+  match that hasn't kicked off (which is what /api/analysis is always about), and
+  `predictions` returns exactly the win/draw/loss percentage this whole feature
+  deliberately refuses to show (see the ethics discussion this was built from) -- not
+  used, on purpose.
+- `standings` and `teams/statistics` ARE season-restricted the same as team+season
+  fixtures -- no current-season league table or team form stats on the free tier.
 
 Still strictly facts, no verdict/percentage -- same rule as bot/webapp/news.py, this just
-adds one more real data point (H2H record + score history) to look at alongside the
-headlines, nothing that predicts the outcome."""
+adds real data points (H2H record + score history + what happened in the last meeting)
+to look at alongside the headlines, nothing that predicts the outcome."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -145,8 +157,8 @@ async def search_team_id(client: httpx.AsyncClient, team_name: str, api_key: str
 
 async def get_head_to_head(client: httpx.AsyncClient, team_a_id: int, team_b_id: int, api_key: str) -> dict | None:
     """None on any failure/no data. Otherwise {"total", "team_a_wins", "team_b_wins",
-    "draws", "matches": [{"date", "home", "away", "home_score", "away_score"}, ...]}
-    (most recent H2H_LOOKBACK_MATCHES, newest first)."""
+    "draws", "matches": [{"fixture_id", "date", "home", "away", "home_score",
+    "away_score"}, ...]} (most recent H2H_LOOKBACK_MATCHES, newest first)."""
     try:
         resp = await client.get(
             f"{API_BASE}/fixtures/headtohead",
@@ -184,6 +196,7 @@ async def get_head_to_head(client: httpx.AsyncClient, team_a_id: int, team_b_id:
 
         if len(matches) < H2H_LOOKBACK_MATCHES:
             matches.append({
+                "fixture_id": f.get("fixture", {}).get("id"),
                 "date": (f.get("fixture", {}).get("date") or "")[:10],
                 "home": home.get("name"),
                 "away": away.get("name"),
@@ -197,18 +210,63 @@ async def get_head_to_head(client: httpx.AsyncClient, team_a_id: int, team_b_id:
     return {"total": total, "team_a_wins": team_a_wins, "team_b_wins": team_b_wins, "draws": draws, "matches": matches}
 
 
+_EVENT_TYPE_EMOJI = {"Goal": "⚽", "Card": "🟨", "subst": "🔄", "Var": "📺"}
+
+
+async def get_fixture_events(client: httpx.AsyncClient, fixture_id: int, api_key: str) -> list[dict]:
+    """Goals/cards/subs for one already-played fixture -- confirmed live (2026-09-06)
+    /fixtures/events is NOT season-restricted on the free tier, unlike team+season
+    queries (see module docstring). [] on any failure, same convention as the rest of
+    this module. Used to enrich the most recent H2H meeting with what actually happened
+    in it, not just the final score."""
+    try:
+        resp = await client.get(
+            f"{API_BASE}/fixtures/events",
+            params={"fixture": fixture_id},
+            headers={"x-apisports-key": api_key},
+            timeout=_REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return []
+
+    events = []
+    for e in data.get("response") or []:
+        minute = (e.get("time") or {}).get("elapsed")
+        if minute is None:
+            continue
+        event_type = e.get("type") or ""
+        events.append({
+            "minute": minute,
+            "emoji": _EVENT_TYPE_EMOJI.get(event_type, "▪️"),
+            "team": (e.get("team") or {}).get("name"),
+            "player": (e.get("player") or {}).get("name"),
+            "detail": e.get("detail"),
+        })
+    events.sort(key=lambda ev: ev["minute"])
+    return events
+
+
 async def get_match_h2h(client: httpx.AsyncClient, team_a: str, team_b: str, api_key: str) -> dict | None:
     """End-to-end: resolve both team names to API-Football IDs, then fetch H2H. None at
     any step (team not found, no shared history, request failure) rather than raising --
     an H2H block just doesn't appear for that match, the rest of the news digest still
-    does."""
+    does. When there's at least one past meeting, also attaches
+    "recent_meeting_events" -- what actually happened (goals/cards) in the most recent
+    one, one extra request rather than per-match to stay well under the free tier's
+    100/day quota."""
     if not api_key:
         return None
     team_a_id = await search_team_id(client, team_a, api_key)
     team_b_id = await search_team_id(client, team_b, api_key)
     if team_a_id is None or team_b_id is None:
         return None
-    return await get_head_to_head(client, team_a_id, team_b_id, api_key)
+    h2h = await get_head_to_head(client, team_a_id, team_b_id, api_key)
+    if h2h and h2h["matches"]:
+        fixture_id = h2h["matches"][0].get("fixture_id")
+        h2h["recent_meeting_events"] = await get_fixture_events(client, fixture_id, api_key) if fixture_id else []
+    return h2h
 
 
 async def get_popular_upcoming_fixtures(
