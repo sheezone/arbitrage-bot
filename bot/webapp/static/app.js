@@ -427,13 +427,60 @@
     }
   }
 
+  // Proportional win/draw/loss bar -- percentages computed explicitly (not flex:N
+  // tricks) so a 0-count segment reliably collapses to 0 width instead of keeping a
+  // content-driven minimum.
+  function renderH2hBar(h2h) {
+    const total = h2h.total || 1;
+    const pctA = (h2h.team_a_wins / total) * 100;
+    const pctD = (h2h.draws / total) * 100;
+    const pctB = (h2h.team_b_wins / total) * 100;
+    const seg = (pct, cls) => (pct > 0 ? `<div class="h2h-bar-seg ${cls}" style="width:${pct}%"></div>` : "");
+    return `<div class="h2h-bar">${seg(pctA, "h2h-bar-a")}${seg(pctD, "h2h-bar-draw")}${seg(pctB, "h2h-bar-b")}</div>`;
+  }
+
+  // Oldest-to-newest reading order (h2h.matches itself is newest-first) -- one colored
+  // chip per match, result computed relative to teamA regardless of which side it
+  // played on in that particular match.
+  function renderH2hForm(h2h, teamA) {
+    const chips = h2h.matches
+      .slice()
+      .reverse()
+      .map((hm) => {
+        const aWasHome = hm.home === teamA;
+        const scoreA = aWasHome ? hm.home_score : hm.away_score;
+        const scoreB = aWasHome ? hm.away_score : hm.home_score;
+        const cls = scoreA > scoreB ? "h2h-chip-w" : scoreA < scoreB ? "h2h-chip-l" : "h2h-chip-d";
+        const letter = scoreA > scoreB ? "W" : scoreA < scoreB ? "L" : "D";
+        return `<span class="h2h-chip ${cls}" title="${esc(hm.date)}: ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}">${letter}</span>`;
+      })
+      .join("");
+    return `<div class="h2h-form">${chips}</div>`;
+  }
+
+  // Horizontal 0-90' timeline -- markers positioned by minute (capped at 90 so extra
+  // time doesn't push off the track), grouped visually by which side each event
+  // belongs to (dot above the track for the home-listed team's events, below for away).
+  function renderH2hTimeline(events, homeTeam) {
+    const markers = events
+      .map((ev) => {
+        const pct = Math.min(100, (ev.minute / 90) * 100);
+        const side = ev.team === homeTeam ? "h2h-marker-top" : "h2h-marker-bottom";
+        return `<div class="h2h-marker ${side}" style="left:${pct}%" title="${ev.minute}' ${esc(ev.player || "")} ${esc(ev.detail || "")} (${esc(ev.team || "")})">${ev.emoji}</div>`;
+      })
+      .join("");
+    return `<div class="h2h-timeline">${markers}<div class="h2h-timeline-track"></div></div>`;
+  }
+
   function renderH2hBlock(h2h, teamA, teamB) {
     if (!h2h) return `<div class="news-empty">${t("no_h2h")}</div>`;
 
-    const eventsBlock = h2h.recent_meeting_events && h2h.recent_meeting_events.length
+    const recentEvents = h2h.recent_meeting_events || [];
+    const eventsBlock = recentEvents.length
       ? `<div class="h2h-events">
           <div class="h2h-events-title">${t("recent_meeting_events")}</div>
-          ${h2h.recent_meeting_events
+          ${renderH2hTimeline(recentEvents, h2h.matches[0].home)}
+          ${recentEvents
             .map(
               (ev) =>
                 `<div class="h2h-event-row"><span class="h2h-event-minute">${ev.minute}'</span> ${ev.emoji} ${esc(ev.player || "")} ${esc(ev.detail || "")} — ${esc(ev.team || "")}</div>`
@@ -444,7 +491,9 @@
 
     return `<div class="h2h-block">
         <div class="h2h-title">📊 ${t("h2h_title")}${h2h.matches.length})</div>
+        ${renderH2hBar(h2h)}
         <div class="h2h-record">${esc(teamA)} ${h2h.team_a_wins} — ${h2h.draws} — ${h2h.team_b_wins} ${esc(teamB)} <span class="h2h-total">(${t("h2h_total")}${h2h.total})</span></div>
+        ${renderH2hForm(h2h, teamA)}
         <div class="h2h-matches">${h2h.matches
           .map(
             (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`

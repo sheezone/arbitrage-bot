@@ -323,8 +323,34 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
   padding: 10px 12px;
   margin-top: 10px;
 }
-.h2h-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.h2h-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+
+/* Proportional win/draw/loss bar -- segment widths are set inline per-render (JS
+   computes the percentages), this just styles the track/segments themselves. */
+.h2h-bar { display: flex; height: 8px; border-radius: 5px; overflow: hidden; background: rgba(255, 255, 255, 0.06); margin-bottom: 8px; }
+.h2h-bar-seg { height: 100%; transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.h2h-bar-a { background: var(--accent); }
+.h2h-bar-draw { background: var(--hint); opacity: 0.5; }
+.h2h-bar-b { background: var(--red); }
+
 .h2h-record { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+
+/* Form strip -- one W/D/L chip per match, oldest to newest left-to-right. */
+.h2h-form { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.h2h-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #0c0f15;
+}
+.h2h-chip-w { background: var(--accent); }
+.h2h-chip-d { background: var(--hint); }
+.h2h-chip-l { background: var(--red); }
 .h2h-total { color: var(--hint); font-size: 12px; }
 .h2h-matches { display: flex; flex-direction: column; gap: 4px; }
 /* Score is the actual content of this row -- was var(--hint) (the same dim gray used
@@ -337,6 +363,28 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 5px; }
 .h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 3px; }
 .h2h-event-minute { color: var(--hint); font-variant-numeric: tabular-nums; margin-right: 4px; }
+
+/* 0-90' timeline: a thin center track with emoji markers above it (home team's
+   events) or below (away team's) at their minute's horizontal position. */
+.h2h-timeline { position: relative; height: 44px; margin: 6px 4px 10px; }
+.h2h-timeline-track {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-50%);
+}
+.h2h-marker {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 13px;
+  cursor: default;
+  line-height: 1;
+}
+.h2h-marker-top { top: 0; }
+.h2h-marker-bottom { bottom: 0; }
 
 .analyze-btn {
   width: 100%;
