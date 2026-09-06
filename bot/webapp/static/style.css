@@ -323,50 +323,67 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
   padding: 10px 12px;
   margin-top: 10px;
 }
-.h2h-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.h2h-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.h2h-title-total { color: var(--hint); font-weight: 500; font-size: 12px; }
 
 /* Proportional win/draw/loss bar -- segment widths are set inline per-render (JS
    computes the percentages), this just styles the track/segments themselves. */
-.h2h-bar { display: flex; height: 8px; border-radius: 5px; overflow: hidden; background: rgba(255, 255, 255, 0.06); margin-bottom: 8px; }
+.h2h-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04); }
 .h2h-bar-seg { height: 100%; transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .h2h-bar-a { background: var(--accent); }
-.h2h-bar-draw { background: var(--hint); opacity: 0.5; }
+.h2h-bar-draw { background: var(--hint); opacity: 0.55; }
 .h2h-bar-b { background: var(--red); }
 
-.h2h-record { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+/* Legend under the bar -- colored dot + team name + rounded %, so the bar's meaning is
+   never left to guesswork the way a bare color-coded strip would be. */
+.h2h-legend { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin: 8px 0 12px; font-size: 11px; color: var(--text); }
+.h2h-legend-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32%; }
+.h2h-legend-item b { font-variant-numeric: tabular-nums; }
+.h2h-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.h2h-dot-a, .h2h-score-w { color: var(--accent); }
+.h2h-dot-a { background: var(--accent); }
+.h2h-dot-draw, .h2h-score-d { color: var(--hint); }
+.h2h-dot-draw { background: var(--hint); opacity: 0.7; }
+.h2h-dot-b, .h2h-score-l { color: var(--red); }
+.h2h-dot-b { background: var(--red); }
 
 /* Form strip -- one W/D/L chip per match, oldest to newest left-to-right. */
-.h2h-form { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.h2h-form { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
 .h2h-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
   font-size: 10px;
   font-weight: 800;
   color: #0c0f15;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 .h2h-chip-w { background: var(--accent); }
 .h2h-chip-d { background: var(--hint); }
 .h2h-chip-l { background: var(--red); }
-.h2h-total { color: var(--hint); font-size: 12px; }
-.h2h-matches { display: flex; flex-direction: column; gap: 4px; }
+
+.h2h-matches { display: flex; flex-direction: column; gap: 5px; }
 /* Score is the actual content of this row -- was var(--hint) (the same dim gray used
    for metadata like dates), which made it nearly unreadable against the card
-   background (confirmed live). Only the date prefix should stay muted. */
-.h2h-row { color: var(--text); font-size: 12px; }
-.h2h-date { color: var(--hint); margin-right: 6px; font-variant-numeric: tabular-nums; }
+   background (confirmed live). Only the date prefix should stay muted. The leading dot
+   repeats the form chip's color so a row can be matched to its chip at a glance. */
+.h2h-row { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 12px; }
+.h2h-row .h2h-dot { flex: none; }
+.h2h-date { color: var(--hint); font-variant-numeric: tabular-nums; }
 
-.h2h-events { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
-.h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 5px; }
-.h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 3px; }
+.h2h-events { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 8px; }
+.h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 4px; }
 .h2h-event-minute { color: var(--hint); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.h2h-event-team { color: var(--hint); }
 
 /* 0-90' timeline: a thin center track with emoji markers above it (home team's
-   events) or below (away team's) at their minute's horizontal position. */
-.h2h-timeline { position: relative; height: 44px; margin: 6px 4px 10px; }
+   events) or below (away team's) at their minute's horizontal position, a faint
+   halftime guide, and end/mid axis labels so the scale is self-explanatory. */
+.h2h-timeline { position: relative; height: 52px; margin: 8px 4px 4px; }
 .h2h-timeline-track {
   position: absolute;
   top: 50%;
@@ -376,15 +393,35 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
   background: rgba(255, 255, 255, 0.1);
   transform: translateY(-50%);
 }
+.h2h-timeline-half {
+  position: absolute;
+  top: 6px;
+  bottom: 14px;
+  left: 50%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.h2h-timeline-axis {
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--hint);
+  font-variant-numeric: tabular-nums;
+}
 .h2h-marker {
   position: absolute;
+  top: 6px;
   transform: translateX(-50%);
   font-size: 13px;
   cursor: default;
   line-height: 1;
 }
-.h2h-marker-top { top: 0; }
-.h2h-marker-bottom { bottom: 0; }
+.h2h-marker-top { top: 6px; }
+.h2h-marker-bottom { bottom: 16px; }
 
 .analyze-btn {
   width: 100%;

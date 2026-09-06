@@ -108,6 +108,7 @@
       no_h2h: "Личных встреч в базе не нашлось.",
       h2h_title: "Личные встречи (последние ",
       h2h_total: "всего встреч: ",
+      draws_label: "Ничьи",
       recent_meeting_events: "Последняя встреча — что произошло",
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
@@ -175,6 +176,7 @@
       no_h2h: "Дар пойгоҳи додаҳо вохӯриҳои шахсӣ ёфт нашуданд.",
       h2h_title: "Вохӯриҳои шахсӣ (охирин ",
       h2h_total: "ҳамагӣ вохӯриҳо: ",
+      draws_label: "Баробарӣ",
       recent_meeting_events: "Вохӯрии охирин — чӣ рӯй дод",
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
@@ -427,40 +429,55 @@
     }
   }
 
-  // Proportional win/draw/loss bar -- percentages computed explicitly (not flex:N
-  // tricks) so a 0-count segment reliably collapses to 0 width instead of keeping a
-  // content-driven minimum.
-  function renderH2hBar(h2h) {
+  // Proportional win/draw/loss bar with a legend underneath (colored dot + short name +
+  // %) -- percentages computed explicitly (not flex:N tricks) so a 0-count segment
+  // reliably collapses to 0 width instead of keeping a content-driven minimum.
+  function renderH2hBar(h2h, teamA, teamB) {
     const total = h2h.total || 1;
     const pctA = (h2h.team_a_wins / total) * 100;
     const pctD = (h2h.draws / total) * 100;
     const pctB = (h2h.team_b_wins / total) * 100;
     const seg = (pct, cls) => (pct > 0 ? `<div class="h2h-bar-seg ${cls}" style="width:${pct}%"></div>` : "");
-    return `<div class="h2h-bar">${seg(pctA, "h2h-bar-a")}${seg(pctD, "h2h-bar-draw")}${seg(pctB, "h2h-bar-b")}</div>`;
+    const legendItem = (dotCls, label, pct) =>
+      `<span class="h2h-legend-item"><i class="h2h-dot ${dotCls}"></i>${esc(label)} <b>${Math.round(pct)}%</b></span>`;
+    return `
+      <div class="h2h-bar">${seg(pctA, "h2h-bar-a")}${seg(pctD, "h2h-bar-draw")}${seg(pctB, "h2h-bar-b")}</div>
+      <div class="h2h-legend">
+        ${legendItem("h2h-dot-a", teamA, pctA)}
+        ${legendItem("h2h-dot-draw", t("draws_label"), pctD)}
+        ${legendItem("h2h-dot-b", teamB, pctB)}
+      </div>`;
   }
 
   // Oldest-to-newest reading order (h2h.matches itself is newest-first) -- one colored
   // chip per match, result computed relative to teamA regardless of which side it
   // played on in that particular match.
+  function h2hResultForTeamA(hm, teamA) {
+    const aWasHome = hm.home === teamA;
+    const scoreA = aWasHome ? hm.home_score : hm.away_score;
+    const scoreB = aWasHome ? hm.away_score : hm.home_score;
+    if (scoreA > scoreB) return "w";
+    if (scoreA < scoreB) return "l";
+    return "d";
+  }
+
   function renderH2hForm(h2h, teamA) {
     const chips = h2h.matches
       .slice()
       .reverse()
       .map((hm) => {
-        const aWasHome = hm.home === teamA;
-        const scoreA = aWasHome ? hm.home_score : hm.away_score;
-        const scoreB = aWasHome ? hm.away_score : hm.home_score;
-        const cls = scoreA > scoreB ? "h2h-chip-w" : scoreA < scoreB ? "h2h-chip-l" : "h2h-chip-d";
-        const letter = scoreA > scoreB ? "W" : scoreA < scoreB ? "L" : "D";
-        return `<span class="h2h-chip ${cls}" title="${esc(hm.date)}: ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}">${letter}</span>`;
+        const result = h2hResultForTeamA(hm, teamA);
+        const letter = result === "w" ? "W" : result === "l" ? "L" : "D";
+        return `<span class="h2h-chip h2h-chip-${result}" title="${esc(hm.date)}: ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}">${letter}</span>`;
       })
       .join("");
     return `<div class="h2h-form">${chips}</div>`;
   }
 
-  // Horizontal 0-90' timeline -- markers positioned by minute (capped at 90 so extra
-  // time doesn't push off the track), grouped visually by which side each event
-  // belongs to (dot above the track for the home-listed team's events, below for away).
+  // Horizontal 0-90' timeline with axis labels and a halftime guide -- markers
+  // positioned by minute (capped at 90 so extra time doesn't push off the track),
+  // grouped visually by which side each event belongs to (dot above the track for the
+  // home-listed team's events, below for away).
   function renderH2hTimeline(events, homeTeam) {
     const markers = events
       .map((ev) => {
@@ -469,7 +486,12 @@
         return `<div class="h2h-marker ${side}" style="left:${pct}%" title="${ev.minute}' ${esc(ev.player || "")} ${esc(ev.detail || "")} (${esc(ev.team || "")})">${ev.emoji}</div>`;
       })
       .join("");
-    return `<div class="h2h-timeline">${markers}<div class="h2h-timeline-track"></div></div>`;
+    return `<div class="h2h-timeline">
+        ${markers}
+        <div class="h2h-timeline-track"></div>
+        <div class="h2h-timeline-half"></div>
+        <div class="h2h-timeline-axis"><span>0'</span><span>45'</span><span>90'</span></div>
+      </div>`;
   }
 
   function renderH2hBlock(h2h, teamA, teamB) {
@@ -483,21 +505,25 @@
           ${recentEvents
             .map(
               (ev) =>
-                `<div class="h2h-event-row"><span class="h2h-event-minute">${ev.minute}'</span> ${ev.emoji} ${esc(ev.player || "")} ${esc(ev.detail || "")} — ${esc(ev.team || "")}</div>`
+                `<div class="h2h-event-row"><span class="h2h-event-minute">${ev.minute}'</span> ${ev.emoji} <b>${esc(ev.player || "")}</b> ${esc(ev.detail || "")} <span class="h2h-event-team">— ${esc(ev.team || "")}</span></div>`
             )
             .join("")}
         </div>`
       : "";
 
     return `<div class="h2h-block">
-        <div class="h2h-title">📊 ${t("h2h_title")}${h2h.matches.length})</div>
-        ${renderH2hBar(h2h)}
-        <div class="h2h-record">${esc(teamA)} ${h2h.team_a_wins} — ${h2h.draws} — ${h2h.team_b_wins} ${esc(teamB)} <span class="h2h-total">(${t("h2h_total")}${h2h.total})</span></div>
+        <div class="h2h-title">📊 ${t("h2h_title")}${h2h.matches.length} <span class="h2h-title-total">/ ${t("h2h_total")}${h2h.total}</span>)</div>
+        ${renderH2hBar(h2h, teamA, teamB)}
         ${renderH2hForm(h2h, teamA)}
         <div class="h2h-matches">${h2h.matches
-          .map(
-            (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`
-          )
+          .map((hm) => {
+            const result = h2hResultForTeamA(hm, teamA);
+            const aWasHome = hm.home === teamA;
+            const scoreHtml = aWasHome
+              ? `<b class="h2h-score-${result}">${hm.home_score}</b>:<b class="h2h-score-${result === "w" ? "l" : result === "l" ? "w" : "d"}">${hm.away_score}</b>`
+              : `<b class="h2h-score-${result === "w" ? "l" : result === "l" ? "w" : "d"}">${hm.home_score}</b>:<b class="h2h-score-${result}">${hm.away_score}</b>`;
+            return `<div class="h2h-row"><i class="h2h-dot h2h-dot-${result}"></i><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${scoreHtml} ${esc(hm.away)}</div>`;
+          })
           .join("")}</div>
         ${eventsBlock}
       </div>`;
