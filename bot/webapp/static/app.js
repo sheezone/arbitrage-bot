@@ -65,6 +65,8 @@
   const content = document.getElementById("content");
   const toastEl = document.getElementById("toast");
   const refreshBtn = document.getElementById("refresh-btn");
+  const langBtn = document.getElementById("lang-btn");
+  const topbarTitleEl = document.getElementById("topbar-title");
 
   function toast(msg) {
     toastEl.textContent = msg;
@@ -77,9 +79,183 @@
   let bookmakersCache = null;
   let refreshTimer = null;
 
-  const TIME_HORIZON_LABELS = { 1: "До 24 часов", 2: "Более 24 часов" };
   const HIGH_PROFIT_THRESHOLD = 10;
   const BANKROLL_PRESETS = [500, 1000, 5000, 10000];
+
+  // ---------- i18n ----------
+  // Frontend chrome only (labels/buttons/messages) -- backend error strings (e.g. HTTP
+  // exception details from api.py) stay Russian regardless, that's a separate, much
+  // bigger scope the user didn't ask for. Tajik strings are a best-effort translation,
+  // not reviewed by a native speaker -- flag any that read oddly and they can be fixed.
+  const I18N = {
+    ru: {
+      tab_vilki: "Вилки",
+      tab_news: "Новости",
+      tab_settings: "Настройки",
+      tab_stats: "Статистика",
+      tab_admin: "Админ",
+      topbar_title: "🔍 Арбитражный бот",
+      data_at: "Данные на ",
+      msk: " МСК",
+      no_vilki: "Сейчас подходящих вилок нет.",
+      check_later: "Загляните чуть позже.",
+      found_vilki: "Найдено вилок: ",
+      profit: "Прибыль: ",
+      possible_win: "Возможный выигрыш: ",
+      odds_warning: "Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.",
+      copied: "Скопировано: ",
+      copy_failed: "Не удалось скопировать",
+      no_h2h: "Личных встреч в базе не нашлось.",
+      h2h_title: "Личные встречи (последние ",
+      h2h_total: "всего встреч: ",
+      loading: "Загрузка…",
+      daily_limit_reached: "Лимит на сегодня исчерпан",
+      analyze_btn: "🔍 Проанализировать",
+      error_prefix: "Ошибка: ",
+      no_fresh_news: "За последние 24 часа свежих новостей не нашлось.",
+      no_news_data: "Пока нет данных для новостной сводки.",
+      news_meta_line:
+        "Новости по популярным матчам — без прогнозов и процентов, только факты для собственного анализа. Анализ (личные встречи) — 1 раз в день.",
+      bankroll: "Банкролл",
+      profit_threshold: "Порог прибыли",
+      profit_threshold_label: "Минимальный % прибыли для показа вилки",
+      profit_threshold_hint: "Можно указать дробное значение, например 0.6",
+      period: "Период",
+      horizon_24: "До 24 часов",
+      horizon_more24: "Более 24 часов",
+      my_bookmakers: "Мои букмекеры",
+      notifications: "Уведомления",
+      muted_label: "🔕 Тихий режим (без звука)",
+      save: "Сохранить",
+      err_bankroll_positive: "Банкролл должен быть больше 0",
+      err_threshold_negative: "Порог прибыли не может быть отрицательным",
+      err_need_horizon: "Нужно оставить хотя бы один период",
+      err_need_bookmaker: "Нужно оставить хотя бы одного букмекера",
+      settings_saved: "Настройки сохранены ✅",
+      save_failed: "Не удалось сохранить: ",
+      today: "Сегодня",
+      stat_found_vilki: "Найдено вилок",
+      stat_avg_profit: "Средняя прибыль",
+      stat_best_profit: "Лучшая прибыль",
+      all_time: "За всё время",
+      admin_users: "Пользователи",
+      admin_total: "Всего",
+      admin_on_trial: "На пробном",
+      admin_has_access: "С доступом",
+      admin_expired: "Доступ истёк",
+      admin_notifications_on: "Уведомления вкл",
+      admin_referred: "По рефералке",
+      admin_payments: "Оплаты",
+      admin_units: " шт · ",
+      admin_no_payments: "Платежей ещё не было.",
+      admin_sources: "Источники регистраций",
+      admin_organic: "органика / без метки",
+      admin_no_data: "Нет данных.",
+      admin_recent_users: "Последние пользователи",
+      admin_no_users: "Пользователей ещё нет.",
+    },
+    tg: {
+      tab_vilki: "Арбитраж",
+      tab_news: "Хабарҳо",
+      tab_settings: "Танзимот",
+      tab_stats: "Омор",
+      tab_admin: "Админ",
+      topbar_title: "🔍 Боти арбитражӣ",
+      data_at: "Маълумот аз соати ",
+      msk: " МСК",
+      no_vilki: "Ҳоло вилкаҳои мувофиқ нест.",
+      check_later: "Баъд аз каме вақт дубора нигаред.",
+      found_vilki: "Вилкаҳои ёфтшуда: ",
+      profit: "Фоида: ",
+      possible_win: "Бурди эҳтимолӣ: ",
+      odds_warning: "Коэффисиентҳо ва фоизи фоида дар назди букмекер метавонанд тағйир ёбанд — пеш аз гузоштани бет санҷед.",
+      copied: "Нусхабардорӣ шуд: ",
+      copy_failed: "Нусхабардорӣ ба амал наомад",
+      no_h2h: "Дар пойгоҳи додаҳо вохӯриҳои шахсӣ ёфт нашуданд.",
+      h2h_title: "Вохӯриҳои шахсӣ (охирин ",
+      h2h_total: "ҳамагӣ вохӯриҳо: ",
+      loading: "Боргирӣ…",
+      daily_limit_reached: "Лимити имрӯза тамом шуд",
+      analyze_btn: "🔍 Таҳлил кардан",
+      error_prefix: "Хато: ",
+      no_fresh_news: "Дар 24 соати охир хабарҳои нав ёфт нашуданд.",
+      no_news_data: "Ҳоло барои хулосаи хабарҳо маълумот нест.",
+      news_meta_line:
+        "Хабарҳо оид ба бозиҳои маъмул — бидуни пешгӯӣ ва фоиз, танҳо далелҳо барои таҳлили худ. Таҳлил (вохӯриҳои шахсӣ) — 1 бор дар як рӯз.",
+      bankroll: "Бонкролл",
+      profit_threshold: "Ҳадди фоида",
+      profit_threshold_label: "Фоизи ҳадди ақали фоида барои нишон додани вилка",
+      profit_threshold_hint: "Метавонед қимати касрӣ нависед, масалан 0.6",
+      period: "Давра",
+      horizon_24: "То 24 соат",
+      horizon_more24: "Зиёда аз 24 соат",
+      my_bookmakers: "Букмекерҳои ман",
+      notifications: "Огоҳиномаҳо",
+      muted_label: "🔕 Реҷаи ором (бе садо)",
+      save: "Нигоҳ доштан",
+      err_bankroll_positive: "Бонкролл бояд аз 0 зиёд бошад",
+      err_threshold_negative: "Ҳадди фоида наметавонад манфӣ бошад",
+      err_need_horizon: "Бояд ҳадди ақал як давра боқӣ монад",
+      err_need_bookmaker: "Бояд ҳадди ақал як букмекер боқӣ монад",
+      settings_saved: "Танзимот нигоҳ дошта шуд ✅",
+      save_failed: "Нигоҳ доштан ноком шуд: ",
+      today: "Имрӯз",
+      stat_found_vilki: "Вилкаҳои ёфтшуда",
+      stat_avg_profit: "Фоидаи миёна",
+      stat_best_profit: "Беҳтарин фоида",
+      all_time: "Дар тамоми давра",
+      admin_users: "Корбарон",
+      admin_total: "Ҳамагӣ",
+      admin_on_trial: "Дар озмоишӣ",
+      admin_has_access: "Бо дастрасӣ",
+      admin_expired: "Дастрасӣ тамом шуд",
+      admin_notifications_on: "Огоҳиномаҳо фаъол",
+      admin_referred: "Тавассути реферал",
+      admin_payments: "Пардохтҳо",
+      admin_units: " адад · ",
+      admin_no_payments: "Пардохт ҳанӯз набудааст.",
+      admin_sources: "Манбаъҳои сабтном",
+      admin_organic: "органикӣ / бе тег",
+      admin_no_data: "Маълумот нест.",
+      admin_recent_users: "Корбарони охирин",
+      admin_no_users: "Корбарон ҳанӯз нест.",
+    },
+  };
+
+  let currentLang = "ru";
+  try {
+    currentLang = localStorage.getItem("lang") === "tg" ? "tg" : "ru";
+  } catch (e) {
+    // localStorage can throw (private mode, blocked site data) -- ru default is fine.
+  }
+
+  function t(key) {
+    return (I18N[currentLang] && I18N[currentLang][key]) || I18N.ru[key] || key;
+  }
+
+  const TIME_HORIZON_LABELS = () => ({ 1: t("horizon_24"), 2: t("horizon_more24") });
+
+  function applyStaticLabels() {
+    topbarTitleEl.textContent = t("topbar_title");
+    document.querySelector('[data-tab="vilki"]').textContent = t("tab_vilki");
+    document.querySelector('[data-tab="news"]').textContent = t("tab_news");
+    document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
+    document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
+    document.getElementById("admin-tab").textContent = t("tab_admin");
+  }
+  applyStaticLabels();
+
+  langBtn.addEventListener("click", () => {
+    haptic("light");
+    currentLang = currentLang === "ru" ? "tg" : "ru";
+    try {
+      localStorage.setItem("lang", currentLang);
+    } catch (e) {
+      // Per-viewer convenience only -- fine if it doesn't persist.
+    }
+    applyStaticLabels();
+    switchTab(currentTab);
+  });
 
   function haptic(style) {
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || "light");
@@ -121,7 +297,7 @@
       else if (tab === "stats") await renderStats();
       else if (tab === "admin") await renderAdmin();
     } catch (e) {
-      toast("Ошибка: " + e.message);
+      toast(t("error_prefix") + e.message);
     } finally {
       if (manual) refreshBtn.classList.remove("spinning");
     }
@@ -146,12 +322,12 @@
 
   async function renderVilki() {
     const data = await api("/api/vilki");
-    const checkedAt = data.updated_at ? fmtMoscowTime(data.updated_at) + " МСК" : "—";
+    const checkedAt = data.updated_at ? fmtMoscowTime(data.updated_at) + t("msk") : "—";
 
     if (!data.matches.length) {
       content.innerHTML = `
-        <div class="meta-line">Данные на ${checkedAt}</div>
-        <div class="empty-state"><span class="empty-icon">🔍</span>Сейчас подходящих вилок нет.<br>Загляните чуть позже.</div>`;
+        <div class="meta-line">${t("data_at")}${checkedAt}</div>
+        <div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
       return;
     }
 
@@ -185,15 +361,15 @@
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${copyable(m.team_a)} vs ${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
-          <div class="${profitClass}">${profitEmoji} Прибыль: ${m.profit_pct.toFixed(2)}%</div>
-          <div class="match-amount"><span class="emoji-bounce">💸</span> Возможный выигрыш: <span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
+          <div class="${profitClass}">${profitEmoji} ${t("profit")}${m.profit_pct.toFixed(2)}%</div>
+          <div class="match-amount"><span class="emoji-bounce">💸</span> ${t("possible_win")}<span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
           <div class="legs">${legs}</div>
-          <div class="odds-warning">⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.</div>
+          <div class="odds-warning">⚠️ ${t("odds_warning")}</div>
         </div>`;
     });
 
     content.innerHTML = `
-      <div class="meta-line">Найдено вилок: <b>${data.matches.length}</b> (данные на ${checkedAt})</div>
+      <div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})</div>
       ${cards.join("")}`;
   }
 
@@ -250,10 +426,10 @@
   }
 
   function renderH2hBlock(h2h, teamA, teamB) {
-    if (!h2h) return `<div class="news-empty">Личных встреч в базе не нашлось.</div>`;
+    if (!h2h) return `<div class="news-empty">${t("no_h2h")}</div>`;
     return `<div class="h2h-block">
-        <div class="h2h-title">📊 Личные встречи (последние ${h2h.matches.length})</div>
-        <div class="h2h-record">${esc(teamA)} ${h2h.team_a_wins} — ${h2h.draws} — ${h2h.team_b_wins} ${esc(teamB)} <span class="h2h-total">(всего встреч: ${h2h.total})</span></div>
+        <div class="h2h-title">📊 ${t("h2h_title")}${h2h.matches.length})</div>
+        <div class="h2h-record">${esc(teamA)} ${h2h.team_a_wins} — ${h2h.draws} — ${h2h.team_b_wins} ${esc(teamB)} <span class="h2h-total">(${t("h2h_total")}${h2h.total})</span></div>
         <div class="h2h-matches">${h2h.matches
           .map(
             (hm) => `<div class="h2h-row"><span class="h2h-date">${esc(hm.date)}</span> ${esc(hm.home)} ${hm.home_score}:${hm.away_score} ${esc(hm.away)}</div>`
@@ -270,7 +446,7 @@
     const slot = document.getElementById(btn.dataset.slotId);
     haptic("light");
     btn.disabled = true;
-    btn.textContent = "Загрузка…";
+    btn.textContent = t("loading");
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
       slot.innerHTML = renderH2hBlock(result.h2h, teamA, teamB);
@@ -282,14 +458,14 @@
         document.querySelectorAll(".analyze-btn").forEach((b) => {
           if (b !== btn) {
             b.disabled = true;
-            b.textContent = "Лимит на сегодня исчерпан";
+            b.textContent = t("daily_limit_reached");
           }
         });
       }
     } catch (e) {
       btn.disabled = false;
-      btn.textContent = "🔍 Проанализировать";
-      toast("Ошибка: " + e.message);
+      btn.textContent = t("analyze_btn");
+      toast(t("error_prefix") + e.message);
     }
   }
 
@@ -302,7 +478,7 @@
       const text = copyEl.dataset.copy;
       copyToClipboard(text).then((ok) => {
         haptic(ok ? "light" : "medium");
-        toast(ok ? `Скопировано: ${text}` : "Не удалось скопировать");
+        toast(ok ? `${t("copied")}${text}` : t("copy_failed"));
       });
     }
   });
@@ -312,7 +488,7 @@
     meCache = me;
 
     if (!data.matches.length) {
-      content.innerHTML = `<div class="empty-state"><span class="empty-icon">📰</span>Пока нет данных для новостной сводки.</div>`;
+      content.innerHTML = `<div class="empty-state"><span class="empty-icon">📰</span>${t("no_news_data")}</div>`;
       return;
     }
 
@@ -327,7 +503,7 @@
           </div>`
             )
             .join("")
-        : `<div class="news-empty">За последние 24 часа свежих новостей не нашлось.</div>`;
+        : `<div class="news-empty">${t("no_fresh_news")}</div>`;
 
       // Full analysis (H2H) is fetched only on click, gated to 1/day/user -- see
       // /api/analysis and onAnalyzeClick above.
@@ -335,8 +511,8 @@
       let analyzeBlock = "";
       if (m.can_analyze) {
         analyzeBlock = me.analysis_available
-          ? `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}" data-slot-id="${slotId}">🔍 Проанализировать</button>`
-          : `<button type="button" class="analyze-btn" disabled>Лимит на сегодня исчерпан</button>`;
+          ? `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}" data-slot-id="${slotId}">${t("analyze_btn")}</button>`
+          : `<button type="button" class="analyze-btn" disabled>${t("daily_limit_reached")}</button>`;
       }
 
       return `
@@ -351,7 +527,7 @@
     });
 
     content.innerHTML = `
-      <div class="meta-line">Новости по популярным матчам — без прогнозов и процентов, только факты для собственного анализа. Анализ (личные встречи) — 1 раз в день.</div>
+      <div class="meta-line">${t("news_meta_line")}</div>
       ${cards.join("")}`;
   }
 
@@ -370,7 +546,7 @@
       (p) => `<button type="button" class="preset-btn" data-preset="${p}">${p}</button>`
     ).join("");
 
-    const horizonRows = Object.entries(TIME_HORIZON_LABELS)
+    const horizonRows = Object.entries(TIME_HORIZON_LABELS())
       .map(
         ([days, label]) => `
         <div class="toggle-row">
@@ -390,35 +566,35 @@
       .join("");
 
     content.innerHTML = `
-      <div class="section-title">Банкролл</div>
+      <div class="section-title">${t("bankroll")}</div>
       <div class="field">
         <input type="number" id="bankroll-input" value="${me.bankroll}" min="1" step="1">
         <div class="preset-row">${presetRow}</div>
       </div>
 
-      <div class="section-title">Порог прибыли</div>
+      <div class="section-title">${t("profit_threshold")}</div>
       <div class="field">
-        <label>Минимальный % прибыли для показа вилки</label>
-        <input type="number" id="threshold-input" value="${me.min_profit_pct}" min="0" step="0.1" placeholder="например, 0.6">
-        <div class="field-hint">Можно указать дробное значение, например 0.6</div>
+        <label>${t("profit_threshold_label")}</label>
+        <input type="number" id="threshold-input" value="${me.min_profit_pct}" min="0" step="0.1" placeholder="0.6">
+        <div class="field-hint">${t("profit_threshold_hint")}</div>
       </div>
 
-      <div class="section-title">Период</div>
+      <div class="section-title">${t("period")}</div>
       ${horizonRows}
 
-      <div class="section-title">Мои букмекеры</div>
+      <div class="section-title">${t("my_bookmakers")}</div>
       <div class="chip-grid" id="bk-grid">${bkChips}</div>
 
-      <div class="section-title">Уведомления</div>
+      <div class="section-title">${t("notifications")}</div>
       <div class="toggle-row">
-        <span>🔕 Тихий режим (без звука)</span>
+        <span>${t("muted_label")}</span>
         <label class="switch">
           <input type="checkbox" id="muted-input" ${me.muted ? "checked" : ""}>
           <span class="slider"></span>
         </label>
       </div>
 
-      <button class="save-btn" id="save-settings-btn">Сохранить</button>
+      <button class="save-btn" id="save-settings-btn">${t("save")}</button>
     `;
 
     document.querySelectorAll(".preset-btn").forEach((btn) => {
@@ -445,10 +621,10 @@
     const bookmakers = Array.from(document.querySelectorAll("#bk-grid .chip.selected")).map((el) => el.dataset.bk);
     const muted = document.getElementById("muted-input").checked;
 
-    if (!bankroll || bankroll <= 0) return toast("Банкролл должен быть больше 0");
-    if (isNaN(minProfitPct) || minProfitPct < 0) return toast("Порог прибыли не может быть отрицательным");
-    if (!horizons.length) return toast("Нужно оставить хотя бы один период");
-    if (!bookmakers.length) return toast("Нужно оставить хотя бы одного букмекера");
+    if (!bankroll || bankroll <= 0) return toast(t("err_bankroll_positive"));
+    if (isNaN(minProfitPct) || minProfitPct < 0) return toast(t("err_threshold_negative"));
+    if (!horizons.length) return toast(t("err_need_horizon"));
+    if (!bookmakers.length) return toast(t("err_need_bookmaker"));
 
     try {
       await api("/api/settings", {
@@ -461,10 +637,10 @@
           muted,
         }),
       });
-      toast("Настройки сохранены ✅");
+      toast(t("settings_saved"));
       if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     } catch (e) {
-      toast("Не удалось сохранить: " + e.message);
+      toast(t("save_failed") + e.message);
       if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
     }
   }
@@ -487,16 +663,16 @@
   async function renderStats() {
     const s = await api("/api/stats");
     content.innerHTML = `
-      <div class="section-title">Сегодня</div>
+      <div class="section-title">${t("today")}</div>
       <div class="stat-grid stat-grid-3">
-        <div class="stat-card" style="animation-delay:0ms"><div class="stat-value" data-v="${s.today_count}" data-suf="" data-dec="0">0</div><div class="stat-label">Найдено вилок</div></div>
-        <div class="stat-card" style="animation-delay:40ms"><div class="stat-value" data-v="${s.today_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Средняя прибыль</div></div>
-        <div class="stat-card" style="animation-delay:80ms"><div class="stat-value" data-v="${s.today_best_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Лучшая прибыль</div></div>
+        <div class="stat-card" style="animation-delay:0ms"><div class="stat-value" data-v="${s.today_count}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("stat_found_vilki")}</div></div>
+        <div class="stat-card" style="animation-delay:40ms"><div class="stat-value" data-v="${s.today_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">${t("stat_avg_profit")}</div></div>
+        <div class="stat-card" style="animation-delay:80ms"><div class="stat-value" data-v="${s.today_best_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">${t("stat_best_profit")}</div></div>
       </div>
-      <div class="section-title">За всё время</div>
+      <div class="section-title">${t("all_time")}</div>
       <div class="stat-grid">
-        <div class="stat-card" style="animation-delay:120ms"><div class="stat-value" data-v="${s.alltime_count}" data-suf="" data-dec="0">0</div><div class="stat-label">Найдено вилок</div></div>
-        <div class="stat-card" style="animation-delay:160ms"><div class="stat-value" data-v="${s.alltime_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">Средняя прибыль</div></div>
+        <div class="stat-card" style="animation-delay:120ms"><div class="stat-value" data-v="${s.alltime_count}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("stat_found_vilki")}</div></div>
+        <div class="stat-card" style="animation-delay:160ms"><div class="stat-value" data-v="${s.alltime_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">${t("stat_avg_profit")}</div></div>
       </div>
     `;
     content.querySelectorAll(".stat-value").forEach((el) => {
@@ -522,18 +698,18 @@
       ? s.payments
           .map(
             (p) =>
-              `<div class="admin-row"><span>${esc(p.provider)} · ${esc(p.currency)}</span><span>${p.count} шт · ${fmtMoney(p.total)}</span></div>`
+              `<div class="admin-row"><span>${esc(p.provider)} · ${esc(p.currency)}</span><span>${p.count}${t("admin_units")}${fmtMoney(p.total)}</span></div>`
           )
           .join("")
-      : `<div class="news-empty">Платежей ещё не было.</div>`;
+      : `<div class="news-empty">${t("admin_no_payments")}</div>`;
 
     const sourcesRows = s.acquisition_sources.length
       ? s.acquisition_sources
           .map(
-            (a) => `<div class="admin-row"><span>${esc(a.source || "органика / без метки")}</span><span>${a.count}</span></div>`
+            (a) => `<div class="admin-row"><span>${esc(a.source || t("admin_organic"))}</span><span>${a.count}</span></div>`
           )
           .join("")
-      : `<div class="news-empty">Нет данных.</div>`;
+      : `<div class="news-empty">${t("admin_no_data")}</div>`;
 
     const usersRows = s.recent_users.length
       ? s.recent_users
@@ -544,26 +720,26 @@
             </div>`
           )
           .join("")
-      : `<div class="news-empty">Пользователей ещё нет.</div>`;
+      : `<div class="news-empty">${t("admin_no_users")}</div>`;
 
     content.innerHTML = `
-      <div class="section-title">Пользователи</div>
+      <div class="section-title">${t("admin_users")}</div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">Всего</div></div>
-        <div class="stat-card"><div class="stat-value" data-v="${s.on_trial}" data-suf="" data-dec="0">0</div><div class="stat-label">На пробном</div></div>
-        <div class="stat-card"><div class="stat-value" data-v="${s.has_access}" data-suf="" data-dec="0">0</div><div class="stat-label">С доступом</div></div>
-        <div class="stat-card"><div class="stat-value" data-v="${s.expired}" data-suf="" data-dec="0">0</div><div class="stat-label">Доступ истёк</div></div>
-        <div class="stat-card"><div class="stat-value" data-v="${s.active_notifications}" data-suf="" data-dec="0">0</div><div class="stat-label">Уведомления вкл</div></div>
-        <div class="stat-card"><div class="stat-value" data-v="${s.referred_count}" data-suf="" data-dec="0">0</div><div class="stat-label">По рефералке</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_total")}</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.on_trial}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_on_trial")}</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.has_access}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_has_access")}</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.expired}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_expired")}</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.active_notifications}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_notifications_on")}</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.referred_count}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_referred")}</div></div>
       </div>
 
-      <div class="section-title">Оплаты</div>
+      <div class="section-title">${t("admin_payments")}</div>
       <div class="card">${paymentsRows}</div>
 
-      <div class="section-title">Источники регистраций</div>
+      <div class="section-title">${t("admin_sources")}</div>
       <div class="card">${sourcesRows}</div>
 
-      <div class="section-title">Последние пользователи</div>
+      <div class="section-title">${t("admin_recent_users")}</div>
       <div class="card">${usersRows}</div>
     `;
     content.querySelectorAll(".stat-value").forEach((el) => {
