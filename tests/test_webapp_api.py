@@ -168,6 +168,25 @@ def test_vilki_endpoint_filters_and_shapes_matches(setup):
     assert m["profit_amount"] == 50.0
     assert m["legs"][0]["bookmaker"] == "FONBET"
     assert m["legs"][0]["bookmaker_url"]
+    assert m["team_a_flag"] is None  # "Team A"/"Team B" aren't in the curated flag list
+    assert m["team_b_flag"] is None
+
+
+def test_vilki_endpoint_includes_team_flags_for_recognized_teams(setup):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    _run(_get(app, "/api/me", headers=_auth_header(1)))
+    repo.set_bankroll(1, 1000)
+    best_odds = [OutcomeOdds("Спартак", "fonbet", 2.1), OutcomeOdds("Барселона", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Спартак", "Барселона", arb, "2026-08-29T20:00:00+00:00")]
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    m = resp.json()["matches"][0]
+    assert m["team_a_flag"] == "🇷🇺"
+    assert m["team_b_flag"] == "🇪🇸"
 
 
 def test_news_endpoint_requires_auth(setup):

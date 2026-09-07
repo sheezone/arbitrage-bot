@@ -35,6 +35,7 @@ from bot.handlers.commands import (
 from bot.webapp.auth import validate_init_data
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures
 from bot.webapp.news import fetch_team_news, pick_popular_matches
+from bot.webapp.team_flags import get_team_flag
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -363,6 +364,8 @@ def register_api(
                 "game_emoji": GAME_EMOJI.get(m.game, "🏆"),
                 "team_a": m.team_a,
                 "team_b": m.team_b,
+                "team_a_flag": get_team_flag(m.team_a),
+                "team_b_flag": get_team_flag(m.team_b),
                 "start_time_label": format_match_start(m.start_time_utc),
                 "profit_pct": m.arb.profit_pct,
                 "profit_amount": user.bankroll * m.arb.profit_pct / 100,

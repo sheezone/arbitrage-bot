@@ -390,7 +390,7 @@
       return `
         <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
-          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${copyable(m.team_a)} vs ${copyable(m.team_b)}</div>
+          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${m.team_a_flag ? `<span class="team-flag">${m.team_a_flag}</span> ` : ""}${copyable(m.team_a)} vs ${m.team_b_flag ? `<span class="team-flag">${m.team_b_flag}</span> ` : ""}${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="${profitClass}">${profitEmoji} ${t("profit")}${m.profit_pct.toFixed(2)}%</div>
           <div class="match-amount"><span class="emoji-bounce">💸</span> ${t("possible_win")}<span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
