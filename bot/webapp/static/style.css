@@ -87,6 +87,66 @@ html, body {
   .blob { animation: none; }
 }
 
+/* Instant boot splash -- pure CSS/markup, painted before app.js even parses, so the
+   very first frame the user sees is branded instead of a blank flash. Hidden by
+   app.js (adds .hide) the moment the first API round-trip resolves; min-shown time is
+   enforced in JS, not here, so this stays dumb and fast. */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--bg);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s;
+}
+#splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+.splash-logo { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+.splash-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-2);
+  animation: splash-spin 0.9s linear infinite;
+}
+@keyframes splash-spin { to { transform: rotate(360deg); } }
+.splash-emoji { font-size: 28px; animation: splash-pulse 1.4s ease-in-out infinite; }
+@keyframes splash-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+.splash-title {
+  font-weight: 800;
+  font-size: 16px;
+  background: linear-gradient(90deg, var(--text), var(--accent), var(--accent-2), var(--text));
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+.splash-bar { width: 120px; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.splash-bar span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  animation: splash-bar 1s ease-in-out infinite;
+}
+@keyframes splash-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-ring, .splash-emoji, .splash-title, .splash-bar span { animation: none; }
+}
+
 .topbar {
   display: flex;
   align-items: center;

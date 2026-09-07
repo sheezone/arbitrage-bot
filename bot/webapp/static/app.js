@@ -7,6 +7,23 @@
     tg.expand();
     applyThemeVars();
     tg.onEvent("themeChanged", applyThemeVars);
+    try {
+      tg.setHeaderColor("secondary_bg_color");
+      tg.setBackgroundColor(tg.themeParams.bg_color || "#0c0f15");
+    } catch (e) {
+      // older client without these methods -- fine, just skip
+    }
+  }
+
+  // Splash stays up at least this long so it never flashes-and-vanishes on a fast
+  // connection -- feels intentional/branded rather than like a loading glitch.
+  const SPLASH_MIN_MS = 550;
+  const splashShownAt = Date.now();
+  function hideSplash() {
+    const el = document.getElementById("splash");
+    if (!el) return;
+    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt));
+    setTimeout(() => el.classList.add("hide"), wait);
   }
 
   function applyThemeVars() {
@@ -936,9 +953,11 @@
       toast(t("error_prefix") + e.message);
       content.innerHTML = skeletons.vilki;
       loadTab("vilki"); // best effort -- lets a real endpoint error surface normally
+      hideSplash();
       return;
     }
     meCache = me;
+    hideSplash();
     if (me.channel_required && !me.is_subscribed) {
       renderSubscriptionGate(me.channel_username);
       return;
