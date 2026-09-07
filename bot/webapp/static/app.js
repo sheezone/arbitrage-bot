@@ -832,9 +832,12 @@
     const usersRows = s.recent_users.length
       ? s.recent_users
           .map(
-            (u) => `<div class="admin-row">
-              <span>${u.chat_id}${u.acquisition_source ? ` <span class="admin-tag">${esc(u.acquisition_source)}</span>` : ""}</span>
-              <span>${u.has_access ? "✅" : "⛔"} ${fmtDate(u.trial_started_at)}</span>
+            (u) => `<div class="admin-user-row">
+              <div class="admin-user-top">
+                <span>${u.chat_id}${u.acquisition_source ? ` <span class="admin-tag">${esc(u.acquisition_source)}</span>` : ""}</span>
+                <span>${u.has_access ? "✅" : "⛔"}</span>
+              </div>
+              <div class="admin-user-period">${fmtDate(u.access_start)} — ${fmtDate(u.access_end)}</div>
             </div>`
           )
           .join("")

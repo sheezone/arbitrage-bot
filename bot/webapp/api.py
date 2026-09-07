@@ -414,6 +414,12 @@ def register_api(
                     "trial_started_at": u.trial_started_at,
                     "has_access": billing.has_access(u, now, admin_chat_ids),
                     "acquisition_source": u.acquisition_source,
+                    # "С какого по какое" -- access_start is when the trial (their only
+                    # possible starting point) began; access_end is the later of trial
+                    # end and any subscription_expires_at, same value the dashboard's
+                    # own lock screen is driven by (billing.has_access).
+                    "access_start": u.trial_started_at,
+                    "access_end": billing.access_end(u, now).isoformat(),
                 }
                 for u in repo.get_recent_users(limit=10)
             ],

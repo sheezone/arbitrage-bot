@@ -447,6 +447,13 @@ def test_admin_stats_returns_aggregate_counts(setup):
     assert body["payments"] == []
     assert any(u["chat_id"] == 1 and u["acquisition_source"] == "telega_ads1" for u in body["recent_users"])
 
+    user1 = next(u for u in body["recent_users"] if u["chat_id"] == 1)
+    assert user1["access_start"] == repo.get_user(1).trial_started_at
+    # A brand-new user's access_end is just their trial end (3 days out), well after now.
+    from datetime import datetime, timezone
+
+    assert datetime.fromisoformat(user1["access_end"]) > datetime.now(timezone.utc)
+
 
 class _FakeMember:
     def __init__(self, status: str):
