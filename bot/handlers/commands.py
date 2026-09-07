@@ -44,7 +44,7 @@ from aiogram.types import (
 
 from bot.core import billing
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
-from bot.core.subscription import is_subscribed
+from bot.core.subscription import CHECK_CHANNEL_SUB_CALLBACK, gate_view, is_subscribed
 from bot.core.monitor import (
     BOOKMAKER_URLS,
     GAME_EMOJI,
@@ -136,28 +136,17 @@ NAV_TOGGLE_MUTED = "nav:toggle_muted"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
 NAV_REFERRAL = "nav:referral"
-NAV_CHECK_CHANNEL_SUB = "nav:check_channel_sub"
+# Both defined in bot/core/subscription.py -- the callback data and the (text, keyboard)
+# gate screen are shared with the periodic re-check in core/monitor.py, which can't
+# import from here (would be circular: this module already imports from monitor.py).
+NAV_CHECK_CHANNEL_SUB = CHECK_CHANNEL_SUB_CALLBACK
+_subscription_gate_view = gate_view
 
 View = tuple[str, InlineKeyboardMarkup | None]
 
 
 def _btn(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
-
-
-def _subscription_gate_view(channel_username: str) -> View:
-    text = (
-        "🔒 <b>Доступ ограничен</b>\n\n"
-        f"Чтобы пользоваться ботом (и мини-приложением), подпишитесь на канал "
-        f"@{channel_username}, затем нажмите «Проверить подписку»."
-    )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="📢 Подписаться", url=f"https://t.me/{channel_username}")],
-            [InlineKeyboardButton(text="✅ Проверить подписку", callback_data=NAV_CHECK_CHANNEL_SUB)],
-        ]
-    )
-    return text, keyboard
 
 
 class SubscriptionGateMiddleware(BaseMiddleware):

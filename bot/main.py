@@ -137,6 +137,8 @@ async def main() -> None:
             showcase_chat_id=config.showcase_chat_id,
             showcase_interval_seconds=config.showcase_interval_seconds,
             bot_username=me.username or "",
+            required_channel_id=config.required_channel_id,
+            required_channel_username=config.required_channel_username,
         )
     )
 

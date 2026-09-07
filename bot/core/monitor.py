@@ -15,6 +15,7 @@ from bot.core import billing
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.reconcile import group_quotes, split_by_market, to_arbitrage_input
 from bot.core.state import LatestState, MatchSnapshot
+from bot.core.subscription import gate_view, is_subscribed
 from bot.db.repository import Repository
 from bot.providers.base import OddsProvider
 from bot.providers.models import SourceQuote
@@ -505,6 +506,36 @@ async def _send_expiry_reminders(repo: Repository, bot: Bot, admin_chat_ids: fro
             logger.exception("Failed to send expiry reminder to chat_id=%s", user.chat_id)
 
 
+# The mandatory-channel gate (bot/core/subscription.py) already re-checks live on every
+# action -- this periodic sweep exists only to proactively catch someone who left the
+# channel and then never opens the bot again on their own (so the live check never gets
+# a chance to run for them), at the user's explicit request. Every 2 days rather than
+# something tighter: it's a reminder nudge, not the actual enforcement.
+CHANNEL_SUB_CHECK_INTERVAL_SECONDS = 2 * 24 * 3600
+
+
+async def _check_channel_subscriptions(
+    repo: Repository, bot: Bot, admin_chat_ids: frozenset[int], required_channel_id: int | None, required_channel_username: str
+) -> None:
+    if required_channel_id is None:
+        return
+    text, keyboard = gate_view(required_channel_username)
+    for user in repo.get_all_users():
+        if user.chat_id in admin_chat_ids:
+            continue
+        # is_subscribed fails closed (returns False on a transient Telegram-side error
+        # too, not just a genuine non-member) -- see its own docstring for why. Worst
+        # case here is an occasional reminder sent to someone who's actually still
+        # subscribed; self-corrects next cycle, or immediately if they tap "Проверить
+        # подписку" themselves.
+        if await is_subscribed(bot, required_channel_id, user.chat_id):
+            continue
+        try:
+            await _send_message_with_retries(bot, user.chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception:
+            logger.exception("Failed to send subscription reminder to chat_id=%s", user.chat_id)
+
+
 def _showcase_key(m: MatchSnapshot) -> str:
     """Deliberately does NOT include the bookmakers/odds hash (unlike _bookmakers_hash-
     based dedup elsewhere in this file) -- the odds on the same match shift by a cent or
@@ -567,6 +598,8 @@ async def run_monitor_loop(
     showcase_chat_id: int | None = None,
     showcase_interval_seconds: int = 600,
     bot_username: str = "",
+    required_channel_id: int | None = None,
+    required_channel_username: str = "",
 ) -> None:
     empty_streaks: dict[str, int] = {}
     # Persisted (not just in-memory) so a process restart -- a deploy, which happens
@@ -577,6 +610,11 @@ async def run_monitor_loop(
     daily_best: MatchSnapshot | None = None
     last_expiry_check = 0.0
     last_showcase_cleanup = 0.0
+    # In-memory only, like last_expiry_check above -- a deploy resets it and the check
+    # runs again on the next loop iteration rather than waiting out the rest of the 2
+    # days. Same accepted trade-off as the expiry-reminder check for this small a user
+    # base; not worth a DB column just to survive restarts precisely.
+    last_channel_sub_check = 0.0
     while True:
         if (
             showcase_chat_id is not None
@@ -587,6 +625,15 @@ async def run_monitor_loop(
             except Exception:
                 logger.exception("Failed to clean up duplicate showcase posts")
             last_showcase_cleanup = time.time()
+
+        if time.time() - last_channel_sub_check >= CHANNEL_SUB_CHECK_INTERVAL_SECONDS:
+            try:
+                await _check_channel_subscriptions(
+                    repo, bot, admin_chat_ids, required_channel_id, required_channel_username
+                )
+            except Exception:
+                logger.exception("Failed to run periodic channel subscription check")
+            last_channel_sub_check = time.time()
 
         if time.time() - last_expiry_check >= EXPIRY_CHECK_INTERVAL_SECONDS:
             try:
