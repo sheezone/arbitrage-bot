@@ -189,6 +189,7 @@ main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1;
 .match-header { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 6px; }
 .match-teams { font-weight: 600; margin-bottom: 4px; }
 .team-flag { font-size: 13px; }
+.team-logo { width: 16px; height: 16px; object-fit: contain; vertical-align: -3px; }
 
 /* Team/outcome names -- tap to copy (see copyToClipboard in app.js), handy for pasting
    into a bookmaker's own search. Underline marks it as tappable without looking like a

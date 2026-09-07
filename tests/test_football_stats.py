@@ -57,6 +57,30 @@ def test_search_team_id_returns_none_on_http_error():
     assert _run(go()) is None
 
 
+def test_search_team_logo_returns_the_logo_url():
+    def handler(request):
+        return httpx.Response(
+            200, json={"response": [{"team": {"id": 541, "name": "Real Madrid", "logo": "https://media.api-sports.io/football/teams/541.png"}}]}
+        )
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.search_team_logo(client, "Реал Мадрид", "key123")
+
+    assert _run(go()) == "https://media.api-sports.io/football/teams/541.png"
+
+
+def test_search_team_logo_returns_none_when_team_not_found():
+    def handler(request):
+        return httpx.Response(200, json={"response": []})
+
+    async def go():
+        async with httpx.AsyncClient(transport=_mock_transport(handler)) as client:
+            return await fs.search_team_logo(client, "Nobody FC", "key123")
+
+    assert _run(go()) is None
+
+
 def _fixture(home_id, away_id, home_name, away_name, home_score, away_score, ts, date):
     return {
         "fixture": {"status": {"short": "FT"}, "timestamp": ts, "date": date},

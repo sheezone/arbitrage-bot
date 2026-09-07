@@ -390,7 +390,7 @@
       return `
         <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
-          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${m.team_a_flag ? `<span class="team-flag">${m.team_a_flag}</span> ` : ""}${copyable(m.team_a)} vs ${m.team_b_flag ? `<span class="team-flag">${m.team_b_flag}</span> ` : ""}${copyable(m.team_b)}</div>
+          <div class="match-teams"><span class="emoji-clash">⚔️</span> ${teamBadge(m.team_a_logo, m.team_a_flag)}${copyable(m.team_a)} vs ${teamBadge(m.team_b_logo, m.team_b_flag)}${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="${profitClass}">${profitEmoji} ${t("profit")}${m.profit_pct.toFixed(2)}%</div>
           <div class="match-amount"><span class="emoji-bounce">💸</span> ${t("possible_win")}<span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
@@ -418,6 +418,20 @@
     // attribute value, so quotes get an extra pass here.
     const attr = esc(text).replace(/"/g, "&quot;");
     return `<span class="copyable" data-copy="${attr}">${esc(text)}</span>`;
+  }
+
+  // A real logo image wins over the plain flag emoji when both are available (e.g.
+  // football, once API-Football resolves it) -- onerror falls back to hiding a broken
+  // image rather than showing the browser's broken-image icon (a CDN url can 404 or
+  // change without notice, see team_logos.py's module docstring).
+  function teamBadge(logoUrl, flag) {
+    if (logoUrl) {
+      return `<img class="team-logo" src="${esc(logoUrl)}" alt="" onerror="this.style.display='none'"> `;
+    }
+    if (flag) {
+      return `<span class="team-flag">${flag}</span> `;
+    }
+    return "";
   }
 
   async function copyToClipboard(text) {

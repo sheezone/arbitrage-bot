@@ -189,6 +189,74 @@ def test_vilki_endpoint_includes_team_flags_for_recognized_teams(setup):
     assert m["team_b_flag"] == "🇪🇸"
 
 
+def test_vilki_endpoint_includes_nba_logos_for_basketball(setup):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    _run(_get(app, "/api/me", headers=_auth_header(1)))
+    repo.set_bankroll(1, 1000)
+    best_odds = [OutcomeOdds("Houston Rockets", "fonbet", 2.1), OutcomeOdds("Dallas Mavericks", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("basketball", "Houston Rockets", "Dallas Mavericks", arb, "2026-08-29T20:00:00+00:00")]
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    m = resp.json()["matches"][0]
+    assert m["team_a_logo"] == "https://a.espncdn.com/i/teamlogos/nba/500/hou.png"
+    assert m["team_b_logo"] == "https://a.espncdn.com/i/teamlogos/nba/500/dal.png"
+
+
+def test_vilki_endpoint_fetches_and_caches_football_logos(setup, monkeypatch):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    _run(_get(app, "/api/me", headers=_auth_header(1)))
+    repo.set_bankroll(1, 1000)
+    best_odds = [OutcomeOdds("Спартак", "fonbet", 2.1), OutcomeOdds("Зенит", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Спартак", "Зенит", arb, "2026-08-29T20:00:00+00:00")]
+
+    call_count = 0
+
+    async def fake_search_team_logo(client, team_name, api_key):
+        nonlocal call_count
+        call_count += 1
+        return f"https://logo.example/{team_name}.png"
+
+    monkeypatch.setattr("bot.webapp.api.search_team_logo", fake_search_team_logo)
+
+    from bot.webapp.api import register_api
+
+    app = register_api(repo, state, admin_chat_ids=frozenset({99}), api_football_key="test-key")
+    resp1 = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    m1 = resp1.json()["matches"][0]
+    assert m1["team_a_logo"] == "https://logo.example/Спартак.png"
+    assert m1["team_b_logo"] == "https://logo.example/Зенит.png"
+    assert call_count == 2
+
+    # Second poll (client refreshes every 20s) must not re-fetch already-known logos.
+    _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    assert call_count == 2
+
+
+def test_vilki_endpoint_football_logo_is_none_without_api_key(setup):
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    _run(_get(app, "/api/me", headers=_auth_header(1)))
+    repo.set_bankroll(1, 1000)
+    best_odds = [OutcomeOdds("Спартак", "fonbet", 2.1), OutcomeOdds("Зенит", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [MatchSnapshot("football", "Спартак", "Зенит", arb, "2026-08-29T20:00:00+00:00")]
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))  # setup's app has no api_football_key
+    m = resp.json()["matches"][0]
+    assert m["team_a_logo"] is None
+    assert m["team_b_logo"] is None
+
+
 def test_news_endpoint_requires_auth(setup):
     app, _, _ = setup
     resp = _run(_get(app, "/api/news"))

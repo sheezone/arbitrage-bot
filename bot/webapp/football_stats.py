@@ -135,7 +135,10 @@ def resolve_search_name(team_name: str) -> str:
     return team_name
 
 
-async def search_team_id(client: httpx.AsyncClient, team_name: str, api_key: str) -> int | None:
+async def _search_team(client: httpx.AsyncClient, team_name: str, api_key: str) -> dict | None:
+    """The raw {"id", "name", "logo", ...} team object for the best-relevance search
+    hit, or None on any failure/no result. Shared by search_team_id and
+    search_team_logo below so both use exactly one request/response shape."""
     try:
         resp = await client.get(
             f"{API_BASE}/teams",
@@ -152,7 +155,17 @@ async def search_team_id(client: httpx.AsyncClient, team_name: str, api_key: str
         return None
     # First hit is API-Football's own best-relevance match (confirmed live: searching
     # "Real Madrid" ranks the senior men's team above "Real Madrid U19" etc.).
-    return results[0].get("team", {}).get("id")
+    return results[0].get("team")
+
+
+async def search_team_id(client: httpx.AsyncClient, team_name: str, api_key: str) -> int | None:
+    team = await _search_team(client, team_name, api_key)
+    return team.get("id") if team else None
+
+
+async def search_team_logo(client: httpx.AsyncClient, team_name: str, api_key: str) -> str | None:
+    team = await _search_team(client, team_name, api_key)
+    return team.get("logo") if team else None
 
 
 async def get_head_to_head(client: httpx.AsyncClient, team_a_id: int, team_b_id: int, api_key: str) -> dict | None:

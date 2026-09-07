@@ -33,9 +33,10 @@ from bot.handlers.commands import (
     _DIRECT_BOOKMAKERS,
 )
 from bot.webapp.auth import validate_init_data
-from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures
+from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
 from bot.webapp.team_flags import get_team_flag
+from bot.webapp.team_logos import get_nba_logo_url
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -156,6 +157,7 @@ def register_api(
 
     news_cache: dict = {"at": 0.0, "payload": None}
     fixtures_cache: dict = {"at": 0.0, "payload": None}
+    football_logo_cache: dict[str, str | None] = {}
 
     async def _require_subscribed(chat_id: int) -> None:
         """Mirrors the button bot UI's SubscriptionGateMiddleware (see
@@ -340,6 +342,18 @@ def register_api(
             repo.set_last_analysis_date(chat_id, today)
         return {"team_a": team_a, "team_b": team_b, "h2h": h2h}
 
+    async def _get_football_logo(client: httpx.AsyncClient, team_name: str) -> str | None:
+        # Cached forever (a logo URL doesn't change) in this process's own dict, shared
+        # across every user's poll -- /api/vilki is auto-refreshed every 20s client-side,
+        # so without this a popular team would re-hit API-Football's 100/day free quota
+        # on nearly every request. First lookup ever for a given team name pays the real
+        # request; everything after is free.
+        if team_name in football_logo_cache:
+            return football_logo_cache[team_name]
+        logo = await search_team_logo(client, team_name, api_football_key) if api_football_key else None
+        football_logo_cache[team_name] = logo
+        return logo
+
     @app.get("/api/vilki")
     async def get_vilki(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
@@ -356,8 +370,15 @@ def register_api(
         ]
         matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
-        def _match_out(m) -> dict:
+        async def _match_out(client: httpx.AsyncClient, m) -> dict:
             stakes = calc_stakes(user.bankroll, m.arb.best_odds)
+            if m.game == "basketball":
+                team_a_logo, team_b_logo = get_nba_logo_url(m.team_a), get_nba_logo_url(m.team_b)
+            elif m.game == "football":
+                team_a_logo = await _get_football_logo(client, m.team_a)
+                team_b_logo = await _get_football_logo(client, m.team_b)
+            else:
+                team_a_logo = team_b_logo = None
             return {
                 "game": m.game,
                 "game_label": GAME_LABELS.get(m.game, m.game.upper()),
@@ -366,6 +387,8 @@ def register_api(
                 "team_b": m.team_b,
                 "team_a_flag": get_team_flag(m.team_a),
                 "team_b_flag": get_team_flag(m.team_b),
+                "team_a_logo": team_a_logo,
+                "team_b_logo": team_b_logo,
                 "start_time_label": format_match_start(m.start_time_utc),
                 "profit_pct": m.arb.profit_pct,
                 "profit_amount": user.bankroll * m.arb.profit_pct / 100,
@@ -381,9 +404,12 @@ def register_api(
                 ],
             }
 
+        async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
+            match_outs = [await _match_out(client, m) for m in matches]
+
         return {
             "updated_at": state.updated_at,
-            "matches": [_match_out(m) for m in matches],
+            "matches": match_outs,
         }
 
     @app.get("/api/admin/stats")
