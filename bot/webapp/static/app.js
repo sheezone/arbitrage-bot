@@ -114,6 +114,11 @@
       tab_stats: "Статистика",
       tab_admin: "Админ",
       topbar_title: "🔍 Арбитражный бот",
+      refresh_btn: "Обновить",
+      share_btn: "Поделиться",
+      shared: "Вилка отправлена",
+      filter_min_profit: "Мин. %",
+      filter_all_sports: "Все виды спорта",
       gate_title: "🔒 Доступ ограничен",
       gate_text: "Чтобы пользоваться ботом и мини-приложением, подпишитесь на канал",
       gate_subscribe: "📢 Подписаться",
@@ -187,6 +192,11 @@
       tab_stats: "Омор",
       tab_admin: "Админ",
       topbar_title: "🔍 Боти арбитражӣ",
+      refresh_btn: "Навсозӣ",
+      share_btn: "Мубодила",
+      shared: "Вилка фиристода шуд",
+      filter_min_profit: "Ҳадди %",
+      filter_all_sports: "Ҳамаи намудҳои варзиш",
       gate_title: "🔒 Дастрасӣ маҳдуд аст",
       gate_text: "Барои истифодаи бот ва мини-барнома ба канал обуна шавед",
       gate_subscribe: "📢 Обуна шудан",
@@ -279,6 +289,7 @@
     // button reads as "tap for Tajik" while in Russian, and vice versa.
     langBtn.textContent = currentLang === "ru" ? "🇹🇯" : "🇷🇺";
     langBtn.title = currentLang === "ru" ? "Тоҷикӣ" : "Русский";
+    applyMainButtonLabel();
   }
   applyStaticLabels();
 
@@ -296,6 +307,9 @@
 
   function haptic(style) {
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || "light");
+  }
+  function hapticNotify(type) {
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(type);
   }
 
   const skeletons = {
@@ -323,6 +337,124 @@
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     content.innerHTML = skeletons[tab] || "";
     loadTab(tab);
+  }
+
+  // Order of tabs as swiping should cycle through them -- only the ones actually
+  // visible right now (admin-tab stays `hidden` in the DOM for non-admins, so it's
+  // naturally excluded without any extra bookkeeping).
+  function visibleTabs() {
+    return Array.from(document.querySelectorAll(".tab")).filter((b) => !b.hidden);
+  }
+
+  // ---------- swipe between tabs ----------
+  // Horizontal drag on the content area moves to the next/prev tab, mirroring the tap
+  // targets above it. Only acts once the gesture clearly reads as horizontal (delta-x
+  // well past delta-y) so it never fights vertical scrolling or pull-to-refresh below.
+  (function setupTabSwipe() {
+    let startX = 0, startY = 0, tracking = false;
+    content.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        tracking = true;
+      },
+      { passive: true }
+    );
+    content.addEventListener(
+      "touchend",
+      (e) => {
+        if (!tracking) return;
+        tracking = false;
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+        const tabs = visibleTabs();
+        const idx = tabs.findIndex((b) => b.dataset.tab === currentTab);
+        if (idx === -1) return;
+        // Swipe left (dx<0) advances to the next tab, same direction as a horizontal
+        // carousel; swipe right goes back -- matches the RTL-agnostic LTR tab order.
+        const nextIdx = dx < 0 ? idx + 1 : idx - 1;
+        if (nextIdx < 0 || nextIdx >= tabs.length) return;
+        haptic("light");
+        switchTab(tabs[nextIdx].dataset.tab);
+      },
+      { passive: true }
+    );
+  })();
+
+  // ---------- pull-to-refresh ----------
+  // No library -- just enough touch math to drag #content down against a rubber-band
+  // resistance curve and fire a manual refresh past a threshold. Only engages when the
+  // page is already scrolled to the very top, so it never hijacks normal scrolling.
+  (function setupPullToRefresh() {
+    const indicator = document.getElementById("ptr-indicator");
+    const PTR_THRESHOLD = 64;
+    let startY = 0, pulling = false, dragged = 0;
+
+    function atTop() {
+      return (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+    }
+
+    content.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1 || !atTop()) return;
+        startY = e.touches[0].clientY;
+        pulling = true;
+        dragged = 0;
+      },
+      { passive: true }
+    );
+    content.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!pulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy <= 0) {
+          dragged = 0;
+          content.style.transform = "";
+          indicator.style.opacity = "0";
+          return;
+        }
+        // Resistance curve -- each extra pixel of real drag moves the content less the
+        // further it's already pulled, so it never feels like it's chasing the finger.
+        dragged = Math.min(90, Math.sqrt(dy) * 6);
+        content.style.transform = `translateY(${dragged}px)`;
+        indicator.style.opacity = Math.min(1, dragged / PTR_THRESHOLD).toFixed(2);
+        indicator.style.transform = `translateX(-50%) rotate(${dragged * 3}deg)`;
+      },
+      { passive: true }
+    );
+    content.addEventListener("touchend", () => {
+      if (!pulling) return;
+      pulling = false;
+      content.style.transform = "";
+      if (dragged >= PTR_THRESHOLD) {
+        haptic("medium");
+        indicator.classList.add("spin");
+        loadTab(currentTab, true).finally(() => {
+          indicator.classList.remove("spin");
+          indicator.style.opacity = "0";
+        });
+      } else {
+        indicator.style.opacity = "0";
+      }
+      dragged = 0;
+    });
+  })();
+
+  // ---------- Telegram MainButton ----------
+  // Mirrors the 🔄 icon in the topbar (kept as-is for anyone who doesn't notice the
+  // native button) -- shows/labels itself per-language and always refreshes whichever
+  // tab is currently open.
+  if (tg && tg.MainButton) {
+    tg.MainButton.onClick(() => loadTab(currentTab, true));
+    tg.MainButton.show();
+  }
+  function applyMainButtonLabel() {
+    if (tg && tg.MainButton) tg.MainButton.setText(t("refresh_btn").toUpperCase());
   }
 
   async function loadTab(tab, manual) {
@@ -372,18 +504,64 @@
     }
   }
 
-  async function renderVilki() {
-    const data = await api("/api/vilki");
-    const checkedAt = data.updated_at ? fmtMoscowTime(data.updated_at) + t("msk") : "—";
-
-    if (!data.matches.length) {
-      content.innerHTML = `
-        <div class="meta-line">${t("data_at")}${checkedAt}</div>
-        <div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
-      return;
+  // Stale-while-revalidate cache: last successful /api/vilki payload, so re-opening the
+  // Mini App paints real cards instantly (dimmed, see .card.stale) instead of an empty
+  // skeleton, while the fresh fetch races in the background and replaces it.
+  const VILKI_CACHE_KEY = "vilki_cache_v1";
+  function readVilkiCache() {
+    try {
+      const raw = localStorage.getItem(VILKI_CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
     }
+  }
+  function writeVilkiCache(data) {
+    try {
+      localStorage.setItem(VILKI_CACHE_KEY, JSON.stringify(data));
+    } catch (e) {
+      // best-effort only
+    }
+  }
 
-    const cards = data.matches.map((m, i) => {
+  // Quick filter (min-% + sport) applied client-side on top of the server's own
+  // settings-driven filtering -- lets a user narrow the *current* fetch without a trip
+  // to Настройки. Persisted per-viewer so it survives a reopen.
+  const VILKI_FILTER_KEY = "vilki_filter_v1";
+  function readVilkiFilter() {
+    try {
+      return JSON.parse(localStorage.getItem(VILKI_FILTER_KEY)) || { minPct: 0, sport: "" };
+    } catch (e) {
+      return { minPct: 0, sport: "" };
+    }
+  }
+  function writeVilkiFilter(f) {
+    try {
+      localStorage.setItem(VILKI_FILTER_KEY, JSON.stringify(f));
+    } catch (e) {
+      // best-effort only
+    }
+  }
+
+  // Tracks the most recently *shown* high-profit match so the success haptic fires only
+  // once per new find, not on every 20s poll that still shows the same one.
+  let lastHighProfitKey = null;
+
+  function shareVilkaText(m) {
+    const legs = m.legs.map((l) => `${l.outcome_name}: ${l.odds} @ ${l.bookmaker}`).join("\n");
+    return `${m.game_emoji} ${m.team_a} vs ${m.team_b}\n${t("profit")}${m.profit_pct.toFixed(2)}%\n\n${legs}`;
+  }
+
+  function shareVilka(m) {
+    haptic("light");
+    const text = shareVilkaText(m);
+    const url = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`;
+    if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+    else window.open(url, "_blank");
+  }
+
+  function renderVilkiCards(matches) {
+    return matches.map((m, i) => {
       const isHigh = m.profit_pct > HIGH_PROFIT_THRESHOLD;
       const profitClass = isHigh ? "match-profit high" : "match-profit";
       const profitEmoji = isHigh ? `<span class="emoji-shake">‼️</span>` : `<span class="emoji-pulse">🚀</span>`;
@@ -410,7 +588,10 @@
         .join("");
       return `
         <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
-          <div class="match-header"><span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span></div>
+          <div class="match-header">
+            <span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span>
+            <button type="button" class="share-btn" data-share-idx="${i}" title="${t("share_btn")}">📤</button>
+          </div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${teamBadge(m.team_a_logo, m.team_a_flag)}${copyable(m.team_a)} vs ${teamBadge(m.team_b_logo, m.team_b_flag)}${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="${profitClass}">${profitEmoji} ${t("profit")}${m.profit_pct.toFixed(2)}%</div>
@@ -418,11 +599,115 @@
           <div class="legs">${legs}</div>
           <div class="odds-warning">⚠️ ${t("odds_warning")}</div>
         </div>`;
-    });
+    }).join("");
+  }
 
-    content.innerHTML = `
-      <div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})</div>
-      ${cards.join("")}`;
+  function renderVilkiFilterBar(sports, filter) {
+    const sportChips = sports
+      .map(
+        (s) =>
+          `<button type="button" class="filter-chip${filter.sport === s.emoji ? " selected" : ""}" data-sport="${esc(s.emoji)}">${esc(s.emoji)} ${esc(s.label)}</button>`
+      )
+      .join("");
+    return `
+      <div class="filter-bar">
+        <input type="number" class="filter-pct" id="filter-pct-input" placeholder="${t("filter_min_profit")}" min="0" step="0.1" value="${filter.minPct || ""}">
+        <div class="filter-sport-row">
+          <button type="button" class="filter-chip${filter.sport ? "" : " selected"}" data-sport="">${t("filter_all_sports")}</button>
+          ${sportChips}
+        </div>
+      </div>`;
+  }
+
+  function applyVilkiFilter(matches, filter) {
+    return matches.filter((m) => {
+      if (filter.minPct && m.profit_pct < filter.minPct) return false;
+      if (filter.sport && m.game_emoji !== filter.sport) return false;
+      return true;
+    });
+  }
+
+  function bindVilkiControls(allMatches, filter) {
+    const pctInput = document.getElementById("filter-pct-input");
+    if (pctInput) {
+      pctInput.addEventListener("change", () => {
+        filter.minPct = parseFloat(pctInput.value) || 0;
+        writeVilkiFilter(filter);
+        renderVilkiBody(allMatches, filter);
+      });
+    }
+    document.querySelectorAll(".filter-chip[data-sport]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        haptic("light");
+        filter.sport = chip.dataset.sport;
+        writeVilkiFilter(filter);
+        renderVilkiBody(allMatches, filter);
+      });
+    });
+    content.querySelectorAll(".share-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const m = allMatches[Number(btn.dataset.shareIdx)];
+        if (m) shareVilka(m);
+      });
+    });
+  }
+
+  // Renders the meta line + filter bar + filtered cards (or empty state) into
+  // #content, and (re)binds their listeners -- shared by both the initial render and
+  // every filter-change re-render so the two never drift apart.
+  function renderVilkiBody(allMatches, filter, metaLineHtml, isStale) {
+    const sportsSeen = new Map();
+    allMatches.forEach((m) => {
+      if (!sportsSeen.has(m.game_emoji)) sportsSeen.set(m.game_emoji, m.game_label);
+    });
+    const sports = Array.from(sportsSeen, ([emoji, label]) => ({ emoji, label }));
+    const filtered = applyVilkiFilter(allMatches, filter);
+    const filterBar = sports.length > 1 || filter.minPct ? renderVilkiFilterBar(sports, filter) : "";
+
+    const body = filtered.length
+      ? renderVilkiCards(filtered)
+      : `<div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
+
+    content.innerHTML = `${metaLineHtml || ""}${filterBar}<div${isStale ? ' class="stale"' : ""}>${body}</div>`;
+    bindVilkiControls(allMatches, filter);
+
+    // Success haptic once per *newly seen* high-profit find, not on every 20s poll
+    // that still shows the same one.
+    const topHigh = filtered.find((m) => m.profit_pct > HIGH_PROFIT_THRESHOLD);
+    const key = topHigh ? `${topHigh.team_a}|${topHigh.team_b}|${topHigh.profit_pct}` : null;
+    if (key && key !== lastHighProfitKey && !isStale) hapticNotify("success");
+    if (!isStale) lastHighProfitKey = key;
+  }
+
+  async function renderVilki() {
+    const filter = readVilkiFilter();
+
+    // Stale-while-revalidate: paint the last cached fetch immediately (dimmed) so a
+    // reopen never shows an empty skeleton if we already have something to show --
+    // the real fetch below replaces it either way, success or failure.
+    if (content.querySelector(".skeleton") || !content.innerHTML.trim()) {
+      const cached = readVilkiCache();
+      if (cached && cached.matches && cached.matches.length) {
+        const staleMeta = `<div class="meta-line">${t("data_at")}${cached.checkedAt || "—"}</div>`;
+        renderVilkiBody(cached.matches, filter, staleMeta, true);
+      }
+    }
+
+    const data = await api("/api/vilki");
+    const checkedAt = data.updated_at ? fmtMoscowTime(data.updated_at) + t("msk") : "—";
+    writeVilkiCache({ matches: data.matches, checkedAt });
+
+    if (!data.matches.length) {
+      content.innerHTML = `
+        <div class="meta-line">${t("data_at")}${checkedAt}</div>
+        <div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
+      lastHighProfitKey = null;
+      return;
+    }
+
+    const metaLine = `<div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})</div>`;
+    renderVilkiBody(data.matches, filter, metaLine, false);
   }
 
   function esc(s) {
@@ -791,10 +1076,10 @@
         }),
       });
       toast(t("settings_saved"));
-      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+      hapticNotify("success");
     } catch (e) {
       toast(t("save_failed") + e.message);
-      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+      hapticNotify("error");
     }
   }
 

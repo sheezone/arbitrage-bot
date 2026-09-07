@@ -222,7 +222,74 @@ html, body {
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .tab:disabled { opacity: 0.35; cursor: default; }
 
-main#content { flex: 1; padding: 12px 14px 30px; position: relative; z-index: 1; }
+.content-wrap { position: relative; flex: 1; }
+main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-action: pan-y; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Pull-to-refresh indicator -- a plain rotating icon pinned above the content, revealed
+   by translating #content down as the user drags (see app.js's touch handlers). No
+   library: the gesture itself is ~30 lines of touch math, not worth a dependency. */
+#ptr-indicator {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  color: var(--accent);
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+#ptr-indicator.spin { animation: spin 0.7s cubic-bezier(0.5, 0, 0.5, 1) infinite; }
+
+/* Quick filter bar at the top of the Вилки tab -- min-% input plus sport chips built
+   from whatever sports are actually present in the current fetch (no point offering a
+   chip for a sport with zero matches right now). */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; animation: rise-in 0.3s ease both; }
+.filter-pct {
+  width: 78px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 9px;
+  color: var(--text);
+  font-size: 13px;
+}
+.filter-pct:focus { outline: none; border-color: var(--accent); }
+.filter-sport-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-chip {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--hint);
+  transition: transform 0.12s ease, border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.filter-chip:active { transform: scale(0.93); }
+.filter-chip.selected { border-color: var(--accent); color: var(--accent); background: rgba(70, 211, 155, 0.1); }
+
+.match-header { position: relative; }
+.share-btn {
+  position: absolute;
+  right: 0;
+  top: -2px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  color: var(--hint);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: transform 0.12s ease, color 0.15s ease, background 0.15s ease;
+}
+.share-btn:active { transform: scale(0.85); background: var(--card-bg); color: var(--accent); }
+
+.card.stale { opacity: 0.6; }
 
 @keyframes rise-in {
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
