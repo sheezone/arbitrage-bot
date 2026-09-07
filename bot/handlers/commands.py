@@ -91,33 +91,46 @@ GAME_LABELS = {
     "volleyball": "Волейбол",
 }
 
-SEARCH_BUTTON_TEXT = "🔍 Поиск вилок"
-PROFILE_BUTTON_TEXT = "👤 Мой профиль"
+SEARCH_BUTTON_TEXT_RU = "🔍 Поиск вилок"
+SEARCH_BUTTON_TEXT_TG = "🔍 Ҷустуҷӯи вилкаҳо"
+PROFILE_BUTTON_TEXT_RU = "👤 Мой профиль"
+PROFILE_BUTTON_TEXT_TG = "👤 Профили ман"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
+# Shows the flag of the language a tap switches TO -- same "target, not current"
+# convention as the Mini App's own 🌐 toggle (see static/app.js).
+LANG_TOGGLE_TO_TG_TEXT = "🇹🇯 Тоҷикӣ"
+LANG_TOGGLE_TO_RU_TEXT = "🇷🇺 Русский"
+
+
+def _search_button_text(language: str) -> str:
+    return SEARCH_BUTTON_TEXT_TG if language == "tg" else SEARCH_BUTTON_TEXT_RU
+
+
+def _profile_button_text(language: str) -> str:
+    return PROFILE_BUTTON_TEXT_TG if language == "tg" else PROFILE_BUTTON_TEXT_RU
+
 
 # The dashboard message itself carries no inline keyboard (see _dashboard_view) -- this
 # compact row is the only bottom-of-chat surface. What to search for (bankroll,
 # threshold, games, time horizon) lives one level down inside "🔍 Поиск вилок" itself
 # (see _search_view), right next to the results it controls; account-level things
-# (pause, subscription, help) live inside "👤 Мой профиль" (see _profile_view).
-MAIN_MENU_KEYBOARD = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text=SEARCH_BUTTON_TEXT), KeyboardButton(text=PROFILE_BUTTON_TEXT)],
-    ],
-    resize_keyboard=True,
-    is_persistent=True,
-)
-
-def _main_menu_keyboard(webapp_url: str) -> ReplyKeyboardMarkup:
-    """The Mini App itself is launched via the chat's Menu Button (set in bot/main.py
-    via bot.set_chat_menu_button), not a button here -- confirmed live 2026-08-30: a
-    reply-keyboard KeyboardButton(web_app=...) opened the Mini App but Telegram never
-    attached tgWebAppData to the URL (no initData at all, on both Desktop and mobile),
-    while the Menu Button worked immediately once the app was registered with @BotFather
-    (/newapp). `webapp_url` is accepted for parity with register_handlers/future use but
-    doesn't change this keyboard -- kept as a parameter rather than removed outright in
-    case a reliable reply-keyboard path is worth revisiting later."""
-    return MAIN_MENU_KEYBOARD
+# (pause, subscription, help) live inside "👤 Мой профиль" (see _profile_view). The
+# language-toggle row switches user.language (persisted, see repo.set_language) and
+# re-sends this same keyboard with the new labels -- see on_toggle_language.
+def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Built fresh per user/language rather than a module-level singleton (unlike
+    before language existed) -- confirmed live 2026-08-30 that the Mini App itself
+    can't be launched via a reply-keyboard button (no tgWebAppData attached), so this
+    only ever carries Search/Profile/Language, nothing web_app-related."""
+    lang_toggle_text = LANG_TOGGLE_TO_TG_TEXT if language != "tg" else LANG_TOGGLE_TO_RU_TEXT
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=_search_button_text(language)), KeyboardButton(text=_profile_button_text(language))],
+            [KeyboardButton(text=lang_toggle_text)],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 TIME_HORIZONS = {1: "До 24 часов", 2: "Более 24 часов"}
 
@@ -200,13 +213,43 @@ class SubscriptionGateMiddleware(BaseMiddleware):
 
 def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
+    lang = user.language
+    profile_btn = _profile_button_text(lang)
     if not billing.has_access(user, now, admin_chat_ids):
+        if lang == "tg":
+            text = (
+                "🎰 <b>БОТИ АРБИТРАЖӢ</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "⏳ Давраи озмоишӣ ба охир расид.\n"
+                "Обуна харед, то бот огоҳиномаҳои вилкаҳоро фиристодан идома диҳад "
+                f"(тугмаи «{profile_btn}» дар поён → «💳 Обуна»)."
+            )
+        else:
+            text = (
+                "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "⏳ Пробный период закончился.\n"
+                "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках "
+                f"(кнопка «{profile_btn}» снизу → «💳 Подписка»)."
+            )
+        return text, None
+
+    if lang == "tg":
+        status = "🟢 Фаъол" if user.is_active else "⏸️ Дар таваққуф"
+        if billing.is_admin(user, admin_chat_ids):
+            access_line = "♾️ Дастрасии беохир"
+        else:
+            left = billing.days_left(user, now)
+            access_line = (
+                f"⏳ Давраи озмоишӣ · {left} рӯз монд"
+                if billing.on_trial(user, now)
+                else f"💳 Обуна фаъол · {left} рӯз монд"
+            )
         text = (
-            "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "⏳ Пробный период закончился.\n"
-            "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках "
-            f"(кнопка «{PROFILE_BUTTON_TEXT}» снизу → «💳 Подписка»)."
+            "🎰 <b>БОТИ АРБИТРАЖӢ</b>\n\n"
+            f"{status}  ·  {access_line}\n\n"
+            f"Танзимот — «{profile_btn}» дар поён\n"
+            "⬇️ Идоракунӣ — тугмаҳои поён"
         )
         return text, None
 
@@ -224,7 +267,7 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
     text = (
         "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n\n"
         f"{status}  ·  {access_line}\n\n"
-        f"Настройки — «{PROFILE_BUTTON_TEXT}» снизу\n"
+        f"Настройки — «{profile_btn}» снизу\n"
         "⬇️ Управление — кнопками снизу"
     )
     return text, None
@@ -801,8 +844,6 @@ def register_handlers(
     required_channel_id: int | None = None,
     required_channel_username: str = "",
 ) -> Router:
-    main_menu_keyboard = _main_menu_keyboard(webapp_url)
-
     @router.callback_query(F.data == NAV_CHECK_CHANNEL_SUB)
     async def on_check_channel_subscription(callback: CallbackQuery, bot: Bot) -> None:
         if required_channel_id is None or callback.message is None:
@@ -863,7 +904,12 @@ def register_handlers(
         # NOT deleted: confirmed live that deleting it -- immediately or after a delay --
         # makes the reply keyboard itself disappear on at least one client, contrary to
         # the usual "keyboard survives its carrier message" behavior.
-        await message.answer("👇 Кнопки снизу — быстрый доступ к разделам.", reply_markup=main_menu_keyboard)
+        buttons_below_text = (
+            "👇 Тугмаҳои поён — дастрасии зуд ба бахшҳо."
+            if user.language == "tg"
+            else "👇 Кнопки снизу — быстрый доступ к разделам."
+        )
+        await message.answer(buttons_below_text, reply_markup=_main_menu_keyboard(user.language))
 
         # Gated here, inline, rather than by the blanket SubscriptionGateMiddleware --
         # that middleware deliberately lets /start straight through so the referral/
@@ -917,7 +963,7 @@ def register_handlers(
         except Exception:
             pass
 
-    @router.message(F.text == SEARCH_BUTTON_TEXT)
+    @router.message(F.text.in_({SEARCH_BUTTON_TEXT_RU, SEARCH_BUTTON_TEXT_TG}))
     async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)
@@ -925,7 +971,38 @@ def register_handlers(
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
-    @router.message(F.text == PROFILE_BUTTON_TEXT)
+    @router.message(F.text.in_({LANG_TOGGLE_TO_TG_TEXT, LANG_TOGGLE_TO_RU_TEXT}))
+    async def on_toggle_language(message: Message, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        await _dismiss(message)
+        chat_id = message.chat.id
+        user = repo.get_user(chat_id)
+        if user is None:
+            repo.upsert_user(chat_id)
+            user = repo.get_user(chat_id)
+        new_language = "tg" if user.language != "tg" else "ru"
+        repo.set_language(chat_id, new_language)
+        user.language = new_language
+
+        buttons_below_text = (
+            "👇 Тугмаҳои поён — дастрасии зуд ба бахшҳо."
+            if new_language == "tg"
+            else "👇 Кнопки снизу — быстрый доступ к разделам."
+        )
+        await message.answer(buttons_below_text, reply_markup=_main_menu_keyboard(new_language))
+
+        if user.menu_message_id:
+            try:
+                await bot.delete_message(chat_id, user.menu_message_id)
+            except Exception:
+                pass
+            repo.set_menu_message_id(chat_id, None)
+
+        text, keyboard = _dashboard_view(user, admin_chat_ids)
+        sent = await message.answer_photo(FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML")
+        repo.set_menu_message_id(chat_id, sent.message_id)
+
+    @router.message(F.text.in_({PROFILE_BUTTON_TEXT_RU, PROFILE_BUTTON_TEXT_TG}))
     async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)

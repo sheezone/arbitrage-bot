@@ -27,6 +27,7 @@ class UserSettings:
     muted: bool
     last_analysis_date: str | None = None
     acquisition_source: str | None = None
+    language: str = "ru"
 
 
 class Repository:
@@ -92,6 +93,12 @@ class Repository:
             # get_acquisition_source_counts). NULL for anyone who just pressed /start
             # cold or came via a numeric referral link.
             self._conn.execute("ALTER TABLE users ADD COLUMN acquisition_source TEXT")
+        if "language" not in columns:
+            # "ru" or "tg" -- the button bot UI's language, set via the reply-keyboard
+            # flag-toggle (see handlers/commands.py). Independent of the Mini App's own
+            # language, which is a pure frontend localStorage preference with no server
+            # state at all.
+            self._conn.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'ru'")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None, acquisition_source: str | None = None) -> None:
         """`referred_by`/`acquisition_source` only ever take effect for a genuinely new
@@ -158,6 +165,10 @@ class Repository:
 
     def set_muted(self, chat_id: int, muted: bool) -> None:
         self._conn.execute("UPDATE users SET muted = ? WHERE chat_id = ?", (int(muted), chat_id))
+        self._conn.commit()
+
+    def set_language(self, chat_id: int, language: str) -> None:
+        self._conn.execute("UPDATE users SET language = ? WHERE chat_id = ?", (language, chat_id))
         self._conn.commit()
 
     def set_time_horizons(self, chat_id: int, days: list[int]) -> None:
@@ -387,6 +398,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         muted=bool(row["muted"]),
         last_analysis_date=row["last_analysis_date"],
         acquisition_source=row["acquisition_source"],
+        language=row["language"] or "ru",
     )
 
 

@@ -258,6 +258,10 @@
     document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
     document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
     document.getElementById("admin-tab").textContent = t("tab_admin");
+    // Shows the flag of the language a tap switches TO (not the current one) -- the
+    // button reads as "tap for Tajik" while in Russian, and vice versa.
+    langBtn.textContent = currentLang === "ru" ? "🇹🇯" : "🇷🇺";
+    langBtn.title = currentLang === "ru" ? "Тоҷикӣ" : "Русский";
   }
   applyStaticLabels();
 
