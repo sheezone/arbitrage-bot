@@ -13,6 +13,7 @@ from aiogram.types import LinkPreviewOptions
 
 from bot.core import billing
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
+from bot.core.bookmakers import filter_licensed
 from bot.core.reconcile import group_quotes, split_by_market, to_arbitrage_input
 from bot.core.state import LatestState, MatchSnapshot
 from bot.core.subscription import gate_view, is_subscribed
@@ -140,22 +141,22 @@ _OUTCOME_MARKERS = ["📈", "📉", "🔹", "🔸"]
 # provider module's own SourceQuote(...) calls, plus surebet.py's BOOKMAKERS/display-name
 # map) -- lets the bookmaker name in a result link straight to where to place the bet,
 # instead of just naming it. A key with no entry here still renders, just not as a link.
+# Only RF-registered (ЕРАИ / ЦУПИС) operators -- deep-linking to an unlicensed
+# bookmaker is the sharpest "promoting illegal gambling" risk, so foreign books
+# (bet365, 1xbet, Pinnacle) and Melbet are intentionally NOT here even though quotes
+# from them would normally be dropped upstream anyway (see bot/core/bookmakers.py).
 BOOKMAKER_URLS = {
     "fonbet": "https://www.fonbet.ru",
     "pari": "https://pari.ru",
     "marathon": "https://www.marathonbet.ru",
     "baltbet": "https://baltbet.ru",
     "zenit": "https://zenit.win",
-    "melbet": "https://melbet.ru",
     "leon": "https://leon.ru",
     "olimpbet": "https://www.olimp.bet",
     "winline": "https://winline.ru",
     "betcity": "https://betcity.ru",
     "betboom": "https://betboom.ru",
     "ligastavok": "https://www.ligastavok.ru",
-    "bet365": "https://www.bet365.com",
-    "1xbet": "https://1xbet.com",
-    "pinnacle": "https://www.pinnacle.com",
 }
 
 
@@ -205,16 +206,19 @@ def _format_message(
     match_time = format_match_start(start_time_utc)
     if match_time:
         lines.append(f"🕒 {match_time}")
-    lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
+    lines.append(f"🚀 Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
     if bankroll is not None:
-        # The guaranteed profit is the same no matter which leg wins -- that's the whole
-        # point of an arb -- so this is a single number, not a per-outcome range.
+        # Model figure for the given bankroll if the shown odds hold and both bets are
+        # accepted -- not a promised payout (the disclaimer line below spells that out).
         profit_amount = bankroll * arb.profit_pct / 100
-        lines.append(f"💸 Возможный выигрыш: <b>{format_amount(profit_amount)}</b>")
+        lines.append(f"💸 Расчётный результат: <b>{format_amount(profit_amount)}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     lines.append("")
-    lines.append("⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.")
+    lines.append(
+        "⚠️ Расчёт по текущим коэффициентам, не гарантия. Котировки могут измениться, "
+        "БК может не принять ставку. 18+. Ставки — самостоятельно у лицензированных БК."
+    )
     return "\n".join(lines)
 
 
@@ -229,7 +233,7 @@ def _format_showcase_message(
     match_time = format_match_start(start_time_utc)
     if match_time:
         lines.append(f"🕒 {match_time}")
-    lines.append(f"🚀 Прибыль: <b>{arb.profit_pct:.2f}%</b>")
+    lines.append(f"🚀 Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
     lines.append("")
     lines.append("Букмекеры и коэффициенты — в боте по подписке.")
     if bot_username:
@@ -253,7 +257,10 @@ async def _fetch_one_source(source: OddsProvider, games: list[str]) -> tuple[str
 
 
 async def _fetch_all_quotes(
-    sources: list[OddsProvider], games: list[str], empty_streaks: dict[str, int]
+    sources: list[OddsProvider],
+    games: list[str],
+    empty_streaks: dict[str, int],
+    licensed_only: bool = True,
 ) -> list[SourceQuote]:
     # Fetched concurrently, not one after another: OlimpBet's response alone is ~10MB, and
     # sequentially awaiting every source in turn used to add each one's latency on top of
@@ -278,6 +285,10 @@ async def _fetch_all_quotes(
                     empty_streaks[name],
                 )
         all_quotes.extend(quotes)
+    if licensed_only:
+        # Drop anything from a bookmaker not in the RF register before it can reach
+        # arbitrage evaluation / a notification -- see bot/core/bookmakers.py.
+        all_quotes = filter_licensed(all_quotes)
     return all_quotes
 
 
@@ -402,6 +413,7 @@ async def _recheck_and_notify_high_profit(
     repo: Repository,
     bot: Bot,
     admin_chat_ids: frozenset[int],
+    licensed_bookmakers_only: bool = True,
 ) -> list[MatchSnapshot]:
     logger.info(
         "%d suspiciously high-profit match(es) found (>%.0f%%) -- rechecking in %ds before notifying",
@@ -414,7 +426,7 @@ async def _recheck_and_notify_high_profit(
     if suspicious:
         fresh_by_key: dict[tuple[str, str, str, str], ArbitrageResult] = {}
         try:
-            fresh_quotes = await _fetch_all_quotes(sources, games, empty_streaks)
+            fresh_quotes = await _fetch_all_quotes(sources, games, empty_streaks, licensed_bookmakers_only)
             for group in group_quotes(fresh_quotes):
                 try:
                     for game, team_a, team_b, market, arb in _evaluate_group(group):
@@ -600,6 +612,7 @@ async def run_monitor_loop(
     bot_username: str = "",
     required_channel_id: int | None = None,
     required_channel_username: str = "",
+    licensed_bookmakers_only: bool = True,
 ) -> None:
     empty_streaks: dict[str, int] = {}
     # Persisted (not just in-memory) so a process restart -- a deploy, which happens
@@ -642,7 +655,7 @@ async def run_monitor_loop(
                 logger.exception("Failed to send expiry reminders")
             last_expiry_check = time.time()
 
-        all_quotes = await _fetch_all_quotes(sources, games, empty_streaks)
+        all_quotes = await _fetch_all_quotes(sources, games, empty_streaks, licensed_bookmakers_only)
         groups = group_quotes(all_quotes)
 
         found: list[MatchSnapshot] = []
@@ -690,7 +703,7 @@ async def run_monitor_loop(
                 found.extend(
                     await _recheck_and_notify_high_profit(
                         suspicious, surebet_suspicious, sources, games, empty_streaks, surebet_finder,
-                        repo, bot, admin_chat_ids,
+                        repo, bot, admin_chat_ids, licensed_bookmakers_only,
                     )
                 )
             except Exception:

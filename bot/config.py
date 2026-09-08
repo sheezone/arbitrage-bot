@@ -31,6 +31,12 @@ class Config:
     default_min_profit_pct: float
     db_path: str
     enable_melbet: bool = False
+    # Compliance defaults (see bot/core/bookmakers.py, README "Правовые аспекты").
+    # licensed_bookmakers_only: only surface odds from RF-registered (ЕРАИ) bookmakers.
+    # enable_crypto_payment: offer the USDT payment method -- off by default because
+    # 259-ФЗ ст. 14 bars RF residents/entities from taking digital currency as payment.
+    licensed_bookmakers_only: bool = True
+    enable_crypto_payment: bool = False
     games: list[str] = field(
         default_factory=lambda: [
             "cs2", "dota2", "lol", "valorant", "tennis", "basketball", "football", "hockey",
@@ -73,4 +79,9 @@ def load_config() -> Config:
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),
         db_path=os.environ.get("DB_PATH", "arbitrage_bot.sqlite3"),
         enable_melbet=os.environ.get("ENABLE_MELBET", "").strip().lower() in ("1", "true", "yes"),
+        # Default TRUE: absent/blank env var keeps the compliant behaviour. Set to an
+        # explicit "false"/"0"/"no" to lift the RF-register restriction.
+        licensed_bookmakers_only=os.environ.get("LICENSED_BOOKMAKERS_ONLY", "true").strip().lower()
+        not in ("0", "false", "no"),
+        enable_crypto_payment=os.environ.get("ENABLE_CRYPTO_PAYMENT", "").strip().lower() in ("1", "true", "yes"),
     )

@@ -75,18 +75,27 @@ async def main() -> None:
         PariProvider(),
         MarathonProvider(),
         BaltbetProvider(),
-        TheOddsApiProvider(api_key=config.the_odds_api_key),
         ZenitProvider(),
         LeonProvider(),
         OlimpBetProvider(),
     ]
+    # The Odds API only returns non-RF (EU) books -- every quote it yields would be
+    # dropped by the RF-register filter, so it's just wasted requests then.
+    if not config.licensed_bookmakers_only:
+        sources.append(TheOddsApiProvider(api_key=config.the_odds_api_key))
     # Opt-in, heavier than everything else here (drives a real headless Chromium) --
-    # see bot/providers/melbet.py's module docstring. Off by default; ENABLE_MELBET=true
-    # to turn it on once its memory footprint has been watched on the production VPS.
-    if config.enable_melbet:
+    # see bot/providers/melbet.py's module docstring. Also NOT an RF-registered operator,
+    # so it stays off whenever licensed_bookmakers_only is on regardless of ENABLE_MELBET.
+    if config.enable_melbet and not config.licensed_bookmakers_only:
         sources.append(MelbetProvider())
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
-    crypto_pay_client = CryptoPayClient(api_token=config.cryptobot_api_token) if config.cryptobot_api_token else None
+    # Off unless BOTH a token is set AND enable_crypto_payment is on -- 259-ФЗ ст. 14
+    # bars RF residents/entities from accepting digital currency as payment.
+    crypto_pay_client = (
+        CryptoPayClient(api_token=config.cryptobot_api_token)
+        if config.cryptobot_api_token and config.enable_crypto_payment
+        else None
+    )
 
     me = await _get_me_with_retries(bot)
 
@@ -139,6 +148,7 @@ async def main() -> None:
             bot_username=me.username or "",
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
+            licensed_bookmakers_only=config.licensed_bookmakers_only,
         )
     )
 

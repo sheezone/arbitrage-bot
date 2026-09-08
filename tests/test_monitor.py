@@ -115,7 +115,7 @@ def test_format_message_still_uses_plain_emoji_not_yet_reintroduced_animated_one
     arb = ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.95, profit_pct=5.0)
     text = _format_message("football", "Team A", "Team B", arb)
     assert "<tg-emoji" not in text
-    assert "🚀 Прибыль" in text
+    assert "🚀 Расчётная разница" in text
 
 
 def _snapshot(odds_a: float, odds_b: float) -> MatchSnapshot:

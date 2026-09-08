@@ -131,9 +131,10 @@
       no_vilki: "Сейчас подходящих вилок нет.",
       check_later: "Загляните чуть позже.",
       found_vilki: "Найдено вилок: ",
-      profit: "Прибыль: ",
-      possible_win: "Возможный выигрыш: ",
-      odds_warning: "Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.",
+      disclaimer: "18+. Информационно-аналитический сервис сравнения коэффициентов лицензированных БК. Не букмекер, ставки не принимает, доход не гарантирует. Не является призывом к участию в азартных играх.",
+      profit: "Расчётная разница: ",
+      possible_win: "Расчётный результат: ",
+      odds_warning: "Расчёт по текущим коэффициентам, не гарантия дохода. Котировки могут измениться, БК может не принять ставку. 18+.",
       copied: "Скопировано: ",
       copy_failed: "Не удалось скопировать",
       no_h2h: "Личных встреч в базе не нашлось.",
@@ -217,9 +218,10 @@
       no_vilki: "Ҳоло вилкаҳои мувофиқ нест.",
       check_later: "Баъд аз каме вақт дубора нигаред.",
       found_vilki: "Вилкаҳои ёфтшуда: ",
-      profit: "Фоида: ",
-      possible_win: "Бурди эҳтимолӣ: ",
-      odds_warning: "Коэффисиентҳо ва фоизи фоида дар назди букмекер метавонанд тағйир ёбанд — пеш аз гузоштани бет санҷед.",
+      disclaimer: "18+. Хидмати иттилоотӣ-таҳлилии муқоисаи коэффисиентҳои БК-и иҷозатдор. Букмекер нест, ставка қабул намекунад, даромадро кафолат намедиҳад. Даъват ба бозии қиморӣ нест.",
+      profit: "Фарқи ҳисобӣ: ",
+      possible_win: "Натиҷаи ҳисобӣ: ",
+      odds_warning: "Ҳисоб аз рӯи коэффисиентҳои ҷорӣ, кафолати даромад нест. Котировкаҳо тағйир ёфта метавонанд. 18+.",
       copied: "Нусхабардорӣ шуд: ",
       copy_failed: "Нусхабардорӣ ба амал наомад",
       no_h2h: "Дар пойгоҳи додаҳо вохӯриҳои шахсӣ ёфт нашуданд.",
@@ -303,9 +305,10 @@
       no_vilki: "No suitable arbs right now.",
       check_later: "Check back a little later.",
       found_vilki: "Arbs found: ",
-      profit: "Profit: ",
-      possible_win: "Possible payout: ",
-      odds_warning: "Odds and profit % may change at the bookmaker — double-check before betting.",
+      disclaimer: "18+. An information and analytics service comparing licensed bookmakers' odds. Not a bookmaker, takes no bets, guarantees no income. Not a call to gamble.",
+      profit: "Calc. margin: ",
+      possible_win: "Calc. result: ",
+      odds_warning: "A model figure at current odds, not guaranteed income. Odds may move, the bookmaker may refuse the bet. 18+.",
       copied: "Copied: ",
       copy_failed: "Couldn't copy",
       no_h2h: "No head-to-head meetings in the database.",
@@ -792,7 +795,7 @@
       ? renderVilkiCards(filtered)
       : `<div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
 
-    content.innerHTML = `${metaLineHtml || ""}${filterBar}<div${isStale ? ' class="stale"' : ""}>${body}</div>`;
+    content.innerHTML = `${metaLineHtml || ""}${filterBar}<div${isStale ? ' class="stale"' : ""}>${body}</div><div class="meta-line disclaimer">${t("disclaimer")}</div>`;
     bindVilkiControls(allMatches, filter);
 
     // Success haptic once per *newly seen* high-profit find, not on every 20s poll

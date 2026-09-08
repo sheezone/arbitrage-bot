@@ -549,6 +549,8 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 .form-rec { font-size: 11px; color: var(--hint); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
 .form-standing { font-size: 11px; color: var(--text); margin-bottom: 8px; }
 
+.meta-line.disclaimer { margin-top: 16px; font-size: 10px; line-height: 1.5; color: var(--hint); opacity: 0.85; }
+
 .h2h-events { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 8px; }
 .h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 4px; }

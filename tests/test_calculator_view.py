@@ -8,14 +8,14 @@ from bot.handlers.commands import _calculator_result_view
 
 def test_shows_profit_for_a_real_arb():
     text, _ = _calculator_result_view(1000, 2.10, 2.05)
-    assert "Прибыль" in text
+    assert "Расчётная разница" in text
     assert "не вилка" not in text
 
 
 def test_shows_loss_warning_when_not_an_arb():
     text, _ = _calculator_result_view(1000, 1.5, 1.5)
     assert "не вилка" in text
-    assert "Прибыль" not in text
+    assert "Расчётная разница" not in text
 
 
 def test_stakes_sum_to_roughly_the_bankroll():
