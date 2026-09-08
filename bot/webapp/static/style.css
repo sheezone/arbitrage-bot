@@ -213,6 +213,9 @@ html, body {
   z-index: 20;
   min-width: 150px;
 }
+/* `display: flex` above would otherwise beat the UA [hidden] rule, so the menu
+   never actually hides -- pin it explicitly for the hidden state. */
+.lang-menu[hidden] { display: none; }
 .lang-menu-item {
   background: none;
   border: none;
