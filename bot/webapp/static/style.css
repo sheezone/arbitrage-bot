@@ -557,6 +557,29 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 
 .meta-line.disclaimer { margin-top: 16px; font-size: 10px; line-height: 1.5; color: var(--hint); opacity: 0.85; }
 
+/* Calculator modal -- opened from the 🧮 topbar button. */
+.modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 56px 12px 12px; }
+.modal[hidden] { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.modal-panel {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--bg) 96%, #fff);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  padding: 14px 16px 18px;
+  animation: modal-in 0.16s ease;
+}
+@keyframes modal-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.modal-head span { font-size: 15px; font-weight: 700; color: var(--text); }
+.modal-close { background: none; border: none; color: var(--hint); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+.modal-close:active { background: var(--card-bg); }
+
 .calc-margin { font-size: 14px; margin: 8px 0 10px; }
 .calc-margin.pos { color: var(--accent); }
 .calc-margin.neg { color: var(--red); }

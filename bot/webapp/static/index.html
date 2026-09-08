@@ -32,13 +32,13 @@
         <button class="lang-menu-item" data-lang="tg">🇹🇯 Тоҷикӣ</button>
       </div>
     </div>
+    <button id="calc-btn" class="icon-btn" title="Калькулятор">🧮</button>
     <button id="refresh-btn" class="icon-btn" title="Обновить">🔄</button>
   </header>
 
   <nav class="tabs">
     <button class="tab active" data-tab="vilki">Вилки</button>
     <button class="tab" data-tab="news">Новости</button>
-    <button class="tab" data-tab="calc">Калькулятор</button>
     <button class="tab" data-tab="settings">Настройки</button>
     <button class="tab" data-tab="stats">Статистика</button>
     <button class="tab" data-tab="admin" id="admin-tab" hidden>Админ</button>
@@ -49,6 +49,17 @@
     <main id="content"></main>
   </div>
   <div id="toast" class="toast"></div>
+
+  <div id="calc-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span id="calc-modal-title">Калькулятор</span>
+        <button id="calc-close" class="modal-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div id="calc-body"></div>
+    </div>
+  </div>
 </div>
 <script src="app.js"></script>
 </body>

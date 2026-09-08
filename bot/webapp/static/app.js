@@ -86,6 +86,9 @@
   const refreshBtn = document.getElementById("refresh-btn");
   const langBtn = document.getElementById("lang-btn");
   const langMenu = document.getElementById("lang-menu");
+  const calcBtn = document.getElementById("calc-btn");
+  const calcModal = document.getElementById("calc-modal");
+  const calcBody = document.getElementById("calc-body");
   const topbarTitleEl = document.getElementById("topbar-title");
 
   function toast(msg) {
@@ -427,8 +430,9 @@
     document.querySelector('[data-tab="vilki"]').textContent = t("tab_vilki");
     document.querySelector('[data-tab="news"]').textContent = t("tab_news");
     document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
-    document.querySelector('[data-tab="calc"]').textContent = t("tab_calc");
     document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
+    calcBtn.title = t("tab_calc");
+    document.getElementById("calc-modal-title").textContent = t("tab_calc");
     document.getElementById("admin-tab").textContent = t("tab_admin");
     document.querySelectorAll(".lang-menu-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.lang === currentLang);
@@ -479,7 +483,6 @@
     vilki: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     news: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     settings: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
-    calc: `<div class="skeleton skeleton-card" style="height:220px"></div>`,
     stats: `<div class="stat-grid"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div>`,
     admin: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
   };
@@ -626,7 +629,6 @@
     try {
       if (tab === "vilki") await renderVilki();
       else if (tab === "news") await renderNews();
-      else if (tab === "calc") renderCalc();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
       else if (tab === "admin") await renderAdmin();
@@ -1226,7 +1228,7 @@
 
   function renderCalc() {
     const saved = readCalc();
-    content.innerHTML = `
+    calcBody.innerHTML = `
       <div class="meta-line">${t("calc_intro")}</div>
       <div class="field">
         <label>${t("calc_bankroll")}</label>
@@ -1245,14 +1247,26 @@
       <div id="calc-result"></div>
     `;
 
-    document.querySelectorAll("[data-calc-preset]").forEach((btn) => {
+    calcBody.querySelectorAll("[data-calc-preset]").forEach((btn) => {
       btn.addEventListener("click", () => {
         haptic("light");
-        document.getElementById("calc-bankroll").value = btn.dataset.calcPreset;
+        calcBody.querySelector("#calc-bankroll").value = btn.dataset.calcPreset;
       });
     });
-    document.getElementById("calc-run").addEventListener("click", runCalc);
+    calcBody.querySelector("#calc-run").addEventListener("click", runCalc);
   }
+
+  function openCalc() {
+    haptic("light");
+    renderCalc();
+    calcModal.hidden = false;
+  }
+  function closeCalc() {
+    calcModal.hidden = true;
+  }
+  calcBtn.addEventListener("click", openCalc);
+  document.getElementById("calc-close").addEventListener("click", closeCalc);
+  calcModal.querySelector(".modal-backdrop").addEventListener("click", closeCalc);
 
   function runCalc() {
     const bankroll = parseFloat(document.getElementById("calc-bankroll").value);
