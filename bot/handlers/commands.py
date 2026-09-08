@@ -650,10 +650,22 @@ _METHOD_LABELS = {
 }
 
 
+# Third-party bot that sells Telegram Stars (usually below the in-app price). Linked
+# from the Stars payment screen so a user short on Stars can top up without leaving
+# Telegram, then come back and pay.
+STARS_SHOP_BOT_URL = "https://t.me/starslly_bot"
+
+
 def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: frozenset[int]) -> View:
     status = _subscription_status_line(user, admin_chat_ids)
     label = _METHOD_LABELS.get(method, method.upper())
     text = f"{label}\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
+    if method == "stars":
+        text += (
+            "\n\n💡 Не хватает звёзд? Купить их можно прямо в Telegram через "
+            f'<a href="{STARS_SHOP_BOT_URL}">@starslly_bot</a> (часто дешевле, чем в приложении), '
+            "потом вернитесь сюда и оплатите."
+        )
     rows = []
     for plan in billing.PLANS:
         if method == "stars":
@@ -663,6 +675,8 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
         else:
             price = f"{plan.price_usdt:g} USDT"
         rows.append([_btn(f"{plan.label} — {price}", f"sub:{plan.id}:{method}")])
+    if method == "stars":
+        rows.append([InlineKeyboardButton(text="⭐ Купить звёзды (@starslly_bot)", url=STARS_SHOP_BOT_URL)])
     rows.append([_btn("◀️ Назад", NAV_SUBSCRIPTION)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
