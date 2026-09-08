@@ -85,6 +85,7 @@
   const toastEl = document.getElementById("toast");
   const refreshBtn = document.getElementById("refresh-btn");
   const langBtn = document.getElementById("lang-btn");
+  const langMenu = document.getElementById("lang-menu");
   const topbarTitleEl = document.getElementById("topbar-title");
 
   function toast(msg) {
@@ -285,24 +286,42 @@
     document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
     document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
     document.getElementById("admin-tab").textContent = t("tab_admin");
-    // Shows the flag of the language a tap switches TO (not the current one) -- the
-    // button reads as "tap for Tajik" while in Russian, and vice versa.
-    langBtn.textContent = currentLang === "ru" ? "🇹🇯" : "🇷🇺";
-    langBtn.title = currentLang === "ru" ? "Тоҷикӣ" : "Русский";
+    document.querySelectorAll(".lang-menu-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.lang === currentLang);
+    });
     applyMainButtonLabel();
   }
   applyStaticLabels();
 
-  langBtn.addEventListener("click", () => {
+  function closeLangMenu() {
+    langMenu.hidden = true;
+  }
+
+  langBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
     haptic("light");
-    currentLang = currentLang === "ru" ? "tg" : "ru";
-    try {
-      localStorage.setItem("lang", currentLang);
-    } catch (e) {
-      // Per-viewer convenience only -- fine if it doesn't persist.
-    }
-    applyStaticLabels();
-    switchTab(currentTab);
+    langMenu.hidden = !langMenu.hidden;
+  });
+
+  langMenu.querySelectorAll(".lang-menu-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const chosen = btn.dataset.lang === "tg" ? "tg" : "ru";
+      closeLangMenu();
+      if (chosen === currentLang) return;
+      haptic("light");
+      currentLang = chosen;
+      try {
+        localStorage.setItem("lang", currentLang);
+      } catch (e) {
+        // Per-viewer convenience only -- fine if it doesn't persist.
+      }
+      applyStaticLabels();
+      switchTab(currentTab);
+    });
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!langMenu.hidden && !langMenu.contains(e.target) && e.target !== langBtn) closeLangMenu();
   });
 
   function haptic(style) {

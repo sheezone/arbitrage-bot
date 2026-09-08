@@ -6,13 +6,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bot.db.repository import Repository
 from bot.handlers.commands import (
-    LANG_TOGGLE_TO_RU_TEXT,
-    LANG_TOGGLE_TO_TG_TEXT,
+    LANG_BUTTON_TEXT,
     PROFILE_BUTTON_TEXT_RU,
     PROFILE_BUTTON_TEXT_TG,
     SEARCH_BUTTON_TEXT_RU,
     SEARCH_BUTTON_TEXT_TG,
     _dashboard_view,
+    _language_menu_view,
     _main_menu_keyboard,
 )
 
@@ -34,20 +34,31 @@ def test_set_language_round_trips(tmp_path):
     assert repo.get_user(1).language == "tg"
 
 
-def test_main_menu_keyboard_shows_russian_labels_and_offers_tajik(tmp_path):
+def test_main_menu_keyboard_shows_russian_labels_and_language_button(tmp_path):
     kb = _main_menu_keyboard("ru")
     texts = [btn.text for row in kb.keyboard for btn in row]
     assert SEARCH_BUTTON_TEXT_RU in texts
     assert PROFILE_BUTTON_TEXT_RU in texts
-    assert LANG_TOGGLE_TO_TG_TEXT in texts  # offers to switch TO Tajik
+    assert LANG_BUTTON_TEXT in texts
 
 
-def test_main_menu_keyboard_shows_tajik_labels_and_offers_russian(tmp_path):
+def test_main_menu_keyboard_shows_tajik_labels_and_language_button(tmp_path):
     kb = _main_menu_keyboard("tg")
     texts = [btn.text for row in kb.keyboard for btn in row]
     assert SEARCH_BUTTON_TEXT_TG in texts
     assert PROFILE_BUTTON_TEXT_TG in texts
-    assert LANG_TOGGLE_TO_RU_TEXT in texts  # offers to switch TO Russian
+    assert LANG_BUTTON_TEXT in texts
+
+
+def test_language_menu_marks_current_choice(tmp_path):
+    text, kb = _language_menu_view("ru")
+    buttons = [btn for row in kb.inline_keyboard for btn in row]
+    ru_btn = next(b for b in buttons if "Русский" in b.text)
+    tg_btn = next(b for b in buttons if "Тоҷикӣ" in b.text)
+    assert ru_btn.text.startswith("✅")
+    assert not tg_btn.text.startswith("✅")
+    assert ru_btn.callback_data == "lang:set:ru"
+    assert tg_btn.callback_data == "lang:set:tg"
 
 
 def test_dashboard_view_is_russian_by_default(tmp_path):
