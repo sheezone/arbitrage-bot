@@ -612,17 +612,10 @@
     });
   })();
 
-  // ---------- Telegram MainButton ----------
-  // Mirrors the 🔄 icon in the topbar (kept as-is for anyone who doesn't notice the
-  // native button) -- shows/labels itself per-language and always refreshes whichever
-  // tab is currently open.
-  if (tg && tg.MainButton) {
-    tg.MainButton.onClick(() => loadTab(currentTab, true));
-    tg.MainButton.show();
-  }
-  function applyMainButtonLabel() {
-    if (tg && tg.MainButton) tg.MainButton.setText(t("refresh_btn").toUpperCase());
-  }
+  // Telegram MainButton (the big bottom "ОБНОВИТЬ") intentionally NOT used -- the 🔄
+  // icon in the topbar covers refresh and the bottom bar just crowded the screen.
+  if (tg && tg.MainButton) tg.MainButton.hide();
+  function applyMainButtonLabel() {}
 
   async function loadTab(tab, manual) {
     if (manual) refreshBtn.classList.add("spinning");
