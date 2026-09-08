@@ -480,6 +480,17 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 .news-meta { color: var(--hint); font-size: 12px; margin-top: 5px; }
 .news-empty { color: var(--hint); font-size: 13px; padding: 4px 2px; }
 
+.progress-block {
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+.progress-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.progress-competition { color: var(--hint); font-weight: 500; font-size: 12px; }
+.progress-standings { font-size: 12px; color: var(--text); margin-bottom: 8px; }
+.progress-standings b { font-variant-numeric: tabular-nums; }
+
 .h2h-block {
   background: rgba(255, 255, 255, 0.035);
   border-radius: 12px;

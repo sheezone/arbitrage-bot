@@ -141,6 +141,8 @@
       h2h_total: "всего встреч: ",
       draws_label: "Ничьи",
       recent_meeting_events: "Последняя встреча — что произошло",
+      standings_position: "Место в таблице: ",
+      standings_points: "очков",
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
       analyze_btn: "🔍 Проанализировать",
@@ -220,6 +222,8 @@
       h2h_total: "ҳамагӣ вохӯриҳо: ",
       draws_label: "Баробарӣ",
       recent_meeting_events: "Вохӯрии охирин — чӣ рӯй дод",
+      standings_position: "Ҷой дар ҷадвал: ",
+      standings_points: "хол",
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
       analyze_btn: "🔍 Таҳлил кардан",
@@ -978,6 +982,35 @@
       </div>`;
   }
 
+  // Recent form (last 5 games, any opponent) + table position -- facts from a separate
+  // free-tier source (football-data.org, only Western European top flights, see
+  // bot/webapp/football_data.py), no verdict/percentage, same rule as the H2H block.
+  // Renders nothing for a team football-data.org doesn't cover (progress is null) rather
+  // than an empty/broken-looking block.
+  function renderTeamProgressBlock(progress, fallbackName) {
+    if (!progress) return "";
+    const form = progress.form;
+    const standings = progress.standings;
+    const formChips = form
+      ? `<div class="h2h-form">${form.form_string
+          .split("")
+          .map((r) => {
+            const cls = r === "W" ? "w" : r === "L" ? "l" : "d";
+            return `<span class="h2h-chip h2h-chip-${cls}">${r}</span>`;
+          })
+          .join("")}</div>`
+      : "";
+    const standingsLine = standings
+      ? `<div class="progress-standings">${t("standings_position")}<b>${standings.position}</b> / ${standings.total_teams} · ${standings.points} ${t("standings_points")} (${standings.won}-${standings.draw}-${standings.lost})</div>`
+      : "";
+    if (!formChips && !standingsLine) return "";
+    return `<div class="progress-block">
+        <div class="progress-title">${esc(progress.team_name || fallbackName)} <span class="progress-competition">· ${esc(progress.competition_name || "")}</span></div>
+        ${standingsLine}
+        ${formChips}
+      </div>`;
+  }
+
   // Gated to 1 analysis/day/user (see /api/analysis) -- deliberately not fetched for
   // all 3 matches up front, only for the one the user actually clicks on.
   async function onAnalyzeClick(btn) {
@@ -989,7 +1022,9 @@
     btn.textContent = t("loading");
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
-      slot.innerHTML = renderH2hBlock(result.h2h, teamA, teamB);
+      const progressHtml =
+        renderTeamProgressBlock(result.progress_a, teamA) + renderTeamProgressBlock(result.progress_b, teamB);
+      slot.innerHTML = progressHtml + renderH2hBlock(result.h2h, teamA, teamB);
       btn.remove();
       // Admins have no daily quota server-side (see /api/analysis) -- leave every other
       // button clickable for them instead of locking the rest of the page.

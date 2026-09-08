@@ -117,6 +117,7 @@ async def main() -> None:
             state,
             config.admin_chat_ids,
             api_football_key=config.api_football_key,
+            football_data_api_key=config.football_data_api_key,
             bot=bot,
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
