@@ -109,6 +109,7 @@
   // not reviewed by a native speaker -- flag any that read oddly and they can be fixed.
   const I18N = {
     ru: {
+      hi: "Привет",
       tab_vilki: "Вилки",
       tab_news: "Новости",
       tab_settings: "Настройки",
@@ -187,6 +188,7 @@
       admin_no_users: "Пользователей ещё нет.",
     },
     tg: {
+      hi: "Салом",
       tab_vilki: "Арбитраж",
       tab_news: "Хабарҳо",
       tab_settings: "Танзимот",
@@ -265,6 +267,7 @@
       admin_no_users: "Корбарон ҳанӯз нест.",
     },
     en: {
+      hi: "Hi",
       tab_vilki: "Arbs",
       tab_news: "News",
       tab_settings: "Settings",
@@ -1328,6 +1331,17 @@
 
   // ---------- init ----------
 
+  // One-off "Привет, <имя>!" toast on every entry, using the Telegram first name.
+  function greet() {
+    try {
+      const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      const name = (u && u.first_name ? String(u.first_name) : "").trim();
+      toast(name ? `${t("hi")}, ${name}! 👋` : `${t("hi")}! 👋`);
+    } catch (e) {
+      // greeting is cosmetic -- never let it break boot
+    }
+  }
+
   async function boot() {
     document.querySelectorAll(".tab").forEach((b) => (b.disabled = false));
     let me;
@@ -1342,6 +1356,7 @@
     }
     meCache = me;
     hideSplash();
+    greet();
     if (me.channel_required && !me.is_subscribed) {
       renderSubscriptionGate(me.channel_username);
       return;
