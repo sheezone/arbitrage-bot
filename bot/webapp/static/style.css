@@ -238,10 +238,16 @@ html, body {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   z-index: 9;
+  /* Stretch to fill when the labels fit; scroll horizontally when they don't
+     (6 tabs / long translations) instead of squashing each one unreadably. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
-  flex: 1;
-  padding: 12px 0;
+  flex: 1 0 auto;
+  white-space: nowrap;
+  padding: 12px 14px;
   background: none;
   border: none;
   color: var(--hint);
@@ -550,6 +556,12 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 .form-standing { font-size: 11px; color: var(--text); margin-bottom: 8px; }
 
 .meta-line.disclaimer { margin-top: 16px; font-size: 10px; line-height: 1.5; color: var(--hint); opacity: 0.85; }
+
+.calc-margin { font-size: 14px; margin: 8px 0 10px; }
+.calc-margin.pos { color: var(--accent); }
+.calc-margin.neg { color: var(--red); }
+.calc-payout { font-size: 13px; color: var(--text); margin-top: 10px; }
+.calc-margin b, .calc-payout b { font-variant-numeric: tabular-nums; }
 
 .h2h-events { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 8px; }

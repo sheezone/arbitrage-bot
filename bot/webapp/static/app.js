@@ -149,6 +149,18 @@
       standing_label: "в таблице",
       pts_short: "очк.",
       goals_short: "мячи",
+      tab_calc: "Калькулятор",
+      calc_intro: "Расчёт распределения ставки на два исхода по коэффициентам двух БК. Ставки вы делаете сами; это не гарантия дохода.",
+      calc_bankroll: "Банкролл (сумма на ставку)",
+      calc_odds_a: "Коэффициент, исход 1",
+      calc_odds_b: "Коэффициент, исход 2",
+      calc_run: "Рассчитать",
+      calc_is_arb: "✅ Это вилка",
+      calc_not_arb: "⚠️ Не вилка — при таких коэффициентах убыток",
+      calc_margin: "Расчётная разница",
+      calc_stake_on: "Ставка на исход",
+      calc_payout: "Возврат при любом исходе",
+      calc_err_odds: "Коэффициенты должны быть больше 1",
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
       analyze_btn: "🔍 Проанализировать",
@@ -236,6 +248,18 @@
       standing_label: "дар ҷадвал",
       pts_short: "хол",
       goals_short: "тӯбҳо",
+      tab_calc: "Ҳисобкунак",
+      calc_intro: "Ҳисоби тақсими ставка ба ду натиҷа аз рӯи коэффисиентҳои ду БК. Ставкаро худатон мегузоред; ин кафолати даромад нест.",
+      calc_bankroll: "Бонкролл (маблағ барои ставка)",
+      calc_odds_a: "Коэффисиент, натиҷаи 1",
+      calc_odds_b: "Коэффисиент, натиҷаи 2",
+      calc_run: "Ҳисоб кардан",
+      calc_is_arb: "✅ Ин вилка аст",
+      calc_not_arb: "⚠️ Вилка нест — бо чунин коэффисиентҳо зарар",
+      calc_margin: "Фарқи ҳисобӣ",
+      calc_stake_on: "Ставка ба натиҷа",
+      calc_payout: "Бозгашт дар ҳар натиҷа",
+      calc_err_odds: "Коэффисиентҳо бояд аз 1 зиёд бошанд",
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
       analyze_btn: "🔍 Таҳлил кардан",
@@ -323,6 +347,18 @@
       standing_label: "in the table",
       pts_short: "pts",
       goals_short: "goals",
+      tab_calc: "Calculator",
+      calc_intro: "Splits a stake across two outcomes by two bookmakers' odds. You place the bets yourself; this is not guaranteed income.",
+      calc_bankroll: "Bankroll (total stake)",
+      calc_odds_a: "Odds, outcome 1",
+      calc_odds_b: "Odds, outcome 2",
+      calc_run: "Calculate",
+      calc_is_arb: "✅ It's an arb",
+      calc_not_arb: "⚠️ Not an arb — a loss at these odds",
+      calc_margin: "Calc. margin",
+      calc_stake_on: "Stake on outcome",
+      calc_payout: "Return on either outcome",
+      calc_err_odds: "Odds must be greater than 1",
       loading: "Loading…",
       daily_limit_reached: "Today's limit reached",
       analyze_btn: "🔍 Analyze",
@@ -391,6 +427,7 @@
     document.querySelector('[data-tab="vilki"]').textContent = t("tab_vilki");
     document.querySelector('[data-tab="news"]').textContent = t("tab_news");
     document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
+    document.querySelector('[data-tab="calc"]').textContent = t("tab_calc");
     document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
     document.getElementById("admin-tab").textContent = t("tab_admin");
     document.querySelectorAll(".lang-menu-item").forEach((btn) => {
@@ -442,6 +479,7 @@
     vilki: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     news: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     settings: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
+    calc: `<div class="skeleton skeleton-card" style="height:220px"></div>`,
     stats: `<div class="stat-grid"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div>`,
     admin: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
   };
@@ -588,6 +626,7 @@
     try {
       if (tab === "vilki") await renderVilki();
       else if (tab === "news") await renderNews();
+      else if (tab === "calc") renderCalc();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
       else if (tab === "admin") await renderAdmin();
@@ -1163,6 +1202,93 @@
     content.innerHTML = `
       <div class="meta-line">${t("news_meta_line")}</div>
       ${cards.join("")}`;
+  }
+
+  // ---------- Калькулятор ----------
+  // Pure client-side, no API -- mirrors the bot's _calculator_result_view math
+  // (bot/core/arbitrage.py): arb_ratio = 1/oddsA + 1/oddsB; margin% = (1/ratio - 1)*100;
+  // stake_i = bankroll * (1/odds_i) / ratio. Last inputs persisted per viewer.
+  const CALC_KEY = "calc_v1";
+  function readCalc() {
+    try {
+      return JSON.parse(localStorage.getItem(CALC_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function writeCalc(v) {
+    try {
+      localStorage.setItem(CALC_KEY, JSON.stringify(v));
+    } catch (e) {
+      /* best-effort */
+    }
+  }
+
+  function renderCalc() {
+    const saved = readCalc();
+    content.innerHTML = `
+      <div class="meta-line">${t("calc_intro")}</div>
+      <div class="field">
+        <label>${t("calc_bankroll")}</label>
+        <input type="number" id="calc-bankroll" min="1" step="1" value="${saved.bankroll || 1000}">
+        <div class="preset-row">${BANKROLL_PRESETS.map((p) => `<button type="button" class="preset-btn" data-calc-preset="${p}">${p}</button>`).join("")}</div>
+      </div>
+      <div class="field">
+        <label>${t("calc_odds_a")}</label>
+        <input type="number" id="calc-odds-a" min="1" step="0.01" placeholder="2.10" value="${saved.oddsA || ""}">
+      </div>
+      <div class="field">
+        <label>${t("calc_odds_b")}</label>
+        <input type="number" id="calc-odds-b" min="1" step="0.01" placeholder="2.05" value="${saved.oddsB || ""}">
+      </div>
+      <button class="save-btn" id="calc-run">${t("calc_run")}</button>
+      <div id="calc-result"></div>
+    `;
+
+    document.querySelectorAll("[data-calc-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        haptic("light");
+        document.getElementById("calc-bankroll").value = btn.dataset.calcPreset;
+      });
+    });
+    document.getElementById("calc-run").addEventListener("click", runCalc);
+  }
+
+  function runCalc() {
+    const bankroll = parseFloat(document.getElementById("calc-bankroll").value);
+    const oddsA = parseFloat(document.getElementById("calc-odds-a").value);
+    const oddsB = parseFloat(document.getElementById("calc-odds-b").value);
+    const out = document.getElementById("calc-result");
+
+    if (!bankroll || bankroll <= 0) {
+      toast(t("err_bankroll_positive"));
+      return;
+    }
+    if (!(oddsA > 1) || !(oddsB > 1)) {
+      toast(t("calc_err_odds"));
+      return;
+    }
+    haptic("light");
+    writeCalc({ bankroll, oddsA, oddsB });
+
+    const ratio = 1 / oddsA + 1 / oddsB;
+    const marginPct = (1 / ratio - 1) * 100;
+    const stakeA = (bankroll * (1 / oddsA)) / ratio;
+    const stakeB = (bankroll * (1 / oddsB)) / ratio;
+    const payout = stakeA * oddsA; // equal for either outcome by construction
+    const isArb = marginPct > 0;
+
+    out.innerHTML = `
+      <div class="h2h-block">
+        <div class="h2h-title">${isArb ? t("calc_is_arb") : t("calc_not_arb")}</div>
+        <div class="calc-margin ${isArb ? "pos" : "neg"}">${t("calc_margin")}: <b>${marginPct.toFixed(2)}%</b></div>
+        <div class="h2h-matches">
+          <div class="h2h-row"><span class="h2h-date">${t("calc_stake_on")} 1</span> <b>${fmtMoney(stakeA)}</b> @ ${oddsA}</div>
+          <div class="h2h-row"><span class="h2h-date">${t("calc_stake_on")} 2</span> <b>${fmtMoney(stakeB)}</b> @ ${oddsB}</div>
+        </div>
+        <div class="calc-payout">${t("calc_payout")}: <b>${fmtMoney(payout)}</b> (${fmtMoney(payout - bankroll)})</div>
+        <div class="impl-note">${t("odds_warning")}</div>
+      </div>`;
   }
 
   // ---------- Настройки ----------
