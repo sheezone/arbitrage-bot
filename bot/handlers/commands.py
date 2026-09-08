@@ -127,8 +127,9 @@ def _language_menu_view(current_language: str) -> tuple[str, InlineKeyboardMarku
 # threshold, games, time horizon) lives one level down inside "🔍 Поиск вилок" itself
 # (see _search_view), right next to the results it controls; account-level things
 # (pause, subscription, help) live inside "👤 Мой профиль" (see _profile_view). The
-# language-toggle row switches user.language (persisted, see repo.set_language) and
-# re-sends this same keyboard with the new labels -- see on_toggle_language.
+# language row opens a selection menu that switches user.language (persisted, see
+# repo.set_language) and re-sends this same keyboard with the new labels -- see
+# on_open_language_menu / on_select_language.
 def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Built fresh per user/language rather than a module-level singleton (unlike
     before language existed) -- confirmed live 2026-08-30 that the Mini App itself
@@ -1036,7 +1037,7 @@ def register_handlers(
             repo.set_menu_message_id(chat_id, None)
 
         text, keyboard = _dashboard_view(user, admin_chat_ids)
-        sent = await message.answer_photo(FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML")
+        sent = await bot.send_photo(chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML")
         repo.set_menu_message_id(chat_id, sent.message_id)
 
     @router.message(F.text.in_({PROFILE_BUTTON_TEXT_RU, PROFILE_BUTTON_TEXT_TG}))
