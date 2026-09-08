@@ -93,28 +93,47 @@ GAME_LABELS = {
 
 SEARCH_BUTTON_TEXT_RU = "🔍 Поиск вилок"
 SEARCH_BUTTON_TEXT_TG = "🔍 Ҷустуҷӯи вилкаҳо"
+SEARCH_BUTTON_TEXT_EN = "🔍 Find arbs"
 PROFILE_BUTTON_TEXT_RU = "👤 Мой профиль"
 PROFILE_BUTTON_TEXT_TG = "👤 Профили ман"
+PROFILE_BUTTON_TEXT_EN = "👤 My profile"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
 # Opens the language-selection inline menu (see _language_menu_view) rather than
-# switching directly -- same label in both languages so it doesn't need a language
-# argument like the other bottom-row buttons.
-LANG_BUTTON_TEXT = "🌐 Язык / Забон"
+# switching directly -- carries every language name so it needs no language argument
+# like the other bottom-row buttons.
+LANG_BUTTON_TEXT = "🌐 Язык / Забон / Language"
 
-LANGUAGE_CHOICES = {"ru": "🇷🇺 Русский", "tg": "🇹🇯 Тоҷикӣ"}
+# One of these is user.language; anything else is treated as "ru" (see _lang).
+LANGUAGE_CHOICES = {"ru": "🇷🇺 Русский", "en": "🇬🇧 English", "tg": "🇹🇯 Тоҷикӣ"}
 LANG_SELECT_CALLBACK_PREFIX = "lang:set:"
+
+_SEARCH_BUTTON_TEXT = {"ru": SEARCH_BUTTON_TEXT_RU, "en": SEARCH_BUTTON_TEXT_EN, "tg": SEARCH_BUTTON_TEXT_TG}
+_PROFILE_BUTTON_TEXT = {"ru": PROFILE_BUTTON_TEXT_RU, "en": PROFILE_BUTTON_TEXT_EN, "tg": PROFILE_BUTTON_TEXT_TG}
+_BUTTONS_BELOW_TEXT = {
+    "ru": "👇 Кнопки снизу — быстрый доступ к разделам.",
+    "en": "👇 Buttons below — quick access to the sections.",
+    "tg": "👇 Тугмаҳои поён — дастрасии зуд ба бахшҳо.",
+}
+
+
+def _lang(language: str) -> str:
+    return language if language in LANGUAGE_CHOICES else "ru"
 
 
 def _search_button_text(language: str) -> str:
-    return SEARCH_BUTTON_TEXT_TG if language == "tg" else SEARCH_BUTTON_TEXT_RU
+    return _SEARCH_BUTTON_TEXT[_lang(language)]
 
 
 def _profile_button_text(language: str) -> str:
-    return PROFILE_BUTTON_TEXT_TG if language == "tg" else PROFILE_BUTTON_TEXT_RU
+    return _PROFILE_BUTTON_TEXT[_lang(language)]
+
+
+def _buttons_below_text(language: str) -> str:
+    return _BUTTONS_BELOW_TEXT[_lang(language)]
 
 
 def _language_menu_view(current_language: str) -> tuple[str, InlineKeyboardMarkup]:
-    text = "🌐 Выберите язык / Забонро интихоб кунед"
+    text = "🌐 Выберите язык / Забонро интихоб кунед / Choose your language"
     rows = []
     for code, label in LANGUAGE_CHOICES.items():
         marked = f"✅ {label}" if code == current_language else label
@@ -236,6 +255,14 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
                 "Обуна харед, то бот огоҳиномаҳои вилкаҳоро фиристодан идома диҳад "
                 f"(тугмаи «{profile_btn}» дар поён → «💳 Обуна»)."
             )
+        elif lang == "en":
+            text = (
+                "🎰 <b>ARBITRAGE BOT</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "⏳ Your trial period is over.\n"
+                "Subscribe to keep receiving arbitrage alerts "
+                f"(the «{profile_btn}» button below → «💳 Subscription»)."
+            )
         else:
             text = (
                 "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
@@ -244,6 +271,25 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
                 "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках "
                 f"(кнопка «{profile_btn}» снизу → «💳 Подписка»)."
             )
+        return text, None
+
+    if lang == "en":
+        status = "🟢 Active" if user.is_active else "⏸️ Paused"
+        if billing.is_admin(user, admin_chat_ids):
+            access_line = "♾️ Unlimited access"
+        else:
+            left = billing.days_left(user, now)
+            access_line = (
+                f"⏳ Trial period · {left} day(s) left"
+                if billing.on_trial(user, now)
+                else f"💳 Subscription active · {left} day(s) left"
+            )
+        text = (
+            "🎰 <b>ARBITRAGE BOT</b>\n\n"
+            f"{status}  ·  {access_line}\n\n"
+            f"Settings — «{profile_btn}» below\n"
+            "⬇️ Controls — the buttons below"
+        )
         return text, None
 
     if lang == "tg":
@@ -916,12 +962,9 @@ def register_handlers(
         # NOT deleted: confirmed live that deleting it -- immediately or after a delay --
         # makes the reply keyboard itself disappear on at least one client, contrary to
         # the usual "keyboard survives its carrier message" behavior.
-        buttons_below_text = (
-            "👇 Тугмаҳои поён — дастрасии зуд ба бахшҳо."
-            if user.language == "tg"
-            else "👇 Кнопки снизу — быстрый доступ к разделам."
+        await message.answer(
+            _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
         )
-        await message.answer(buttons_below_text, reply_markup=_main_menu_keyboard(user.language))
 
         # Gated here, inline, rather than by the blanket SubscriptionGateMiddleware --
         # that middleware deliberately lets /start straight through so the referral/
@@ -975,7 +1018,7 @@ def register_handlers(
         except Exception:
             pass
 
-    @router.message(F.text.in_({SEARCH_BUTTON_TEXT_RU, SEARCH_BUTTON_TEXT_TG}))
+    @router.message(F.text.in_(set(_SEARCH_BUTTON_TEXT.values())))
     async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)
@@ -1022,12 +1065,9 @@ def register_handlers(
         except TelegramBadRequest:
             pass
 
-        buttons_below_text = (
-            "👇 Тугмаҳои поён — дастрасии зуд ба бахшҳо."
-            if new_language == "tg"
-            else "👇 Кнопки снизу — быстрый доступ к разделам."
+        await bot.send_message(
+            chat_id, _buttons_below_text(new_language), reply_markup=_main_menu_keyboard(new_language)
         )
-        await bot.send_message(chat_id, buttons_below_text, reply_markup=_main_menu_keyboard(new_language))
 
         if user.menu_message_id:
             try:
@@ -1040,7 +1080,7 @@ def register_handlers(
         sent = await bot.send_photo(chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML")
         repo.set_menu_message_id(chat_id, sent.message_id)
 
-    @router.message(F.text.in_({PROFILE_BUTTON_TEXT_RU, PROFILE_BUTTON_TEXT_TG}))
+    @router.message(F.text.in_(set(_PROFILE_BUTTON_TEXT.values())))
     async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)

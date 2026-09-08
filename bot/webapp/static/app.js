@@ -264,11 +264,91 @@
       admin_recent_users: "Корбарони охирин",
       admin_no_users: "Корбарон ҳанӯз нест.",
     },
+    en: {
+      tab_vilki: "Arbs",
+      tab_news: "News",
+      tab_settings: "Settings",
+      tab_stats: "Stats",
+      tab_admin: "Admin",
+      topbar_title: "🔍 Arbitrage bot",
+      refresh_btn: "Refresh",
+      share_btn: "Share",
+      shared: "Arb shared",
+      filter_min_profit: "Min %",
+      filter_all_sports: "All sports",
+      gate_title: "🔒 Access restricted",
+      gate_text: "To use the bot and the mini app, subscribe to the channel",
+      gate_subscribe: "📢 Subscribe",
+      gate_check: "✅ Check subscription",
+      gate_not_yet: "You haven't subscribed yet",
+      data_at: "Data as of ",
+      msk: " MSK",
+      no_vilki: "No suitable arbs right now.",
+      check_later: "Check back a little later.",
+      found_vilki: "Arbs found: ",
+      profit: "Profit: ",
+      possible_win: "Possible payout: ",
+      odds_warning: "Odds and profit % may change at the bookmaker — double-check before betting.",
+      copied: "Copied: ",
+      copy_failed: "Couldn't copy",
+      no_h2h: "No head-to-head meetings in the database.",
+      h2h_title: "Head-to-head (last ",
+      h2h_total: "total meetings: ",
+      draws_label: "Draws",
+      recent_meeting_events: "Last meeting — what happened",
+      loading: "Loading…",
+      daily_limit_reached: "Today's limit reached",
+      analyze_btn: "🔍 Analyze",
+      error_prefix: "Error: ",
+      no_fresh_news: "No fresh news in the last 24 hours.",
+      no_news_data: "No data for the news digest yet.",
+      news_meta_line:
+        "News on popular matches — no predictions or percentages, just facts for your own analysis. Analysis (head-to-head) — once a day.",
+      bankroll: "Bankroll",
+      profit_threshold: "Profit threshold",
+      profit_threshold_label: "Minimum profit % for an arb to be shown",
+      profit_threshold_hint: "A fractional value is allowed, e.g. 0.6",
+      period: "Period",
+      horizon_24: "Within 24 hours",
+      horizon_more24: "More than 24 hours",
+      my_bookmakers: "My bookmakers",
+      notifications: "Notifications",
+      muted_label: "🔕 Silent mode (no sound)",
+      save: "Save",
+      err_bankroll_positive: "Bankroll must be greater than 0",
+      err_threshold_negative: "Profit threshold can't be negative",
+      err_need_horizon: "Keep at least one period",
+      err_need_bookmaker: "Keep at least one bookmaker",
+      settings_saved: "Settings saved ✅",
+      save_failed: "Couldn't save: ",
+      today: "Today",
+      stat_found_vilki: "Arbs found",
+      stat_avg_profit: "Average profit",
+      stat_best_profit: "Best profit",
+      all_time: "All time",
+      admin_users: "Users",
+      admin_total: "Total",
+      admin_on_trial: "On trial",
+      admin_has_access: "With access",
+      admin_expired: "Access expired",
+      admin_notifications_on: "Notifications on",
+      admin_referred: "Via referral",
+      admin_payments: "Payments",
+      admin_units: " pcs · ",
+      admin_no_payments: "No payments yet.",
+      admin_sources: "Signup sources",
+      admin_organic: "organic / untagged",
+      admin_no_data: "No data.",
+      admin_recent_users: "Recent users",
+      admin_no_users: "No users yet.",
+    },
   };
 
+  const SUPPORTED_LANGS = ["ru", "en", "tg"];
   let currentLang = "ru";
   try {
-    currentLang = localStorage.getItem("lang") === "tg" ? "tg" : "ru";
+    const stored = localStorage.getItem("lang");
+    if (SUPPORTED_LANGS.includes(stored)) currentLang = stored;
   } catch (e) {
     // localStorage can throw (private mode, blocked site data) -- ru default is fine.
   }
@@ -305,7 +385,7 @@
 
   langMenu.querySelectorAll(".lang-menu-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const chosen = btn.dataset.lang === "tg" ? "tg" : "ru";
+      const chosen = SUPPORTED_LANGS.includes(btn.dataset.lang) ? btn.dataset.lang : "ru";
       closeLangMenu();
       if (chosen === currentLang) return;
       haptic("light");
