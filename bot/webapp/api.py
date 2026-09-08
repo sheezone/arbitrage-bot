@@ -35,6 +35,7 @@ from bot.handlers.commands import (
 from bot.webapp.auth import validate_init_data
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
+from bot.webapp.team_form import get_team_form, implied_probabilities
 from bot.webapp.team_flags import get_team_flag
 from bot.webapp.team_logos import get_nba_logo_url
 
@@ -327,6 +328,7 @@ def register_api(
         in_fixtures = any(
             fx["team_a"] == team_a and fx["team_b"] == team_b for fx in (fixtures_cache["payload"] or [])
         )
+        match = None
         if not in_fixtures:
             picked = pick_popular_matches(state.matches, limit=3)
             match = next((m for m in picked if m.team_a == team_a and m.team_b == team_b), None)
@@ -335,12 +337,33 @@ def register_api(
             if match.game != "football":
                 raise HTTPException(status_code=400, detail="Анализ пока доступен только для футбола")
 
+        # Market-implied win probabilities from the arb's own best odds -- only available
+        # when this match came from the arb pool (a real upcoming fixture has no odds
+        # attached). Not a model: just the bookmakers' prices with the margin removed,
+        # the frontend labels it as such.
+        implied = None
+        if match is not None:
+            probs = implied_probabilities(match.arb.best_odds)
+            if probs:
+                implied = {"source": "bookmaker_odds", "outcomes": probs}
+
         async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
             h2h = await get_match_h2h(client, team_a, team_b, api_football_key)
+            # ESPN form/standings has no API key or quota, so it runs regardless of the
+            # API-Football budget the 1/day gate protects.
+            form_a = await get_team_form(client, team_a)
+            form_b = await get_team_form(client, team_b)
 
         if not is_admin:
             repo.set_last_analysis_date(chat_id, today)
-        return {"team_a": team_a, "team_b": team_b, "h2h": h2h}
+        return {
+            "team_a": team_a,
+            "team_b": team_b,
+            "h2h": h2h,
+            "form_a": form_a,
+            "form_b": form_b,
+            "implied": implied,
+        }
 
     async def _get_football_logo(client: httpx.AsyncClient, team_name: str) -> str | None:
         # Cached forever (a logo URL doesn't change) in this process's own dict, shared

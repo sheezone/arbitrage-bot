@@ -537,6 +537,18 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 .h2h-row .h2h-dot { flex: none; }
 .h2h-date { color: var(--hint); font-variant-numeric: tabular-nums; }
 
+/* Team-form block (recent games + implied-odds split) -- shown above the H2H block. */
+.form-block { margin-top: 10px; }
+.impl-block { margin-bottom: 14px; }
+.impl-sub { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.impl-note { font-size: 10px; color: var(--hint); margin-top: 6px; font-style: italic; }
+.form-team { padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.form-team:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+.form-team-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--text); font-size: 13px; margin-bottom: 6px; }
+.form-team-head .h2h-form { margin-bottom: 0; }
+.form-rec { font-size: 11px; color: var(--hint); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.form-standing { font-size: 11px; color: var(--text); margin-bottom: 8px; }
+
 .h2h-events { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 8px; }
 .h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 4px; }

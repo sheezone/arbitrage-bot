@@ -1,11 +1,20 @@
-"""Real news headlines for a handful of "popular" upcoming matches -- deliberately NOT
-predictions/percentages. See the conversation that led to this: the user originally asked
-for AI-generated win-probability percentages factoring in things like a player's divorce
-or injury news. That was declined -- presenting fabricated-precision numbers as if they
-were rigorous analysis, for a paid tool people bet real money through, is a way to
-mislead people into risky bets on made-up confidence. This module gives the honest
-version instead: real headlines (injuries, suspensions, form, transfers, ...) for the
-human to read and judge themselves, no invented odds/probabilities anywhere.
+"""Real news headlines for a handful of "popular" upcoming matches.
+
+2026-09-08 update: the user asked for the analysis view to also show team form and a
+"chance" figure. The line held here is that this module still returns only real
+headlines -- no invented model output. The one percentage the app now shows
+(bot/webapp/team_form.py + /api/analysis) is *market-implied* probability, derived
+straight from the arb's own bookmaker odds and labelled as such in the UI, not a
+fabricated confidence number. The original objection (below) was specifically to
+AI-generated win-probability percentages dressed up as rigorous analysis:
+
+The user originally asked for AI-generated win-probability percentages factoring in
+things like a player's divorce or injury news. That was declined -- presenting
+fabricated-precision numbers as if they were rigorous analysis, for a paid tool people
+bet real money through, is a way to mislead people into risky bets on made-up
+confidence. This module gives the honest version instead: real headlines (injuries,
+suspensions, form, transfers, ...) for the human to read and judge themselves, no
+invented odds/probabilities anywhere.
 
 Source: Google News RSS (https://news.google.com/rss/search?q=...) -- free, no API key,
 no signup. Not sports-specific (it's general news search), so results are filtered to the

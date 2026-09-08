@@ -141,6 +141,13 @@
       h2h_total: "всего встреч: ",
       draws_label: "Ничьи",
       recent_meeting_events: "Последняя встреча — что произошло",
+      form_title: "📈 Форма команд (последние матчи)",
+      form_none: "Данных по форме нет.",
+      implied_title: "Оценка шансов",
+      implied_note: "по коэффициентам букмекеров — не прогноз",
+      standing_label: "в таблице",
+      pts_short: "очк.",
+      goals_short: "мячи",
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
       analyze_btn: "🔍 Проанализировать",
@@ -148,7 +155,7 @@
       no_fresh_news: "За последние 24 часа свежих новостей не нашлось.",
       no_news_data: "Пока нет данных для новостной сводки.",
       news_meta_line:
-        "Новости по популярным матчам — без прогнозов и процентов, только факты для собственного анализа. Анализ (личные встречи) — 1 раз в день.",
+        "Новости по популярным матчам — только факты (заголовки), без прогнозов. «Проанализировать» добавляет форму команд, личные встречи и оценку шансов по коэффициентам БК — 1 раз в день.",
       bankroll: "Банкролл",
       profit_threshold: "Порог прибыли",
       profit_threshold_label: "Минимальный % прибыли для показа вилки",
@@ -220,6 +227,13 @@
       h2h_total: "ҳамагӣ вохӯриҳо: ",
       draws_label: "Баробарӣ",
       recent_meeting_events: "Вохӯрии охирин — чӣ рӯй дод",
+      form_title: "📈 Шакли дастаҳо (бозиҳои охирин)",
+      form_none: "Маълумоти шакл нест.",
+      implied_title: "Арзёбии шансҳо",
+      implied_note: "аз рӯи коэффисиентҳои букмекерҳо — на пешгӯӣ",
+      standing_label: "дар ҷадвал",
+      pts_short: "хол",
+      goals_short: "тӯбҳо",
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
       analyze_btn: "🔍 Таҳлил кардан",
@@ -227,7 +241,7 @@
       no_fresh_news: "Дар 24 соати охир хабарҳои нав ёфт нашуданд.",
       no_news_data: "Ҳоло барои хулосаи хабарҳо маълумот нест.",
       news_meta_line:
-        "Хабарҳо оид ба бозиҳои маъмул — бидуни пешгӯӣ ва фоиз, танҳо далелҳо барои таҳлили худ. Таҳлил (вохӯриҳои шахсӣ) — 1 бор дар як рӯз.",
+        "Хабарҳо оид ба бозиҳои маъмул — танҳо далелҳо (сарлавҳаҳо), бидуни пешгӯӣ. «Таҳлил» шакли дастаҳо, вохӯриҳои шахсӣ ва арзёбии шансро аз рӯи коэффисиентҳо илова мекунад — 1 бор дар рӯз.",
       bankroll: "Бонкролл",
       profit_threshold: "Ҳадди фоида",
       profit_threshold_label: "Фоизи ҳадди ақали фоида барои нишон додани вилка",
@@ -299,6 +313,13 @@
       h2h_total: "total meetings: ",
       draws_label: "Draws",
       recent_meeting_events: "Last meeting — what happened",
+      form_title: "📈 Team form (recent matches)",
+      form_none: "No form data.",
+      implied_title: "Chance estimate",
+      implied_note: "from bookmaker odds — not a prediction",
+      standing_label: "in the table",
+      pts_short: "pts",
+      goals_short: "goals",
       loading: "Loading…",
       daily_limit_reached: "Today's limit reached",
       analyze_btn: "🔍 Analyze",
@@ -306,7 +327,7 @@
       no_fresh_news: "No fresh news in the last 24 hours.",
       no_news_data: "No data for the news digest yet.",
       news_meta_line:
-        "News on popular matches — no predictions or percentages, just facts for your own analysis. Analysis (head-to-head) — once a day.",
+        "News on popular matches — facts only (headlines), no predictions. \"Analyze\" adds team form, head-to-head and an odds-implied chance estimate — once a day.",
       bankroll: "Bankroll",
       profit_threshold: "Profit threshold",
       profit_threshold_label: "Minimum profit % for an arb to be shown",
@@ -943,6 +964,76 @@
       </div>`;
   }
 
+  // Market-implied win split -- (1/odds) per outcome, normalised. Labelled as coming
+  // from bookmaker odds, not presented as an independent prediction.
+  function renderImpliedBar(implied, teamA, teamB) {
+    if (!implied || !implied.outcomes || !implied.outcomes.length) return "";
+    const by = {};
+    implied.outcomes.forEach((o) => (by[o.outcome] = o.prob));
+    let rows;
+    if (by[teamA] != null && by[teamB] != null) {
+      rows = [[teamA, by[teamA], "h2h-bar-a", "h2h-dot-a"], [teamB, by[teamB], "h2h-bar-b", "h2h-dot-b"]];
+    } else {
+      rows = implied.outcomes.map((o, i) => [
+        o.outcome, o.prob, i % 2 ? "h2h-bar-b" : "h2h-bar-a", i % 2 ? "h2h-dot-b" : "h2h-dot-a",
+      ]);
+    }
+    const bar = rows.map(([, p, cls]) => `<div class="h2h-bar-seg ${cls}" style="width:${(p * 100).toFixed(1)}%"></div>`).join("");
+    const legend = rows
+      .map(([name, p, , dot]) => `<span class="h2h-legend-item"><i class="h2h-dot ${dot}"></i>${esc(name)} <b>${Math.round(p * 100)}%</b></span>`)
+      .join("");
+    return `<div class="impl-block">
+        <div class="impl-sub">🎲 ${t("implied_title")}</div>
+        <div class="h2h-bar">${bar}</div>
+        <div class="h2h-legend">${legend}</div>
+        <div class="impl-note">${t("implied_note")}</div>
+      </div>`;
+  }
+
+  function renderTeamForm(form) {
+    if (!form) return "";
+    const chip = (r) => `h2h-chip-${r === "W" ? "w" : r === "L" ? "l" : "d"}`;
+    const chips = (form.matches || [])
+      .slice()
+      .reverse() // matches are newest-first; show oldest→newest like the H2H strip
+      .map((m) => {
+        const ha = m.home_away === "home" ? "🏠" : m.home_away === "away" ? "✈️" : "";
+        return `<span class="h2h-chip ${chip(m.result)}" title="${esc(`${m.date} ${ha} ${m.gf}:${m.ga} ${m.opponent}`)}">${m.result}</span>`;
+      })
+      .join("");
+    const st = form.standing;
+    const stLine =
+      st && st.rank
+        ? `<div class="form-standing">🏆 ${st.rank} ${t("standing_label")} · ${st.points != null ? st.points : "—"} ${t("pts_short")}</div>`
+        : "";
+    const rows = (form.matches || [])
+      .map((m) => {
+        const d = m.result === "W" ? "w" : m.result === "L" ? "l" : "d";
+        const ha = m.home_away === "home" ? "🏠" : m.home_away === "away" ? "✈️" : "";
+        return `<div class="h2h-row"><i class="h2h-dot h2h-dot-${d === "w" ? "a" : d === "l" ? "b" : "draw"}"></i><span class="h2h-date">${esc(m.date)}</span> ${ha} <b>${m.gf}:${m.ga}</b> ${esc(m.opponent)}</div>`;
+      })
+      .join("");
+    return `<div class="form-team">
+        <div class="form-team-head"><b>${esc(form.team)}</b><span class="h2h-form">${chips}</span></div>
+        <div class="form-rec">${form.wins}–${form.draws}–${form.losses} · ${t("goals_short")} ${form.gf}:${form.ga}</div>
+        ${stLine}
+        <div class="h2h-matches">${rows}</div>
+      </div>`;
+  }
+
+  function renderFormBlock(result, teamA, teamB) {
+    const impl = renderImpliedBar(result.implied, teamA, teamB);
+    const fa = renderTeamForm(result.form_a);
+    const fb = renderTeamForm(result.form_b);
+    if (!impl && !fa && !fb) return "";
+    return `<div class="h2h-block form-block">
+        <div class="h2h-title">${t("form_title")}</div>
+        ${impl}
+        ${fa || `<div class="news-empty">${t("form_none")}</div>`}
+        ${fb}
+      </div>`;
+  }
+
   function renderH2hBlock(h2h, teamA, teamB) {
     if (!h2h) return `<div class="news-empty">${t("no_h2h")}</div>`;
 
@@ -989,7 +1080,7 @@
     btn.textContent = t("loading");
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
-      slot.innerHTML = renderH2hBlock(result.h2h, teamA, teamB);
+      slot.innerHTML = renderFormBlock(result, teamA, teamB) + renderH2hBlock(result.h2h, teamA, teamB);
       btn.remove();
       // Admins have no daily quota server-side (see /api/analysis) -- leave every other
       // button clickable for them instead of locking the rest of the page.
