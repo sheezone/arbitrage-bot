@@ -33,6 +33,7 @@ from bot.handlers.commands import (
     _DIRECT_BOOKMAKERS,
 )
 from bot.webapp.auth import validate_init_data
+from bot.webapp.football_data import build_team_index, get_team_progress
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
 from bot.webapp.team_flags import get_team_flag
@@ -53,6 +54,11 @@ NEWS_CACHE_TTL_SECONDS = 600
 # it on the same 10-minute cadence as headlines (up to 144x/day) would blow through the
 # quota fast. An hour is plenty fresh for "what's kicking off in the next 24h".
 FIXTURES_CACHE_TTL_SECONDS = 3600
+
+# football-data.org's team index (name -> id/competition, see build_team_index) only
+# changes on transfer-window boundaries -- a whole day's TTL avoids re-fetching all ~10
+# free competitions' team lists on every analysis click.
+TEAM_INDEX_CACHE_TTL_SECONDS = 86400
 
 
 def _bot_token() -> str:
@@ -131,6 +137,7 @@ def register_api(
     state: LatestState,
     admin_chat_ids: frozenset[int],
     api_football_key: str = "",
+    football_data_api_key: str = "",
     bot: Bot | None = None,
     required_channel_id: int | None = None,
     required_channel_username: str = "",
@@ -158,6 +165,16 @@ def register_api(
     news_cache: dict = {"at": 0.0, "payload": None}
     fixtures_cache: dict = {"at": 0.0, "payload": None}
     football_logo_cache: dict[str, str | None] = {}
+    team_index_cache: dict = {"at": 0.0, "payload": None}
+
+    async def _get_team_index(client: httpx.AsyncClient) -> dict:
+        if (
+            team_index_cache["payload"] is None
+            or time.time() - team_index_cache["at"] >= TEAM_INDEX_CACHE_TTL_SECONDS
+        ):
+            team_index_cache["payload"] = await build_team_index(client, football_data_api_key)
+            team_index_cache["at"] = time.time()
+        return team_index_cache["payload"]
 
     async def _require_subscribed(chat_id: int) -> None:
         """Mirrors the button bot UI's SubscriptionGateMiddleware (see
@@ -337,10 +354,20 @@ def register_api(
 
         async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
             h2h = await get_match_h2h(client, team_a, team_b, api_football_key)
+            # Recent form + table position -- separate free-tier source from H2H (see
+            # bot/webapp/football_data.py's module docstring for why), covers a
+            # different, narrower set of competitions so either side can come back None
+            # independently of the other or of h2h above.
+            team_index = await _get_team_index(client)
+            progress_a = await get_team_progress(client, team_a, football_data_api_key, team_index)
+            progress_b = await get_team_progress(client, team_b, football_data_api_key, team_index)
 
         if not is_admin:
             repo.set_last_analysis_date(chat_id, today)
-        return {"team_a": team_a, "team_b": team_b, "h2h": h2h}
+        return {
+            "team_a": team_a, "team_b": team_b, "h2h": h2h,
+            "progress_a": progress_a, "progress_b": progress_b,
+        }
 
     async def _get_football_logo(client: httpx.AsyncClient, team_name: str) -> str | None:
         # Cached forever (a logo URL doesn't change) in this process's own dict, shared
