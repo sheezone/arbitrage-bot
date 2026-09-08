@@ -64,6 +64,12 @@ async def _post(app, path, headers=None, json_body=None):
         return await client.post(path, headers=headers, json=json_body)
 
 
+async def _post_form(app, path, data, headers=None):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.post(path, headers=headers, data=data)
+
+
 def test_me_requires_auth(setup):
     app, _, _ = setup
     resp = _run(_get(app, "/api/me"))
@@ -636,3 +642,80 @@ def test_settings_endpoint_403s_when_not_subscribed(tmp_path, monkeypatch):
 
     resp = _run(_post(app, "/api/settings", headers=_auth_header(1), json_body={"bankroll": 500}))
     assert resp.status_code == 403
+
+
+# ---- Prodamus СБП webhook ----
+
+def _prodamus_app(tmp_path, monkeypatch, secret="pkey"):
+    monkeypatch.setenv("BOT_TOKEN", BOT_TOKEN)
+    from bot.core.state import LatestState
+    from bot.db.repository import Repository
+    from bot.webapp.api import register_api
+
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    app = register_api(
+        repo, LatestState(), admin_chat_ids=frozenset({99}), prodamus_secret_key=secret
+    )
+    return app, repo
+
+
+def _signed_form(secret, **fields):
+    from bot.providers import prodamus
+
+    pairs = list(fields.items())
+    data = prodamus.parse_php_form([(k, str(v)) for k, v in pairs])
+    sign = prodamus.compute_signature(data, secret)
+    return fields, sign
+
+
+def test_prodamus_webhook_extends_subscription_on_success(tmp_path, monkeypatch):
+    app, repo = _prodamus_app(tmp_path, monkeypatch)
+    repo.upsert_user(42)
+    before = repo.get_user(42).subscription_expires_at
+
+    fields, sign = _signed_form(
+        "pkey",
+        order_num="sbp-42-30d-1700000000",
+        sum="999.00",
+        payment_status="success",
+    )
+    resp = _run(_post_form(app, "/api/prodamus/webhook", fields, headers={"Sign": sign}))
+    assert resp.status_code == 200
+    after = repo.get_user(42).subscription_expires_at
+    assert after != before and after is not None
+    assert repo.has_payment("prodamus:sbp-42-30d-1700000000")
+
+
+def test_prodamus_webhook_rejects_bad_signature(tmp_path, monkeypatch):
+    app, repo = _prodamus_app(tmp_path, monkeypatch)
+    repo.upsert_user(42)
+    resp = _run(_post_form(
+        app, "/api/prodamus/webhook",
+        {"order_num": "sbp-42-30d-1", "sum": "999", "payment_status": "success"},
+        headers={"Sign": "deadbeef"},
+    ))
+    assert resp.status_code == 403
+    assert not repo.has_payment("prodamus:sbp-42-30d-1")
+
+
+def test_prodamus_webhook_is_idempotent(tmp_path, monkeypatch):
+    app, repo = _prodamus_app(tmp_path, monkeypatch)
+    repo.upsert_user(7)
+    fields, sign = _signed_form(
+        "pkey", order_num="sbp-7-7d-1", sum="299.00", payment_status="success"
+    )
+    _run(_post_form(app, "/api/prodamus/webhook", fields, headers={"Sign": sign}))
+    first = repo.get_user(7).subscription_expires_at
+    _run(_post_form(app, "/api/prodamus/webhook", fields, headers={"Sign": sign}))
+    assert repo.get_user(7).subscription_expires_at == first  # not extended twice
+
+
+def test_prodamus_webhook_ignores_non_success_status(tmp_path, monkeypatch):
+    app, repo = _prodamus_app(tmp_path, monkeypatch)
+    repo.upsert_user(5)
+    fields, sign = _signed_form(
+        "pkey", order_num="sbp-5-7d-1", sum="299.00", payment_status="pending"
+    )
+    resp = _run(_post_form(app, "/api/prodamus/webhook", fields, headers={"Sign": sign}))
+    assert resp.status_code == 200
+    assert not repo.has_payment("prodamus:sbp-5-7d-1")

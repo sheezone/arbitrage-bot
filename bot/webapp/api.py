@@ -6,15 +6,18 @@ endpoint requires a valid Telegram `initData` (see auth.py) in the `Authorizatio
 one is rejected outright rather than falling back to some anonymous/demo mode."""
 from __future__ import annotations
 
+import logging
 import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import parse_qsl
 
 import httpx
 from aiogram import Bot
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -32,12 +35,15 @@ from bot.handlers.commands import (
     _AGGREGATOR_BOOKMAKERS,
     _DIRECT_BOOKMAKERS,
 )
+from bot.providers import prodamus
 from bot.webapp.auth import validate_init_data
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
 from bot.webapp.team_form import get_team_form, implied_probabilities
 from bot.webapp.team_flags import get_team_flag
 from bot.webapp.team_logos import get_nba_logo_url
+
+logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -135,6 +141,7 @@ def register_api(
     bot: Bot | None = None,
     required_channel_id: int | None = None,
     required_channel_username: str = "",
+    prodamus_secret_key: str = "",
 ) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
     NOT a module-level singleton mutated in place. Call this once from bot/main.py with
@@ -476,6 +483,77 @@ def register_api(
                 for u in repo.get_recent_users(limit=10)
             ],
         }
+
+    @app.post("/api/prodamus/webhook")
+    async def prodamus_webhook(request: Request):
+        """Prodamus payment notification (form-urlencoded + HMAC in the `Sign` header).
+        Verifies the signature, then -- only for payment_status=success -- extends the
+        buyer's subscription and credits referral bookkeeping. order_num is the order_id
+        we set when building the link: "sbp-<chat_id>-<plan_id>-<ts>"."""
+        if not prodamus_secret_key:
+            raise HTTPException(status_code=404, detail="Not configured")
+
+        raw = await request.body()
+        # Prodamus posts application/x-www-form-urlencoded -- parsed directly (no
+        # python-multipart dependency), then PHP-nested keys are reassembled.
+        pairs = parse_qsl(raw.decode("utf-8", "replace"), keep_blank_values=True)
+        data = prodamus.parse_php_form(pairs)
+        sign = request.headers.get("Sign") or request.headers.get("sign") or data.get("signature", "")
+
+        if not prodamus.verify_signature(data, prodamus_secret_key, sign):
+            logger.warning(
+                "Prodamus webhook signature mismatch: received=%r computed=%r body=%r",
+                sign, prodamus.compute_signature(
+                    {k: v for k, v in data.items() if k.lower() not in ("sign", "signature")},
+                    prodamus_secret_key,
+                ),
+                raw[:2000],
+            )
+            raise HTTPException(status_code=403, detail="bad signature")
+
+        if not prodamus.is_paid(data):
+            return PlainTextResponse("OK")  # pending / test ping / other status -- ack, do nothing
+
+        order_num = str(data.get("order_num") or data.get("order_id") or "")
+        parts = order_num.split("-")
+        if len(parts) < 4 or parts[0] != "sbp" or not parts[1].isdigit():
+            logger.warning("Prodamus webhook: unrecognised order_num %r", order_num)
+            return PlainTextResponse("OK")
+        chat_id = int(parts[1])
+        plan_id = parts[2]
+        plan = billing.PLANS_BY_ID.get(plan_id)
+        if plan is None:
+            logger.warning("Prodamus webhook: unknown plan_id %r (order %r)", plan_id, order_num)
+            return PlainTextResponse("OK")
+
+        charge_key = f"prodamus:{order_num}"
+        if repo.has_payment(charge_key):
+            return PlainTextResponse("OK")  # already credited -- webhook can be re-delivered
+
+        try:
+            amount = float(str(data.get("sum") or data.get("amount") or plan.price_rub))
+        except (TypeError, ValueError):
+            amount = float(plan.price_rub)
+
+        repo.extend_subscription(chat_id, plan.days)
+        repo.record_payment(chat_id, plan.id, "prodamus", amount, "RUB", charge_key)
+
+        discount_used = max(0.0, float(plan.price_rub) - amount)
+        if discount_used > 0:
+            repo.consume_referral_balance(chat_id, discount_used)
+        buyer = repo.get_user(chat_id)
+        if buyer is not None and buyer.referred_by is not None:
+            repo.credit_referral_balance(
+                buyer.referred_by, billing.referral_commission_rub(amount, "RUB")
+            )
+
+        if bot is not None:
+            try:
+                await bot.send_message(chat_id, f"✅ Подписка продлена на {plan.label}. Спасибо!")
+            except Exception:
+                logger.exception("Prodamus webhook: failed to notify chat_id=%s", chat_id)
+
+        return PlainTextResponse("OK")
 
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

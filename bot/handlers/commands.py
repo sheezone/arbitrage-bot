@@ -59,6 +59,7 @@ from bot.core.state import LatestState
 from bot.db.repository import Repository, UserSettings
 from bot.handlers.states import Settings
 from bot.providers.cryptobot import CryptoPayClient, CryptoPayError
+from bot.providers import prodamus
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -619,7 +620,11 @@ def _subscription_status_line(user: UserSettings, admin_chat_ids: frozenset[int]
 
 
 def _subscription_view(
-    user: UserSettings, yookassa_enabled: bool, crypto_enabled: bool = False, admin_chat_ids: frozenset[int] = frozenset()
+    user: UserSettings,
+    yookassa_enabled: bool,
+    crypto_enabled: bool = False,
+    admin_chat_ids: frozenset[int] = frozenset(),
+    sbp_enabled: bool = False,
 ) -> View:
     """Top level: pick a payment method first (each has its own submenu of the 3 plans --
     see _subscription_method_view) rather than one screen listing every plan x every
@@ -627,6 +632,8 @@ def _subscription_view(
     status = _subscription_status_line(user, admin_chat_ids)
     text = f"💳 <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите способ оплаты:"
     rows = [[_btn("⭐ Telegram Stars", f"{NAV_SUB_METHOD_PREFIX}stars")]]
+    if sbp_enabled:
+        rows.append([_btn("💳 СБП", f"{NAV_SUB_METHOD_PREFIX}sbp")])
     if yookassa_enabled:
         rows.append([_btn("💳 Банковская карта", f"{NAV_SUB_METHOD_PREFIX}rub")])
     if crypto_enabled:
@@ -635,7 +642,12 @@ def _subscription_view(
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-_METHOD_LABELS = {"stars": "⭐ TELEGRAM STARS", "rub": "💳 БАНКОВСКАЯ КАРТА", "crypto": "💎 КРИПТОВАЛЮТА (USDT)"}
+_METHOD_LABELS = {
+    "stars": "⭐ TELEGRAM STARS",
+    "rub": "💳 БАНКОВСКАЯ КАРТА",
+    "crypto": "💎 КРИПТОВАЛЮТА (USDT)",
+    "sbp": "💳 СБП",
+}
 
 
 def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: frozenset[int]) -> View:
@@ -646,7 +658,7 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
     for plan in billing.PLANS:
         if method == "stars":
             price = f"{plan.price_stars} ⭐"
-        elif method == "rub":
+        elif method in ("rub", "sbp"):
             price = f"{plan.price_rub}₽"
         else:
             price = f"{plan.price_usdt:g} USDT"
@@ -913,7 +925,11 @@ def register_handlers(
     webapp_url: str = "",
     required_channel_id: int | None = None,
     required_channel_username: str = "",
+    prodamus_form_url: str = "",
+    prodamus_npd_income_type: str = "",
 ) -> Router:
+    # СБП via Prodamus needs a payform URL AND a public webhook target (WEBAPP_URL).
+    sbp_enabled = bool(prodamus_form_url and webapp_url)
     @router.callback_query(F.data == NAV_CHECK_CHANNEL_SUB)
     async def on_check_channel_subscription(callback: CallbackQuery, bot: Bot) -> None:
         if required_channel_id is None or callback.message is None:
@@ -1256,7 +1272,7 @@ def register_handlers(
     async def on_nav_subscription(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _subscription_view(
-            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids
+            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids, sbp_enabled
         )
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
@@ -1272,6 +1288,9 @@ def register_handlers(
             return
         if method == "crypto" and crypto_pay_client is None:
             await callback.answer("Оплата криптой пока не подключена", show_alert=True)
+            return
+        if method == "sbp" and not sbp_enabled:
+            await callback.answer("Оплата через СБП пока не подключена", show_alert=True)
             return
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _subscription_method_view(user, method, admin_chat_ids)
@@ -1376,6 +1395,10 @@ def register_handlers(
             await on_sub_pay_crypto(callback, plan, bot)
             return
 
+        if method == "sbp":
+            await on_sub_pay_sbp(callback, plan, bot)
+            return
+
         if method == "stars":
             currency, provider_token, original_amount = "XTR", "", float(plan.price_stars)
         else:
@@ -1442,6 +1465,67 @@ def register_handlers(
         await _render(bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard)
         await callback.answer()
 
+    async def on_sub_pay_sbp(callback: CallbackQuery, plan: billing.Plan, bot: Bot) -> None:
+        if not sbp_enabled:
+            await callback.answer("Оплата через СБП пока не подключена", show_alert=True)
+            return
+        chat_id = callback.message.chat.id
+        user = repo.get_user(chat_id)
+        discounted, discount_used = billing.referral_discount(
+            float(plan.price_rub), "RUB", user.referral_balance_rub
+        )
+        # order_id round-trips through Prodamus untouched -- pack everything we need to
+        # credit the right user back out of the webhook (see /api/prodamus/webhook).
+        order_id = f"sbp-{chat_id}-{plan.id}-{int(time.time())}"
+        product_name = f"Подписка на {plan.label} — Арбитражный бот"
+        if discount_used > 0:
+            product_name += f" (скидка: -{discount_used:.0f} ₽)"
+        pay_url = prodamus.build_payment_url(
+            prodamus_form_url,
+            order_id=order_id,
+            amount=discounted,
+            product_name=product_name,
+            notification_url=f"{webapp_url.rstrip('/')}/api/prodamus/webhook",
+            success_url=f"https://t.me/{bot_username}" if bot_username else "",
+            customer_extra=f"chat_id={chat_id}",
+            npd_income_type=prodamus_npd_income_type,
+        )
+        text = (
+            "💳 <b>ОПЛАТА ЧЕРЕЗ СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Тариф: <b>{plan.label}</b>\nСумма: <b>{discounted:.0f} ₽</b>\n\n"
+            "Нажмите «Оплатить», выберите СБП и оплатите в приложении банка. "
+            "Доступ продлится автоматически после оплаты — обычно в течение минуты. "
+            "Если этого не произошло, нажмите «✅ Проверить оплату»."
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="💳 Оплатить", url=pay_url)],
+                [_btn("✅ Проверить оплату", f"sbp_check:{order_id}:{plan.id}")],
+                [_btn("◀️ Назад", NAV_SUBSCRIPTION)],
+            ]
+        )
+        await _render(bot, repo, chat_id, callback.message.message_id, text, keyboard)
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("sbp_check:"))
+    async def on_sbp_check(callback: CallbackQuery, bot: Bot) -> None:
+        # The webhook is the source of truth and does the crediting -- this button only
+        # reports whether it has landed yet (has_payment on the prodamus:<order_id> key).
+        _, order_id, _plan_id = callback.data.split(":", 2)
+        if not repo.has_payment(f"prodamus:{order_id}"):
+            await callback.answer("Оплата ещё не поступила. Попробуйте через минуту.", show_alert=True)
+            return
+        user = repo.get_user(callback.message.chat.id)
+        text, keyboard = _subscription_view(
+            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids, sbp_enabled
+        )
+        text = "✅ <b>Оплата получена, подписка продлена!</b>\n\n" + text
+        await _render(
+            bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
+            photo_path=BANNER_SUBSCRIPTION_PATH,
+        )
+        await callback.answer("Оплачено!")
+
     @router.callback_query(F.data.startswith("crypto_check:"))
     async def on_crypto_check(callback: CallbackQuery, bot: Bot) -> None:
         if crypto_pay_client is None:
@@ -1489,7 +1573,7 @@ def register_handlers(
 
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _subscription_view(
-            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids
+            user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids, sbp_enabled
         )
         text = "✅ <b>Оплата получена, подписка продлена!</b>\n\n" + text
         await _render(

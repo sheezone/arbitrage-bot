@@ -20,6 +20,9 @@ class Config:
     surebet_api_token: str
     yookassa_provider_token: str
     cryptobot_api_token: str
+    prodamus_form_url: str
+    prodamus_secret_key: str
+    prodamus_npd_income_type: str
     webapp_url: str
     webapp_port: int
     admin_chat_ids: frozenset[int]
@@ -59,6 +62,12 @@ def load_config() -> Config:
         surebet_api_token=os.environ.get("SUREBET_API_TOKEN", SUREBET_DEFAULT_TEST_TOKEN),
         yookassa_provider_token=os.environ.get("YOOKASSA_PROVIDER_TOKEN", ""),
         cryptobot_api_token=os.environ.get("CRYPTOBOT_API_TOKEN", ""),
+        # Prodamus (payform.ru) СБП/card payment link. Both URL and secret must be set
+        # for the "СБП" method to appear. npd_income_type turns on auto-fiscalization
+        # for self-employed sellers ("FROM_INDIVIDUAL") -- leave blank for ИП/ООО.
+        prodamus_form_url=os.environ.get("PRODAMUS_FORM_URL", "").rstrip("/"),
+        prodamus_secret_key=os.environ.get("PRODAMUS_SECRET_KEY", ""),
+        prodamus_npd_income_type=os.environ.get("PRODAMUS_NPD_INCOME_TYPE", ""),
         webapp_url=os.environ.get("WEBAPP_URL", "").rstrip("/"),
         webapp_port=int(os.environ.get("WEBAPP_PORT", "8000")),
         admin_chat_ids=frozenset(

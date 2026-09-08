@@ -111,6 +111,8 @@ async def main() -> None:
             webapp_url=config.webapp_url,
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
+            prodamus_form_url=config.prodamus_form_url,
+            prodamus_npd_income_type=config.prodamus_npd_income_type,
         )
     )
 
@@ -129,6 +131,7 @@ async def main() -> None:
             bot=bot,
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
+            prodamus_secret_key=config.prodamus_secret_key,
         )
         uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")
         webapp_task = asyncio.create_task(uvicorn.Server(uv_config).serve())
