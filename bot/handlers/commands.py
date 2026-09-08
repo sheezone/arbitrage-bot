@@ -96,10 +96,13 @@ SEARCH_BUTTON_TEXT_TG = "🔍 Ҷустуҷӯи вилкаҳо"
 PROFILE_BUTTON_TEXT_RU = "👤 Мой профиль"
 PROFILE_BUTTON_TEXT_TG = "👤 Профили ман"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
-# Shows the flag of the language a tap switches TO -- same "target, not current"
-# convention as the Mini App's own 🌐 toggle (see static/app.js).
-LANG_TOGGLE_TO_TG_TEXT = "🇹🇯 Тоҷикӣ"
-LANG_TOGGLE_TO_RU_TEXT = "🇷🇺 Русский"
+# Opens the language-selection inline menu (see _language_menu_view) rather than
+# switching directly -- same label in both languages so it doesn't need a language
+# argument like the other bottom-row buttons.
+LANG_BUTTON_TEXT = "🌐 Язык / Забон"
+
+LANGUAGE_CHOICES = {"ru": "🇷🇺 Русский", "tg": "🇹🇯 Тоҷикӣ"}
+LANG_SELECT_CALLBACK_PREFIX = "lang:set:"
 
 
 def _search_button_text(language: str) -> str:
@@ -108,6 +111,15 @@ def _search_button_text(language: str) -> str:
 
 def _profile_button_text(language: str) -> str:
     return PROFILE_BUTTON_TEXT_TG if language == "tg" else PROFILE_BUTTON_TEXT_RU
+
+
+def _language_menu_view(current_language: str) -> tuple[str, InlineKeyboardMarkup]:
+    text = "🌐 Выберите язык / Забонро интихоб кунед"
+    rows = []
+    for code, label in LANGUAGE_CHOICES.items():
+        marked = f"✅ {label}" if code == current_language else label
+        rows.append([InlineKeyboardButton(text=marked, callback_data=f"{LANG_SELECT_CALLBACK_PREFIX}{code}")])
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # The dashboard message itself carries no inline keyboard (see _dashboard_view) -- this
@@ -122,11 +134,10 @@ def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     before language existed) -- confirmed live 2026-08-30 that the Mini App itself
     can't be launched via a reply-keyboard button (no tgWebAppData attached), so this
     only ever carries Search/Profile/Language, nothing web_app-related."""
-    lang_toggle_text = LANG_TOGGLE_TO_TG_TEXT if language != "tg" else LANG_TOGGLE_TO_RU_TEXT
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=_search_button_text(language)), KeyboardButton(text=_profile_button_text(language))],
-            [KeyboardButton(text=lang_toggle_text)],
+            [KeyboardButton(text=LANG_BUTTON_TEXT)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -971,8 +982,8 @@ def register_handlers(
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
-    @router.message(F.text.in_({LANG_TOGGLE_TO_TG_TEXT, LANG_TOGGLE_TO_RU_TEXT}))
-    async def on_toggle_language(message: Message, state: FSMContext, bot: Bot) -> None:
+    @router.message(F.text == LANG_BUTTON_TEXT)
+    async def on_open_language_menu(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)
         chat_id = message.chat.id
@@ -980,16 +991,42 @@ def register_handlers(
         if user is None:
             repo.upsert_user(chat_id)
             user = repo.get_user(chat_id)
-        new_language = "tg" if user.language != "tg" else "ru"
+        text, keyboard = _language_menu_view(user.language)
+        await message.answer(text, reply_markup=keyboard)
+
+    @router.callback_query(F.data.startswith(LANG_SELECT_CALLBACK_PREFIX))
+    async def on_select_language(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        assert callback.message is not None
+        chat_id = callback.message.chat.id
+        new_language = callback.data[len(LANG_SELECT_CALLBACK_PREFIX):]
+        if new_language not in LANGUAGE_CHOICES:
+            await callback.answer()
+            return
+
+        user = repo.get_user(chat_id)
+        if user is None:
+            repo.upsert_user(chat_id)
+            user = repo.get_user(chat_id)
+        if user.language == new_language:
+            await callback.answer()
+            return
+
         repo.set_language(chat_id, new_language)
         user.language = new_language
+        await callback.answer("✅")
+
+        text, keyboard = _language_menu_view(new_language)
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except TelegramBadRequest:
+            pass
 
         buttons_below_text = (
             "👇 Тугмаҳои поён — дастрасии зуд ба бахшҳо."
             if new_language == "tg"
             else "👇 Кнопки снизу — быстрый доступ к разделам."
         )
-        await message.answer(buttons_below_text, reply_markup=_main_menu_keyboard(new_language))
+        await bot.send_message(chat_id, buttons_below_text, reply_markup=_main_menu_keyboard(new_language))
 
         if user.menu_message_id:
             try:

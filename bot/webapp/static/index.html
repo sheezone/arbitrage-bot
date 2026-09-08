@@ -24,7 +24,13 @@
 <div id="app">
   <header class="topbar">
     <div class="topbar-title" id="topbar-title">🔍 Арбитражный бот</div>
-    <button id="lang-btn" class="icon-btn" title="Забон / Язык">🌐</button>
+    <div class="lang-picker">
+      <button id="lang-btn" class="icon-btn" title="Забон / Язык">🌐</button>
+      <div id="lang-menu" class="lang-menu" hidden>
+        <button class="lang-menu-item" data-lang="ru">🇷🇺 Русский</button>
+        <button class="lang-menu-item" data-lang="tg">🇹🇯 Тоҷикӣ</button>
+      </div>
+    </div>
     <button id="refresh-btn" class="icon-btn" title="Обновить">🔄</button>
   </header>
 

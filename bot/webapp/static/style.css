@@ -196,6 +196,36 @@ html, body {
 .icon-btn.spinning { animation: spin 0.7s cubic-bezier(0.5, 0, 0.5, 1) infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+.lang-picker { position: relative; }
+.lang-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 20;
+  min-width: 150px;
+}
+.lang-menu-item {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lang-menu-item:active { background: var(--card-bg); }
+.lang-menu-item.active { background: var(--card-bg-hi); font-weight: 700; }
+
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
