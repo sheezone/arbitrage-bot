@@ -39,6 +39,7 @@ from bot.providers import prodamus
 from bot.webapp.auth import validate_init_data
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
+from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.team_form import get_team_form, implied_probabilities
 from bot.webapp.team_flags import get_team_flag
 from bot.webapp.team_logos import get_nba_logo_url
@@ -142,6 +143,7 @@ def register_api(
     required_channel_id: int | None = None,
     required_channel_username: str = "",
     prodamus_secret_key: str = "",
+    football_data_key: str = "",
 ) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
     NOT a module-level singleton mutated in place. Call this once from bot/main.py with
@@ -356,10 +358,11 @@ def register_api(
 
         async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
             h2h = await get_match_h2h(client, team_a, team_b, api_football_key)
-            # ESPN form/standings has no API key or quota, so it runs regardless of the
-            # API-Football budget the 1/day gate protects.
-            form_a = await get_team_form(client, team_a)
-            form_b = await get_team_form(client, team_b)
+            # Form/standings: football-data.org first (authoritative table + form for
+            # ~10 top leagues when a key is set), ESPN's hidden JSON as the fallback for
+            # everything it doesn't cover. Neither touches the API-Football day budget.
+            form_a = await fd_team_form(client, team_a, football_data_key) or await get_team_form(client, team_a)
+            form_b = await fd_team_form(client, team_b, football_data_key) or await get_team_form(client, team_b)
 
         if not is_admin:
             repo.set_last_analysis_date(chat_id, today)

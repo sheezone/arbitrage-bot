@@ -23,6 +23,7 @@ class Config:
     prodamus_form_url: str
     prodamus_secret_key: str
     prodamus_npd_income_type: str
+    football_data_key: str
     webapp_url: str
     webapp_port: int
     admin_chat_ids: frozenset[int]
@@ -68,6 +69,10 @@ def load_config() -> Config:
         prodamus_form_url=os.environ.get("PRODAMUS_FORM_URL", "").rstrip("/"),
         prodamus_secret_key=os.environ.get("PRODAMUS_SECRET_KEY", ""),
         prodamus_npd_income_type=os.environ.get("PRODAMUS_NPD_INCOME_TYPE", ""),
+        # football-data.org free API key -- adds authoritative table/form/recent
+        # results for ~10 top competitions to the analysis view. Empty = skip, ESPN
+        # stays the fallback. See bot/webapp/football_data.py.
+        football_data_key=os.environ.get("FOOTBALL_DATA_KEY", ""),
         webapp_url=os.environ.get("WEBAPP_URL", "").rstrip("/"),
         webapp_port=int(os.environ.get("WEBAPP_PORT", "8000")),
         admin_chat_ids=frozenset(
