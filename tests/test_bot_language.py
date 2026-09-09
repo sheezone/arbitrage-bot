@@ -50,20 +50,17 @@ def test_language_choices_are_ru_en_tg():
     assert list(LANGUAGE_CHOICES) == ["ru", "en", "tg"]
 
 
-def test_main_menu_keyboard_shows_russian_labels_and_language_button(tmp_path):
+def test_main_menu_keyboard_is_just_search_and_profile(tmp_path):
     kb = _main_menu_keyboard("ru")
     texts = [btn.text for row in kb.keyboard for btn in row]
-    assert SEARCH_BUTTON_TEXT_RU in texts
-    assert PROFILE_BUTTON_TEXT_RU in texts
-    assert LANG_BUTTON_TEXT in texts
+    assert texts == [SEARCH_BUTTON_TEXT_RU, PROFILE_BUTTON_TEXT_RU]
+    assert LANG_BUTTON_TEXT not in texts
 
 
-def test_main_menu_keyboard_shows_tajik_labels_and_language_button(tmp_path):
+def test_main_menu_keyboard_tajik_labels(tmp_path):
     kb = _main_menu_keyboard("tg")
     texts = [btn.text for row in kb.keyboard for btn in row]
-    assert SEARCH_BUTTON_TEXT_TG in texts
-    assert PROFILE_BUTTON_TEXT_TG in texts
-    assert LANG_BUTTON_TEXT in texts
+    assert texts == [SEARCH_BUTTON_TEXT_TG, PROFILE_BUTTON_TEXT_TG]
 
 
 def test_language_menu_is_plain_buttons(tmp_path):
@@ -75,12 +72,10 @@ def test_language_menu_is_plain_buttons(tmp_path):
     assert any("English" in b.text for b in buttons)
 
 
-def test_main_menu_keyboard_shows_english_labels_and_language_button(tmp_path):
+def test_main_menu_keyboard_english_labels(tmp_path):
     kb = _main_menu_keyboard("en")
     texts = [btn.text for row in kb.keyboard for btn in row]
-    assert SEARCH_BUTTON_TEXT_EN in texts
-    assert PROFILE_BUTTON_TEXT_EN in texts
-    assert LANG_BUTTON_TEXT in texts
+    assert texts == [SEARCH_BUTTON_TEXT_EN, PROFILE_BUTTON_TEXT_EN]
 
 
 def test_dashboard_view_is_russian_by_default(tmp_path):
@@ -142,3 +137,13 @@ def test_dashboard_view_admin_gets_unlimited_access_line_translated(tmp_path):
     repo.set_language(1, "tg")
     text, _ = _dashboard_view(repo.get_user(1), admin_chat_ids=frozenset({1}))
     assert "Дастрасии беохир" in text
+
+
+def test_profile_view_has_a_language_button(tmp_path):
+    from bot.handlers.commands import NAV_LANGUAGE, _profile_view
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    _text, kb = _profile_view(repo.get_user(1))
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert NAV_LANGUAGE in datas

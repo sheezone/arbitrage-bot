@@ -153,14 +153,11 @@ def _language_menu_view(current_language: str = "ru") -> tuple[str, InlineKeyboa
 # repo.set_language) and re-sends this same keyboard with the new labels -- see
 # on_open_language_menu / on_select_language.
 def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """Built fresh per user/language rather than a module-level singleton (unlike
-    before language existed) -- confirmed live 2026-08-30 that the Mini App itself
-    can't be launched via a reply-keyboard button (no tgWebAppData attached), so this
-    only ever carries Search/Profile/Language, nothing web_app-related."""
+    """Just the two top-level sections. Language is changed from inside «Мой профиль»
+    (NAV_LANGUAGE) now, not a third bottom-bar button."""
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=_search_button_text(language)), KeyboardButton(text=_profile_button_text(language))],
-            [KeyboardButton(text=LANG_BUTTON_TEXT)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -183,6 +180,7 @@ NAV_TOGGLE_MUTED = "nav:toggle_muted"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
 NAV_REFERRAL = "nav:referral"
+NAV_LANGUAGE = "nav:language"
 # Both defined in bot/core/subscription.py -- the callback data and the (text, keyboard)
 # gate screen are shared with the periodic re-check in core/monitor.py, which can't
 # import from here (would be circular: this module already imports from monitor.py).
@@ -365,6 +363,7 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
         [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
         [_btn("📊 Статистика", NAV_STATS)],
         [_btn("🤝 Партнёрская программа", NAV_REFERRAL)],
+        [_btn("🌐 Язык / Language", NAV_LANGUAGE)],
         [_btn("ℹ️ Помощь", NAV_HELP)],
     ]
     if billing.is_admin(user, admin_chat_ids):
@@ -1080,14 +1079,25 @@ def register_handlers(
 
     @router.message(F.text == LANG_BUTTON_TEXT)
     async def on_open_language_menu(message: Message, state: FSMContext, bot: Bot) -> None:
+        # Back-compat: an old cached reply keyboard may still have this button.
         await state.clear()
         await _dismiss(message)
         chat_id = message.chat.id
-        user = repo.get_user(chat_id)
-        if user is None:
+        if repo.get_user(chat_id) is None:
             repo.upsert_user(chat_id)
         text, keyboard = _language_menu_view()
         await message.answer(text, reply_markup=keyboard)
+
+    @router.callback_query(F.data == NAV_LANGUAGE)
+    async def on_nav_language(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+        await state.clear()
+        assert callback.message is not None
+        chat_id = callback.message.chat.id
+        if repo.get_user(chat_id) is None:
+            repo.upsert_user(chat_id)
+        text, keyboard = _language_menu_view()
+        await bot.send_message(chat_id, text, reply_markup=keyboard)
+        await callback.answer()
 
     @router.callback_query(F.data.startswith(LANG_SELECT_CALLBACK_PREFIX))
     async def on_select_language(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
