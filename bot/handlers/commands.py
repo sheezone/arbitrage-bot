@@ -220,7 +220,12 @@ class SubscriptionGateMiddleware(BaseMiddleware):
                 return await handler(event, data)
             chat_id = event.chat.id
         elif isinstance(event, CallbackQuery):
-            if event.data == NAV_CHECK_CHANNEL_SUB:
+            # Let the check-subscription button and the language flow through untouched:
+            # picking a UI language must come BEFORE the gate (a brand-new user chooses
+            # a language first, then is asked to subscribe -- see cmd_start / _send_start_ui).
+            if event.data == NAV_CHECK_CHANNEL_SUB or (event.data or "").startswith(
+                (LANG_SELECT_CALLBACK_PREFIX, NAV_LANGUAGE)
+            ):
                 return await handler(event, data)
             chat_id = event.message.chat.id if event.message else event.from_user.id
         else:
@@ -368,7 +373,6 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
     ]
     if billing.is_admin(user, admin_chat_ids):
         rows.append([_btn("🛠 Админ-панель", NAV_ADMIN)])
-    rows.append([_btn("◀️ Назад", NAV_DASHBOARD)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -962,6 +966,12 @@ def register_handlers(
             repo.upsert_user(chat_id)
             user = repo.get_user(chat_id)
 
+        # A user who only got here after subscribing may never have received the
+        # persistent keyboard (the gate cut _send_start_ui short) -- (re)attach it.
+        await bot.send_message(
+            chat_id, _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
+        )
+
         text, keyboard = _dashboard_view(user, admin_chat_ids)
         sent = await callback.message.answer_photo(
             FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
@@ -1018,21 +1028,16 @@ def register_handlers(
             pass
 
     async def _send_start_ui(bot: Bot, chat_id: int, user: UserSettings, *, send_welcome: bool) -> None:
-        """Attach the persistent keyboard, run the subscription gate, optionally send the
-        one-off welcome note, then plant a fresh dashboard as the LAST message in the
-        chat (deleting any older one) so the main panel is always at the bottom. Shared
-        by /start and the very first language pick."""
+        """Attach the persistent keyboard, send the one-off welcome note, run the
+        subscription gate, then (if past the gate) plant a fresh dashboard as the LAST
+        message in the chat so the main panel is always at the bottom. Shared by /start
+        and the very first language pick -- order is: language (already done by the
+        caller) -> keyboard/welcome -> gate -> bot."""
         # Carrier for the persistent bottom menu. Deliberately NOT deleted: confirmed
         # live that deleting it makes the reply keyboard disappear on some clients.
         await bot.send_message(
             chat_id, _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
         )
-
-        if required_channel_id is not None and chat_id not in admin_chat_ids:
-            if not await is_subscribed(bot, required_channel_id, chat_id):
-                text, keyboard = _subscription_gate_view(required_channel_username)
-                await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
-                return
 
         if send_welcome:
             trial_days = billing.REFERRED_TRIAL_DAYS if user.referred_by is not None else billing.TRIAL_DAYS
@@ -1049,6 +1054,12 @@ def register_handlers(
                 "Подробнее — кнопка «ℹ️ Помощь».",
                 parse_mode="HTML",
             )
+
+        if required_channel_id is not None and chat_id not in admin_chat_ids:
+            if not await is_subscribed(bot, required_channel_id, chat_id):
+                text, keyboard = _subscription_gate_view(required_channel_username)
+                await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+                return
 
         if user.menu_message_id:
             try:
