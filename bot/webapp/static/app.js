@@ -176,6 +176,9 @@
       age_min: "обновлено {n} мин назад",
       hint_swipe: "Листайте вкладки свайпом влево-вправо. 🧮 вверху — калькулятор.",
       hint_ok: "Понятно",
+      hist_recent: "Недавние — могли измениться",
+      hist_seen: "видели {n} назад",
+      u_sec: "сек", u_min: "мин", u_hr: "ч",
 an_news: "Новости (травмы, форма, дисквалификации)",
       an_lineups: "Составы и расстановка",
       an_lineups_none: "Составы станут известны ближе к началу матча. Структурные составы/травмы доступны только на платном источнике данных.",
@@ -287,6 +290,9 @@ an_news: "Новости (травмы, форма, дисквалификаци
       age_min: "{n} дақ пеш нав шуд",
       hint_swipe: "Бахшҳоро бо свайп чап-рост варақ занед. 🧮 боло — ҳисобкунак.",
       hint_ok: "Фаҳмидам",
+      hist_recent: "Наздикӣ — метавонанд тағйир ёбанд",
+      hist_seen: "{n} пеш дида шуд",
+      u_sec: "сон", u_min: "дақ", u_hr: "соат",
 an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалификатсия)",
       an_lineups: "Ҳайат ва ҷобаҷогузорӣ",
       an_lineups_none: "Ҳайатҳо наздик ба оғози бозӣ маълум мешаванд. Ҳайат/ҷароҳатҳои сохторӣ танҳо дар манбаи пулакӣ дастрасанд.",
@@ -398,6 +404,9 @@ an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалифика
       age_min: "updated {n}m ago",
       hint_swipe: "Swipe left/right to change tabs. 🧮 up top is the calculator.",
       hint_ok: "Got it",
+      hist_recent: "Recent — may have changed",
+      hist_seen: "seen {n} ago",
+      u_sec: "s", u_min: "m", u_hr: "h",
 an_news: "News (injuries, form, suspensions)",
       an_lineups: "Lineups & formation",
       an_lineups_none: "Lineups appear closer to kickoff. Structured lineups/injuries are only available on a paid data source.",
@@ -845,6 +854,45 @@ an_news: "News (injuries, form, suspensions)",
     }
   }
 
+  // Rolling history of arbs the Mini App has seen -- a single /api/vilki fetch only
+  // ever shows the *current* scan, so a vilka that dropped out of the latest cycle
+  // would otherwise vanish. History keeps the last HISTORY_MAX by lastSeen, drops
+  // anything not seen for HISTORY_TTL_MS, and is shown (dimmed, with an age label)
+  // below the live list.
+  const VILKI_HISTORY_KEY = "vilki_history_v2";
+  const HISTORY_MAX = 60;
+  const HISTORY_TTL_MS = 4 * 3600 * 1000;
+  const HISTORY_SHOW = 15;
+
+  function vilkiKey(m) {
+    const legs = (m.legs || []).map((l) => l.outcome_name).sort().join("|");
+    return `${m.game}|${m.team_a}|${m.team_b}|${legs}`;
+  }
+  function readVilkiHistory() {
+    try {
+      return JSON.parse(localStorage.getItem(VILKI_HISTORY_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function mergeVilkiHistory(matches) {
+    const now = Date.now();
+    const hist = readVilkiHistory();
+    matches.forEach((m) => {
+      const k = vilkiKey(m);
+      const prev = hist[k];
+      hist[k] = { match: m, firstSeen: (prev && prev.firstSeen) || now, lastSeen: now };
+    });
+    let entries = Object.entries(hist).filter(([, v]) => now - v.lastSeen <= HISTORY_TTL_MS);
+    entries.sort((a, b) => b[1].lastSeen - a[1].lastSeen);
+    entries = entries.slice(0, HISTORY_MAX);
+    try {
+      localStorage.setItem(VILKI_HISTORY_KEY, JSON.stringify(Object.fromEntries(entries)));
+    } catch (e) {
+      // storage full / blocked -- history is a nice-to-have
+    }
+  }
+
   // Quick filter (min-% + sport) applied client-side on top of the server's own
   // settings-driven filtering -- lets a user narrow the *current* fetch without a trip
   // to Настройки. Persisted per-viewer so it survives a reopen.
@@ -889,7 +937,8 @@ an_news: "News (injuries, form, suspensions)",
     return `${m.game_emoji} ${m.team_a} vs ${m.team_b}\n${t("profit")}${m.profit_pct.toFixed(2)}% · ${fmtMoney(m.profit_amount)}\n\n${legs}`;
   }
 
-  function renderVilkiCards(matches) {
+  function renderVilkiCards(matches, opts) {
+    const hist = opts && opts.historical;
     return matches
       .map((m, i) => {
         const isHigh = m.profit_pct > HIGH_PROFIT_THRESHOLD;
@@ -906,12 +955,17 @@ an_news: "News (injuries, form, suspensions)",
             </div>`;
           })
           .join("");
+        const idxAttr = hist ? `data-hist-idx="${i}"` : "";
+        const shareAttr = hist ? "" : `data-share-idx="${i}"`;
+        const copyAttr = hist ? `data-histcopy-idx="${i}"` : `data-copyall-idx="${i}"`;
         return `
-        <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
+        <div class="card${isHigh ? " high-profit" : ""}${hist ? " card-hist" : ""}" ${idxAttr} style="animation-delay:${Math.min(i * 45, 360)}ms">
           <div class="card-top">
             <span class="emoji-wiggle">${m.game_emoji}</span>
             <span class="game-label">${esc(m.game_label)}</span>
-            <button type="button" class="share-btn" data-share-idx="${i}" title="${t("share_btn")}">📤</button>
+            ${hist
+              ? `<span class="hist-age">${esc(t("hist_seen").replace("{n}", shortAge(Date.now() - (m._lastSeen || Date.now()))))}</span>`
+              : `<button type="button" class="share-btn" ${shareAttr} title="${t("share_btn")}">📤</button>`}
           </div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${teamBadge(m.team_a_logo, m.team_a_flag)}${copyable(m.team_a)} vs ${teamBadge(m.team_b_logo, m.team_b_flag)}${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
@@ -920,7 +974,7 @@ an_news: "News (injuries, form, suspensions)",
           <div class="legs-tbl">${legs}</div>
           <div class="card-foot">
             <div class="odds-warning">⚠️ ${t("odds_warning")}</div>
-            <button type="button" class="copyall-btn" data-copyall-idx="${i}">${t("copy_all")}</button>
+            <button type="button" class="copyall-btn" ${copyAttr}>${t("copy_all")}</button>
           </div>
         </div>`;
       })
@@ -962,7 +1016,7 @@ an_news: "News (injuries, form, suspensions)",
     return out;
   }
 
-  function bindVilkiControls(allMatches, shownMatches, filter) {
+  function bindVilkiControls(allMatches, shownMatches, histMatches, filter) {
     const pctInput = document.getElementById("filter-pct-input");
     if (pctInput) {
       pctInput.addEventListener("change", () => {
@@ -997,7 +1051,10 @@ an_news: "News (injuries, form, suspensions)",
     content.querySelectorAll(".copyall-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const m = shownMatches[Number(btn.dataset.copyallIdx)];
+        const isHist = btn.dataset.histcopyIdx != null;
+        const m = isHist
+          ? (histMatches || [])[Number(btn.dataset.histcopyIdx)]
+          : shownMatches[Number(btn.dataset.copyallIdx)];
         if (!m) return;
         copyToClipboard(vilkaCopyText(m)).then((ok) => {
           haptic(ok ? "light" : "medium");
@@ -1019,13 +1076,32 @@ an_news: "News (injuries, form, suspensions)",
     const filtered = applyVilkiFilter(allMatches, filter);
     const filterBar = renderVilkiFilterBar(sports, filter);
 
+    // Recent arbs from history that aren't in the current live scan -- shown dimmed
+    // below, marked "видели N назад". Not on a stale (cached) render, to avoid mixing
+    // two flavours of "old".
+    let histMatches = [];
+    if (!isStale) {
+      const liveKeys = new Set(allMatches.map(vilkiKey));
+      const hist = readVilkiHistory();
+      histMatches = Object.values(hist)
+        .filter((v) => !liveKeys.has(vilkiKey(v.match)))
+        .map((v) => ({ ...v.match, _lastSeen: v.lastSeen }));
+      histMatches = applyVilkiFilter(histMatches, filter)
+        .sort((a, b) => b._lastSeen - a._lastSeen)
+        .slice(0, HISTORY_SHOW);
+    }
+
     const body = filtered.length
       ? renderVilkiCards(filtered)
       : `<div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}
            <button type="button" class="empty-cta" id="empty-refresh">🔄 ${t("refresh_btn")}</button></div>`;
 
-    content.innerHTML = `${metaLineHtml || ""}${filterBar}<div${isStale ? ' class="stale"' : ""}>${body}</div><div class="meta-line disclaimer">${t("disclaimer")}</div>`;
-    bindVilkiControls(allMatches, filtered, filter);
+    const histBlock = histMatches.length
+      ? `<div class="hist-divider">${t("hist_recent")}</div><div class="hist-wrap">${renderVilkiCards(histMatches, { historical: true })}</div>`
+      : "";
+
+    content.innerHTML = `${metaLineHtml || ""}${filterBar}<div${isStale ? ' class="stale"' : ""}>${body}</div>${histBlock}<div class="meta-line disclaimer">${t("disclaimer")}</div>`;
+    bindVilkiControls(allMatches, filtered, histMatches, filter);
     const er = document.getElementById("empty-refresh");
     if (er) er.addEventListener("click", () => { haptic("light"); loadTab("vilki", true); });
 
@@ -1054,6 +1130,7 @@ an_news: "News (injuries, form, suspensions)",
     const data = await api("/api/vilki");
     const checkedAt = data.updated_at ? fmtMoscowTime(data.updated_at) + t("msk") : "—";
     writeVilkiCache({ matches: data.matches, checkedAt });
+    mergeVilkiHistory(data.matches);
     lastVilkiFetchTs = Date.now();
 
     if (!data.matches.length) {
@@ -1952,6 +2029,13 @@ an_news: "News (injuries, form, suspensions)",
     if (s < 60) return t("age_now").replace("{n}", s);
     const m = Math.round(s / 60);
     return t("age_min").replace("{n}", m);
+  }
+  function shortAge(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s} ${t("u_sec")}`;
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m} ${t("u_min")}`;
+    return `${Math.round(m / 60)} ${t("u_hr")}`;
   }
   function startDataAgeTicker() {
     setInterval(() => {

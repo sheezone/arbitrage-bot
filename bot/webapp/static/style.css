@@ -1024,3 +1024,16 @@ input:checked + .slider::before { transform: translateX(19px); background: #0c0f
   margin-left: auto; flex: none; background: var(--accent); color: var(--button-text);
   border: none; border-radius: 9px; padding: 7px 14px; font-weight: 700; font-size: var(--fs-sm); cursor: pointer;
 }
+
+/* Recent-arb history (kept in the Mini App's own storage, shown below the live list) */
+.hist-divider {
+  margin: 22px 0 12px; text-align: center; font-size: var(--fs-sm); color: var(--hint);
+  letter-spacing: 0.04em;
+}
+.hist-divider::before, .hist-divider::after {
+  content: ""; display: inline-block; width: 28px; height: 1px; vertical-align: middle;
+  margin: 0 8px; background: var(--border);
+}
+.hist-wrap { opacity: 0.62; }
+.card-hist { border-style: dashed; box-shadow: none; }
+.hist-age { margin-left: auto; font-size: var(--fs-xs); color: var(--hint); white-space: nowrap; }
