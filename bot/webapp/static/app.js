@@ -98,6 +98,7 @@
   }
 
   let currentTab = "vilki";
+  let swipeActive = false; // true while a horizontal tab-swipe owns the gesture
   let meCache = null;
   let bookmakersCache = null;
   let refreshTimer = null;
@@ -491,7 +492,10 @@
     btn.addEventListener("click", () => {
       if (btn.dataset.tab === currentTab) return;
       haptic("light");
-      switchTab(btn.dataset.tab);
+      const tabs = visibleTabs();
+      const from = tabs.findIndex((b) => b.dataset.tab === currentTab);
+      const to = tabs.findIndex((b) => b.dataset.tab === btn.dataset.tab);
+      animatedSwitch(btn.dataset.tab, to > from ? -1 : 1);
     });
   });
   refreshBtn.addEventListener("click", () => {
@@ -506,6 +510,39 @@
     loadTab(tab);
   }
 
+  // Slide the current page off in `dir` (-1 = new page enters from the right / moving
+  // forward, +1 = from the left), swap content, then slide the new page in. Used by
+  // both the swipe gesture and a tab-bar tap so navigation always feels like flipping.
+  let animating = false;
+  function animatedSwitch(tab, dir) {
+    if (animating || tab === currentTab) {
+      if (tab === currentTab) content.style.transform = "";
+      return;
+    }
+    animating = true;
+    const w = content.clientWidth || window.innerWidth;
+    content.style.transition = "transform 0.16s ease-in";
+    content.style.transform = `translateX(${dir * -w}px)`;
+    let swapped = false;
+    const finish = () => {
+      if (swapped) return;
+      swapped = true;
+      content.removeEventListener("transitionend", finish);
+      switchTab(tab);
+      content.style.transition = "none";
+      content.style.transform = `translateX(${dir * w}px)`;
+      void content.offsetWidth; // reflow, so the slide-in animates from off-screen
+      content.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)";
+      content.style.transform = "";
+      setTimeout(() => {
+        content.style.transition = "";
+        animating = false;
+      }, 220);
+    };
+    content.addEventListener("transitionend", finish);
+    setTimeout(finish, 220); // fallback if transitionend is missed
+  }
+
   // Order of tabs as swiping should cycle through them -- only the ones actually
   // visible right now (admin-tab stays `hidden` in the DOM for non-admins, so it's
   // naturally excluded without any extra bookkeeping).
@@ -514,41 +551,80 @@
   }
 
   // ---------- swipe between tabs ----------
-  // Horizontal drag on the content area moves to the next/prev tab, mirroring the tap
-  // targets above it. Only acts once the gesture clearly reads as horizontal (delta-x
-  // well past delta-y) so it never fights vertical scrolling or pull-to-refresh below.
+  // The content area follows the finger horizontally (rubber-banding at the first/last
+  // tab), and on release either flips to the neighbouring tab or snaps back -- so pages
+  // feel paged through, not just tapped. `touch-action: pan-y` on #content keeps the
+  // browser owning vertical scroll, so this never has to preventDefault.
   (function setupTabSwipe() {
-    let startX = 0, startY = 0, tracking = false;
-    content.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches.length !== 1) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        tracking = true;
-      },
-      { passive: true }
-    );
-    content.addEventListener(
-      "touchend",
-      (e) => {
-        if (!tracking) return;
-        tracking = false;
-        const dx = e.changedTouches[0].clientX - startX;
-        const dy = e.changedTouches[0].clientY - startY;
-        if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
-        const tabs = visibleTabs();
-        const idx = tabs.findIndex((b) => b.dataset.tab === currentTab);
-        if (idx === -1) return;
-        // Swipe left (dx<0) advances to the next tab, same direction as a horizontal
-        // carousel; swipe right goes back -- matches the RTL-agnostic LTR tab order.
-        const nextIdx = dx < 0 ? idx + 1 : idx - 1;
-        if (nextIdx < 0 || nextIdx >= tabs.length) return;
+    let startX = 0, startY = 0, startT = 0, axis = null, dxNow = 0;
+
+    function canScrollXUnder(target) {
+      let el = target;
+      while (el && el !== content) {
+        if (el.scrollWidth - el.clientWidth > 4) return true;
+        el = el.parentElement;
+      }
+      return false;
+    }
+
+    content.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1 || animating || !calcModal.hidden) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startT = Date.now();
+      axis = null;
+      dxNow = 0;
+    }, { passive: true });
+
+    content.addEventListener("touchmove", (e) => {
+      if (startT === 0) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (axis === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        // vertical, or starting inside something that scrolls sideways -> let it be
+        if (Math.abs(dy) > Math.abs(dx) || canScrollXUnder(e.target)) {
+          axis = "y";
+          return;
+        }
+        axis = "x";
+        swipeActive = true;
+        content.style.transition = "none";
+      }
+      if (axis !== "x") return;
+      const tabs = visibleTabs();
+      const idx = tabs.findIndex((b) => b.dataset.tab === currentTab);
+      const atEnd = (dx < 0 && idx >= tabs.length - 1) || (dx > 0 && idx <= 0);
+      dxNow = atEnd ? dx * 0.28 : dx; // rubber-band past the ends
+      content.style.transform = `translateX(${dxNow}px)`;
+    }, { passive: true });
+
+    function endSwipe() {
+      if (startT === 0) return;
+      const wasX = axis === "x";
+      const dx = dxNow;
+      const elapsed = Date.now() - startT;
+      startT = 0;
+      axis = null;
+      swipeActive = false;
+      if (!wasX) return;
+      const w = content.clientWidth || window.innerWidth;
+      const flick = Math.abs(dx) > 45 && elapsed < 250;
+      const tabs = visibleTabs();
+      const idx = tabs.findIndex((b) => b.dataset.tab === currentTab);
+      const dir = dx < 0 ? -1 : 1; // dx<0 -> go to next tab (enters from right)
+      const nextIdx = dx < 0 ? idx + 1 : idx - 1;
+      if ((Math.abs(dx) > w * 0.25 || flick) && nextIdx >= 0 && nextIdx < tabs.length) {
         haptic("light");
-        switchTab(tabs[nextIdx].dataset.tab);
-      },
-      { passive: true }
-    );
+        animatedSwitch(tabs[nextIdx].dataset.tab, dir);
+      } else {
+        content.style.transition = "transform 0.18s ease";
+        content.style.transform = "";
+        setTimeout(() => (content.style.transition = ""), 200);
+      }
+    }
+    content.addEventListener("touchend", endSwipe, { passive: true });
+    content.addEventListener("touchcancel", endSwipe, { passive: true });
   })();
 
   // ---------- pull-to-refresh ----------
@@ -577,7 +653,7 @@
     content.addEventListener(
       "touchmove",
       (e) => {
-        if (!pulling) return;
+        if (!pulling || swipeActive) return;
         const dy = e.touches[0].clientY - startY;
         if (dy <= 0) {
           dragged = 0;
