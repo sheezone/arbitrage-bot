@@ -580,6 +580,45 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 .modal-close { background: none; border: none; color: var(--hint); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
 .modal-close:active { background: var(--card-bg); }
 
+/* Full-screen variant (match analysis) */
+.modal.modal-full { padding: 10px; align-items: stretch; }
+.modal.modal-full .modal-panel { max-width: 560px; margin: 0 auto; max-height: calc(100vh - 20px); }
+.modal-full .modal-head { position: sticky; top: -14px; background: color-mix(in srgb, var(--bg) 96%, #fff); padding-top: 4px; z-index: 1; }
+
+.an-head { text-align: center; font-size: 15px; color: var(--text); margin-bottom: 10px; }
+.an-vs { color: var(--hint); margin: 0 6px; font-weight: 400; }
+.an-loading { text-align: center; color: var(--hint); padding: 40px 0; }
+.an-news .news-row { padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.an-news .news-row:last-child { border-bottom: none; }
+
+/* Formation pitch -- dots placed by JS from a "4-3-3"-style string. */
+.pitch-wrap { display: flex; flex-direction: column; gap: 10px; }
+.pitch {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #1f7a43, #166034);
+  overflow: hidden;
+}
+.pitch-lines {
+  position: absolute; inset: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+}
+.pitch-lines::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%;
+  border-top: 2px solid rgba(255, 255, 255, 0.25);
+}
+.pitch-player { position: absolute; transform: translate(-50%, -50%); text-align: center; width: 46px; }
+.pitch-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; color: #166034; font-size: 10px; font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.pitch-name { display: block; font-size: 9px; color: #fff; margin-top: 2px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); white-space: nowrap; }
+
 .calc-margin { font-size: 14px; margin: 8px 0 10px; }
 .calc-margin.pos { color: var(--accent); }
 .calc-margin.neg { color: var(--red); }

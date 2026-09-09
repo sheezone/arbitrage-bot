@@ -89,6 +89,8 @@
   const calcBtn = document.getElementById("calc-btn");
   const calcModal = document.getElementById("calc-modal");
   const calcBody = document.getElementById("calc-body");
+  const analysisModal = document.getElementById("analysis-modal");
+  const analysisBody = document.getElementById("analysis-body");
   const topbarTitleEl = document.getElementById("topbar-title");
 
   function toast(msg) {
@@ -165,6 +167,10 @@
       calc_stake_on: "Ставка на исход",
       calc_payout: "Возврат при любом исходе",
       calc_err_odds: "Коэффициенты должны быть больше 1",
+            an_title: "Анализ матча",
+an_news: "Новости (травмы, форма, дисквалификации)",
+      an_lineups: "Составы и расстановка",
+      an_lineups_none: "Составы станут известны ближе к началу матча. Структурные составы/травмы доступны только на платном источнике данных.",
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
       analyze_btn: "🔍 Проанализировать",
@@ -264,6 +270,10 @@
       calc_stake_on: "Ставка ба натиҷа",
       calc_payout: "Бозгашт дар ҳар натиҷа",
       calc_err_odds: "Коэффисиентҳо бояд аз 1 зиёд бошанд",
+            an_title: "Таҳлили бозӣ",
+an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалификатсия)",
+      an_lineups: "Ҳайат ва ҷобаҷогузорӣ",
+      an_lineups_none: "Ҳайатҳо наздик ба оғози бозӣ маълум мешаванд. Ҳайат/ҷароҳатҳои сохторӣ танҳо дар манбаи пулакӣ дастрасанд.",
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
       analyze_btn: "🔍 Таҳлил кардан",
@@ -363,6 +373,10 @@
       calc_stake_on: "Stake on outcome",
       calc_payout: "Return on either outcome",
       calc_err_odds: "Odds must be greater than 1",
+            an_title: "Match analysis",
+an_news: "News (injuries, form, suspensions)",
+      an_lineups: "Lineups & formation",
+      an_lineups_none: "Lineups appear closer to kickoff. Structured lineups/injuries are only available on a paid data source.",
       loading: "Loading…",
       daily_limit_reached: "Today's limit reached",
       analyze_btn: "🔍 Analyze",
@@ -434,6 +448,7 @@
     document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
     calcBtn.title = t("tab_calc");
     document.getElementById("calc-modal-title").textContent = t("tab_calc");
+    document.getElementById("analysis-modal-title").textContent = t("an_title");
     document.getElementById("admin-tab").textContent = t("tab_admin");
     document.querySelectorAll(".lang-menu-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.lang === currentLang);
@@ -598,7 +613,7 @@
     }
 
     content.addEventListener("touchstart", (e) => {
-      if (e.touches.length !== 1 || animating || !calcModal.hidden) return;
+      if (e.touches.length !== 1 || animating || !calcModal.hidden || !analysisModal.hidden) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startT = Date.now();
@@ -1216,21 +1231,92 @@
       </div>`;
   }
 
+  function closeAnalysis() {
+    analysisModal.hidden = true;
+  }
+  document.getElementById("analysis-close").addEventListener("click", closeAnalysis);
+  analysisModal.querySelector(".modal-backdrop").addEventListener("click", closeAnalysis);
+
+  // Draws an 11-a-side pitch with player dots laid out by `formation` ("4-3-3").
+  // Only used when lineup data is actually present (no free football source has it
+  // pre-match yet -- see /api/analysis); the section is hidden otherwise.
+  function renderPitch(lineup, flip) {
+    if (!lineup || !Array.isArray(lineup.starters) || lineup.starters.length < 11) return "";
+    const rows = String(lineup.formation || "4-3-3").split("-").map((n) => parseInt(n, 10)).filter(Boolean);
+    let players = lineup.starters.slice();
+    const gk = players.shift();
+    const bands = [[gk]];
+    rows.forEach((count) => bands.push(players.splice(0, count)));
+    const n = bands.length;
+    const dots = bands
+      .map((band, bi) => {
+        const y = flip ? 100 - ((bi + 0.5) / n) * 100 : ((bi + 0.5) / n) * 100;
+        return band
+          .map((p, pi) => {
+            const x = ((pi + 0.5) / band.length) * 100;
+            const label = esc((p && (p.shirt || p.name)) ? String(p.shirt || "").trim() || "" : "");
+            const name = esc(p && p.name ? p.name.split(" ").slice(-1)[0] : "");
+            return `<div class="pitch-player" style="left:${x}%;top:${y}%">
+                <span class="pitch-dot">${label}</span><span class="pitch-name">${name}</span>
+              </div>`;
+          })
+          .join("");
+      })
+      .join("");
+    return `<div class="pitch"><div class="pitch-lines"></div>${dots}</div>`;
+  }
+
+  function renderNewsBlock(news) {
+    if (!news || !news.length) return `<div class="news-empty">${t("no_fresh_news")}</div>`;
+    return (
+      `<div class="an-news">` +
+      news
+        .slice(0, 8)
+        .map(
+          (h) => `<div class="news-row">
+            <a href="${esc(h.link)}" target="_blank" rel="noopener">${esc(h.title)}</a>
+            <div class="news-meta">${esc(h.source || "")}${h.published_at ? " · " + fmtNewsTime(h.published_at) : ""}</div>
+          </div>`
+        )
+        .join("") +
+      `</div>`
+    );
+  }
+
+  function renderAnalysis(result, teamA, teamB) {
+    const secForm = renderFormBlock(result, teamA, teamB);
+    const secH2h = renderH2hBlock(result.h2h, teamA, teamB);
+    const pitchA = renderPitch(result.lineup_a, false);
+    const pitchB = renderPitch(result.lineup_b, true);
+    const lineupSec = pitchA || pitchB
+      ? `<div class="h2h-block"><div class="h2h-title">📋 ${t("an_lineups")}</div>
+           <div class="pitch-wrap">${pitchB}${pitchA}</div></div>`
+      : `<div class="h2h-block"><div class="h2h-title">📋 ${t("an_lineups")}</div>
+           <div class="news-empty">${t("an_lineups_none")}</div></div>`;
+    return `
+      <div class="an-head">
+        <b>${esc(teamA)}</b> <span class="an-vs">vs</span> <b>${esc(teamB)}</b>
+      </div>
+      ${secForm}
+      ${secH2h}
+      <div class="h2h-block"><div class="h2h-title">📰 ${t("an_news")}</div>${renderNewsBlock(result.news)}</div>
+      ${lineupSec}
+    `;
+  }
+
   // Gated to 1 analysis/day/user (see /api/analysis) -- deliberately not fetched for
-  // all 3 matches up front, only for the one the user actually clicks on.
+  // all 3 matches up front, only for the one the user actually clicks on. Opens a
+  // full-screen modal.
   async function onAnalyzeClick(btn) {
     const teamA = btn.dataset.teamA;
     const teamB = btn.dataset.teamB;
-    const slot = document.getElementById(btn.dataset.slotId);
     haptic("light");
-    btn.disabled = true;
-    btn.textContent = t("loading");
+    analysisBody.innerHTML = `<div class="an-loading">${t("loading")}</div>`;
+    analysisModal.hidden = false;
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
-      slot.innerHTML = renderFormBlock(result, teamA, teamB) + renderH2hBlock(result.h2h, teamA, teamB);
+      analysisBody.innerHTML = renderAnalysis(result, teamA, teamB);
       btn.remove();
-      // Admins have no daily quota server-side (see /api/analysis) -- leave every other
-      // button clickable for them instead of locking the rest of the page.
       if (!meCache || !meCache.is_admin) {
         if (meCache) meCache.analysis_available = false;
         document.querySelectorAll(".analyze-btn").forEach((b) => {
@@ -1241,6 +1327,7 @@
         });
       }
     } catch (e) {
+      closeAnalysis();
       btn.disabled = false;
       btn.textContent = t("analyze_btn");
       toast(t("error_prefix") + e.message);
@@ -1283,13 +1370,12 @@
             .join("")
         : `<div class="news-empty">${t("no_fresh_news")}</div>`;
 
-      // Full analysis (H2H) is fetched only on click, gated to 1/day/user -- see
-      // /api/analysis and onAnalyzeClick above.
-      const slotId = `analysis-slot-${i}`;
+      // Full analysis is fetched only on click, gated to 1/day/user, and opens in a
+      // full-screen modal -- see /api/analysis and onAnalyzeClick above.
       let analyzeBlock = "";
       if (m.can_analyze) {
         analyzeBlock = me.analysis_available
-          ? `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}" data-slot-id="${slotId}">${t("analyze_btn")}</button>`
+          ? `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}">${t("analyze_btn")}</button>`
           : `<button type="button" class="analyze-btn" disabled>${t("daily_limit_reached")}</button>`;
       }
 
@@ -1300,7 +1386,6 @@
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div class="news-list">${headlines}</div>
           ${analyzeBlock}
-          <div id="${slotId}"></div>
         </div>`;
     });
 

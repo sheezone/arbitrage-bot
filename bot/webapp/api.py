@@ -363,6 +363,7 @@ def register_api(
             # everything it doesn't cover. Neither touches the API-Football day budget.
             form_a = await fd_team_form(client, team_a, football_data_key) or await get_team_form(client, team_a)
             form_b = await fd_team_form(client, team_b, football_data_key) or await get_team_form(client, team_b)
+            headlines = await fetch_team_news(client, team_a, team_b)
 
         if not is_admin:
             repo.set_last_analysis_date(chat_id, today)
@@ -373,6 +374,13 @@ def register_api(
             "form_a": form_a,
             "form_b": form_b,
             "implied": implied,
+            "news": headlines,
+            # Lineups / formations / structured injuries have no free source for
+            # football (API-Football free, football-data.org free, ESPN soccer and
+            # TheSportsDB all omit them) -- populated only if a paid provider is wired
+            # later. The frontend renders the pitch when these are non-null.
+            "lineup_a": None,
+            "lineup_b": None,
         }
 
     async def _get_football_logo(client: httpx.AsyncClient, team_name: str) -> str | None:
