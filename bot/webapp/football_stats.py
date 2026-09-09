@@ -211,8 +211,8 @@ async def get_head_to_head(client: httpx.AsyncClient, team_a_id: int, team_b_id:
             matches.append({
                 "fixture_id": f.get("fixture", {}).get("id"),
                 "date": (f.get("fixture", {}).get("date") or "")[:10],
-                "home": home.get("name"),
-                "away": away.get("name"),
+                "home": display_team_name(home.get("name") or ""),
+                "away": display_team_name(away.get("name") or ""),
                 "home_score": home_score,
                 "away_score": away_score,
             })
@@ -253,9 +253,9 @@ async def get_fixture_events(client: httpx.AsyncClient, fixture_id: int, api_key
         events.append({
             "minute": minute,
             "emoji": _EVENT_TYPE_EMOJI.get(event_type, "▪️"),
-            "team": (e.get("team") or {}).get("name"),
+            "team": display_team_name((e.get("team") or {}).get("name") or ""),
             "player": (e.get("player") or {}).get("name"),
-            "detail": e.get("detail"),
+            "detail": e.get("detail"),  # English enum; the frontend localises it
         })
     events.sort(key=lambda ev: ev["minute"])
     return events

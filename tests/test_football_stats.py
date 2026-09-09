@@ -290,5 +290,5 @@ def test_get_match_h2h_attaches_recent_meeting_events():
 
     result = _run(go())
     assert result["recent_meeting_events"] == [
-        {"minute": 30, "emoji": "⚽", "team": "Real Madrid", "player": "Vinicius", "detail": "Normal Goal"}
+        {"minute": 30, "emoji": "⚽", "team": "Реал Мадрид", "player": "Vinicius", "detail": "Normal Goal"}
     ]

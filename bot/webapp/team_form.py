@@ -18,7 +18,7 @@ import unicodedata
 
 import httpx
 
-from bot.webapp.football_stats import resolve_search_name
+from bot.webapp.football_stats import display_team_name, resolve_search_name
 
 ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 ESPN_CORE_V2 = "https://site.api.espn.com/apis/v2/sports/soccer"
@@ -130,7 +130,7 @@ async def _recent_matches(client: httpx.AsyncClient, slug: str, team_id: str, di
             result = "D"
         out.append({
             "date": (ev.get("date") or "")[:10],
-            "opponent": opp["team"].get("displayName") or opp["team"].get("name") or "?",
+            "opponent": display_team_name(opp["team"].get("displayName") or opp["team"].get("name") or "?"),
             "home_away": me.get("homeAway") or "",
             "gf": gf,
             "ga": ga,
@@ -185,7 +185,7 @@ async def get_team_form(client: httpx.AsyncClient, team_name: str) -> dict | Non
     draws = sum(1 for m in matches if m["result"] == "D")
     losses = sum(1 for m in matches if m["result"] == "L")
     return {
-        "team": display_name,
+        "team": display_team_name(display_name),
         "form": "".join(m["result"] for m in matches),  # newest-first, e.g. "WWDLW"
         "played": len(matches),
         "wins": wins,

@@ -1116,6 +1116,46 @@ an_news: "News (injuries, form, suspensions)",
     if (d.includes("penalt") && ev.emoji === "⚽") return "🎯";
     return ev.emoji || "▪️";
   }
+
+  // API-Football sends event `detail` as an English enum -- localise it to the Mini
+  // App's language. Keyword-matched (order matters: "own goal" before "goal", etc.).
+  const EVENT_DETAIL = {
+    ru: {
+      own_goal: "Автогол", missed_pen: "Нереализованный пенальти", penalty: "Гол с пенальти",
+      goal: "Гол", "2yellow": "Вторая жёлтая", yellow: "Жёлтая карточка", red: "Красная карточка",
+      sub: "Замена", goal_cancelled: "Гол отменён (VAR)", goal_confirmed: "Гол засчитан (VAR)",
+      pen_confirmed: "Пенальти назначен (VAR)", pen_cancelled: "Пенальти отменён (VAR)",
+      card_upgrade: "Карточка изменена (VAR)",
+    },
+    en: {
+      own_goal: "Own goal", missed_pen: "Missed penalty", penalty: "Penalty goal", goal: "Goal",
+      "2yellow": "Second yellow", yellow: "Yellow card", red: "Red card", sub: "Substitution",
+      goal_cancelled: "Goal cancelled (VAR)", goal_confirmed: "Goal confirmed (VAR)",
+      pen_confirmed: "Penalty confirmed (VAR)", pen_cancelled: "Penalty cancelled (VAR)",
+      card_upgrade: "Card upgraded (VAR)",
+    },
+    tg: {
+      own_goal: "Голи худӣ", missed_pen: "Пеналтии аз даст рафта", penalty: "Гол аз пеналти",
+      goal: "Гол", "2yellow": "Зарди дуюм", yellow: "Корти зард", red: "Корти сурх", sub: "Иваз",
+      goal_cancelled: "Гол бекор шуд (VAR)", goal_confirmed: "Гол қабул шуд (VAR)",
+      pen_confirmed: "Пеналти таъин шуд (VAR)", pen_cancelled: "Пеналти бекор шуд (VAR)",
+      card_upgrade: "Корт тағйир ёфт (VAR)",
+    },
+  };
+  const _EVENT_DETAIL_KEYS = [
+    ["own goal", "own_goal"], ["missed penalty", "missed_pen"], ["penalty confirmed", "pen_confirmed"],
+    ["penalty cancelled", "pen_cancelled"], ["goal cancelled", "goal_cancelled"],
+    ["goal confirmed", "goal_confirmed"], ["card upgrade", "card_upgrade"],
+    ["second yellow", "2yellow"], ["yellow card", "yellow"], ["red card", "red"],
+    ["substitution", "sub"], ["penalty", "penalty"], ["normal goal", "goal"], ["goal", "goal"],
+  ];
+  function evDetail(raw) {
+    if (!raw) return "";
+    const d = raw.toLowerCase();
+    const M = EVENT_DETAIL[currentLang] || EVENT_DETAIL.ru;
+    for (const [kw, key] of _EVENT_DETAIL_KEYS) if (d.includes(kw)) return M[key] || raw;
+    return raw;
+  }
   function renderH2hTimeline(events, homeTeam) {
     const rows = events
       .slice()
@@ -1126,7 +1166,7 @@ an_news: "News (injuries, form, suspensions)",
             <span class="tl-min">${ev.minute || 0}'</span>
             <span class="tl-node ${home ? "tl-home" : "tl-away"}">${h2hEventIcon(ev)}</span>
             <span class="tl-body"><b>${esc(ev.player || "")}</b>${
-              ev.detail ? ` <span class="tl-detail">${esc(ev.detail)}</span>` : ""
+              ev.detail ? ` <span class="tl-detail">${esc(evDetail(ev.detail))}</span>` : ""
             }<span class="tl-team">${esc(ev.team || "")}</span></span>
           </div>`;
       })

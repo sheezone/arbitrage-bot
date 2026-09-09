@@ -86,7 +86,7 @@ def test_get_team_form_parses_recent_results():
 
     form = _run(go())
     assert form is not None
-    assert form["team"] == "Real Madrid"
+    assert form["team"] == "Реал Мадрид"
     assert form["form"] == "WL"  # newest-first
     assert form["wins"] == 1 and form["losses"] == 1 and form["draws"] == 0
     assert form["gf"] == 5 and form["ga"] == 2

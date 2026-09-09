@@ -17,7 +17,7 @@ import time
 
 import httpx
 
-from bot.webapp.football_stats import resolve_search_name
+from bot.webapp.football_stats import display_team_name, resolve_search_name
 from bot.webapp.team_form import _norm
 
 API_BASE = "https://api.football-data.org/v4"
@@ -108,7 +108,7 @@ async def _recent_matches(client: httpx.AsyncClient, team_id: int, api_key: str)
         result = "W" if gf > ga else "L" if gf < ga else "D"
         out.append({
             "date": (m.get("utcDate") or "")[:10],
-            "opponent": opp.get("shortName") or opp.get("name") or "?",
+            "opponent": display_team_name(opp.get("shortName") or opp.get("name") or "?"),
             "home_away": "home" if is_home else "away",
             "gf": gf,
             "ga": ga,
@@ -135,7 +135,7 @@ async def get_team_form(client: httpx.AsyncClient, team_name: str, api_key: str)
         draws = sum(1 for m in matches if m["result"] == "D")
         losses = sum(1 for m in matches if m["result"] == "L")
         return {
-            "team": row["name"],
+            "team": display_team_name(row["name"]),
             "form": "".join(m["result"] for m in matches),
             "played": len(matches),
             "wins": wins,
