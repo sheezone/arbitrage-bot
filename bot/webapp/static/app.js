@@ -511,18 +511,42 @@
   }
 
   // Slide the current page off in `dir` (-1 = new page enters from the right / moving
-  // forward, +1 = from the left), swap content, then slide the new page in. Used by
-  // both the swipe gesture and a tab-bar tap so navigation always feels like flipping.
+  // forward, +1 = from the left), swap content while it's hidden, then ease the new
+  // page in. Used by both the swipe gesture and a tab-bar tap so navigation always
+  // feels like flipping. Transform + opacity together (partial travel) so the swap in
+  // the middle is invisible and the motion stays light rather than a hard full-width
+  // slam. One easing curve throughout; double-rAF between the swap and the slide-in so
+  // the browser paints the off-screen start before animating from it.
+  const SWIPE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+  const REDUCE_MOTION = (() => {
+    try {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {
+      return false;
+    }
+  })();
   let animating = false;
   function animatedSwitch(tab, dir) {
+    if (REDUCE_MOTION) {
+      content.style.transform = "";
+      content.style.opacity = "";
+      if (tab !== currentTab) switchTab(tab);
+      return;
+    }
     if (animating || tab === currentTab) {
-      if (tab === currentTab) content.style.transform = "";
+      if (tab === currentTab) {
+        content.style.transition = `transform 0.22s ${SWIPE_EASE}, opacity 0.22s ${SWIPE_EASE}`;
+        content.style.transform = "";
+        content.style.opacity = "";
+      }
       return;
     }
     animating = true;
     const w = content.clientWidth || window.innerWidth;
-    content.style.transition = "transform 0.16s ease-in";
-    content.style.transform = `translateX(${dir * -w}px)`;
+    const travel = Math.round(w * 0.55);
+    content.style.transition = `transform 0.2s ${SWIPE_EASE}, opacity 0.18s linear`;
+    content.style.transform = `translateX(${dir * -travel}px)`;
+    content.style.opacity = "0";
     let swapped = false;
     const finish = () => {
       if (swapped) return;
@@ -530,17 +554,23 @@
       content.removeEventListener("transitionend", finish);
       switchTab(tab);
       content.style.transition = "none";
-      content.style.transform = `translateX(${dir * w}px)`;
-      void content.offsetWidth; // reflow, so the slide-in animates from off-screen
-      content.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)";
-      content.style.transform = "";
-      setTimeout(() => {
-        content.style.transition = "";
-        animating = false;
-      }, 220);
+      content.style.transform = `translateX(${dir * travel}px)`;
+      content.style.opacity = "0";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          content.style.transition = `transform 0.28s ${SWIPE_EASE}, opacity 0.22s linear`;
+          content.style.transform = "";
+          content.style.opacity = "1";
+          setTimeout(() => {
+            content.style.transition = "";
+            content.style.opacity = "";
+            animating = false;
+          }, 300);
+        });
+      });
     };
     content.addEventListener("transitionend", finish);
-    setTimeout(finish, 220); // fallback if transitionend is missed
+    setTimeout(finish, 230); // fallback if transitionend is missed
   }
 
   // Order of tabs as swiping should cycle through them -- only the ones actually
@@ -594,9 +624,12 @@
       if (axis !== "x") return;
       const tabs = visibleTabs();
       const idx = tabs.findIndex((b) => b.dataset.tab === currentTab);
+      const w = content.clientWidth || window.innerWidth;
       const atEnd = (dx < 0 && idx >= tabs.length - 1) || (dx > 0 && idx <= 0);
       dxNow = atEnd ? dx * 0.28 : dx; // rubber-band past the ends
+      // Slight fade as the page is dragged, so it connects to the release animation.
       content.style.transform = `translateX(${dxNow}px)`;
+      content.style.opacity = String(1 - Math.min(0.3, Math.abs(dxNow) / w));
     }, { passive: true });
 
     function endSwipe() {
@@ -618,9 +651,10 @@
         haptic("light");
         animatedSwitch(tabs[nextIdx].dataset.tab, dir);
       } else {
-        content.style.transition = "transform 0.18s ease";
+        content.style.transition = `transform 0.24s ${SWIPE_EASE}, opacity 0.24s ${SWIPE_EASE}`;
         content.style.transform = "";
-        setTimeout(() => (content.style.transition = ""), 200);
+        content.style.opacity = "";
+        setTimeout(() => (content.style.transition = ""), 260);
       }
     }
     content.addEventListener("touchend", endSwipe, { passive: true });

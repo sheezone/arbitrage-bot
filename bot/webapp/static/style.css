@@ -262,7 +262,7 @@ html, body {
 .tab:disabled { opacity: 0.35; cursor: default; }
 
 .content-wrap { position: relative; flex: 1; }
-main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-action: pan-y; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-action: pan-y; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform, opacity; }
 
 /* Pull-to-refresh indicator -- a plain rotating icon pinned above the content, revealed
    by translating #content down as the user drags (see app.js's touch handlers). No
