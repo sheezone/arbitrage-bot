@@ -24,10 +24,10 @@ from bot.db.repository import Repository
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BONUS_DAYS = 3
+BONUS_DAYS = 5
 MESSAGE = (
     "🎁 <b>Подарок от нас!</b>\n\n"
-    f"Всем пользователям начислено <b>+{BONUS_DAYS} бесплатных дня</b> доступа к боту — "
+    f"Всем пользователям начислено <b>+{BONUS_DAYS} бесплатных дней</b> доступа к боту — "
     "просто в благодарность за то, что вы с нами. Дни уже добавлены к вашему счёту, "
     "ничего делать не нужно."
 )

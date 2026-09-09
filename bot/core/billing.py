@@ -9,10 +9,11 @@ from datetime import datetime, timedelta
 
 from bot.db.repository import UserSettings
 
-TRIAL_DAYS = 3
+TRIAL_DAYS = 5
 # A user who signed up via someone's referral link gets a longer trial -- extra incentive
-# to actually use a referral link instead of just starting the bot cold.
-REFERRED_TRIAL_DAYS = 5
+# to actually use a referral link instead of just starting the bot cold. Kept strictly
+# above TRIAL_DAYS so "referred = more" stays true.
+REFERRED_TRIAL_DAYS = 7
 
 
 @dataclass(frozen=True)
