@@ -30,6 +30,14 @@ def test_language_defaults_to_ru(tmp_path):
     assert repo.get_user(1).language == "ru"
 
 
+def test_new_user_has_not_chosen_language_yet(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    assert repo.get_user(1).lang_chosen is False
+    repo.set_lang_chosen(1)
+    assert repo.get_user(1).lang_chosen is True
+
+
 def test_set_language_round_trips(tmp_path):
     repo = _repo(tmp_path)
     repo.upsert_user(1)
@@ -58,14 +66,13 @@ def test_main_menu_keyboard_shows_tajik_labels_and_language_button(tmp_path):
     assert LANG_BUTTON_TEXT in texts
 
 
-def test_language_menu_marks_current_choice(tmp_path):
-    text, kb = _language_menu_view("en")
+def test_language_menu_is_plain_buttons(tmp_path):
+    # No "current" checkmark -- the menu is deleted the moment a choice is tapped.
+    text, kb = _language_menu_view()
     buttons = [btn for row in kb.inline_keyboard for btn in row]
     assert {b.callback_data for b in buttons} == {"lang:set:ru", "lang:set:en", "lang:set:tg"}
-    en_btn = next(b for b in buttons if "English" in b.text)
-    ru_btn = next(b for b in buttons if "Русский" in b.text)
-    assert en_btn.text.startswith("✅")
-    assert not ru_btn.text.startswith("✅")
+    assert not any(b.text.startswith("✅") for b in buttons)
+    assert any("English" in b.text for b in buttons)
 
 
 def test_main_menu_keyboard_shows_english_labels_and_language_button(tmp_path):

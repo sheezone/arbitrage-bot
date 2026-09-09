@@ -28,6 +28,7 @@ class UserSettings:
     last_analysis_date: str | None = None
     acquisition_source: str | None = None
     language: str = "ru"
+    lang_chosen: bool = False
 
 
 class Repository:
@@ -94,11 +95,17 @@ class Repository:
             # cold or came via a numeric referral link.
             self._conn.execute("ALTER TABLE users ADD COLUMN acquisition_source TEXT")
         if "language" not in columns:
-            # "ru" or "tg" -- the button bot UI's language, set via the reply-keyboard
-            # flag-toggle (see handlers/commands.py). Independent of the Mini App's own
+            # "ru" / "en" / "tg" -- the button bot UI's language, set via the language
+            # menu (see handlers/commands.py). Independent of the Mini App's own
             # language, which is a pure frontend localStorage preference with no server
             # state at all.
             self._conn.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'ru'")
+        if "lang_chosen" not in columns:
+            # 1 once the user has explicitly picked a UI language. A brand-new user is
+            # shown the language picker before anything else (see cmd_start); existing
+            # users are already onboarded, so backfill them to 1.
+            self._conn.execute("ALTER TABLE users ADD COLUMN lang_chosen INTEGER NOT NULL DEFAULT 0")
+            self._conn.execute("UPDATE users SET lang_chosen = 1")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None, acquisition_source: str | None = None) -> None:
         """`referred_by`/`acquisition_source` only ever take effect for a genuinely new
@@ -169,6 +176,10 @@ class Repository:
 
     def set_language(self, chat_id: int, language: str) -> None:
         self._conn.execute("UPDATE users SET language = ? WHERE chat_id = ?", (language, chat_id))
+        self._conn.commit()
+
+    def set_lang_chosen(self, chat_id: int) -> None:
+        self._conn.execute("UPDATE users SET lang_chosen = 1 WHERE chat_id = ?", (chat_id,))
         self._conn.commit()
 
     def set_time_horizons(self, chat_id: int, days: list[int]) -> None:
@@ -399,6 +410,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         last_analysis_date=row["last_analysis_date"],
         acquisition_source=row["acquisition_source"],
         language=row["language"] or "ru",
+        lang_chosen=bool(row["lang_chosen"]),
     )
 
 

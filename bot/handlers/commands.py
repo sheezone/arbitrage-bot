@@ -133,12 +133,14 @@ def _buttons_below_text(language: str) -> str:
     return _BUTTONS_BELOW_TEXT[_lang(language)]
 
 
-def _language_menu_view(current_language: str) -> tuple[str, InlineKeyboardMarkup]:
+def _language_menu_view(current_language: str = "ru") -> tuple[str, InlineKeyboardMarkup]:
+    # Plain buttons, no "current" checkmark -- this message is deleted the moment a
+    # choice is tapped (see on_select_language), so a marker would only ever flash.
     text = "🌐 Выберите язык / Забонро интихоб кунед / Choose your language"
-    rows = []
-    for code, label in LANGUAGE_CHOICES.items():
-        marked = f"✅ {label}" if code == current_language else label
-        rows.append([InlineKeyboardButton(text=marked, callback_data=f"{LANG_SELECT_CALLBACK_PREFIX}{code}")])
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=f"{LANG_SELECT_CALLBACK_PREFIX}{code}")]
+        for code, label in LANGUAGE_CHOICES.items()
+    ]
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -998,34 +1000,46 @@ def register_handlers(
         repo.upsert_user(message.chat.id, referred_by=referred_by, acquisition_source=acquisition_source)
         user = repo.get_user(message.chat.id)
 
-        # Re-attach the persistent bottom menu on every /start, not just for new users --
-        # otherwise anyone whose client cached an older keyboard layout (e.g. before a
-        # button was added) never sees the update. This carrier message is deliberately
-        # NOT deleted: confirmed live that deleting it -- immediately or after a delay --
-        # makes the reply keyboard itself disappear on at least one client, contrary to
-        # the usual "keyboard survives its carrier message" behavior.
-        await message.answer(
-            _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
+        # First launch ever: show ONLY the language picker. Everything else (keyboard,
+        # welcome note, dashboard) is sent once a language is picked -- see
+        # on_select_language, which calls _send_start_ui.
+        if not user.lang_chosen:
+            text, keyboard = _language_menu_view()
+            await message.answer(text, reply_markup=keyboard)
+            try:
+                await message.delete()
+            except Exception:
+                pass
+            return
+
+        await _send_start_ui(bot, message.chat.id, user, send_welcome=is_new_user)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+    async def _send_start_ui(bot: Bot, chat_id: int, user: UserSettings, *, send_welcome: bool) -> None:
+        """Attach the persistent keyboard, run the subscription gate, optionally send the
+        one-off welcome note, then plant a fresh dashboard as the LAST message in the
+        chat (deleting any older one) so the main panel is always at the bottom. Shared
+        by /start and the very first language pick."""
+        # Carrier for the persistent bottom menu. Deliberately NOT deleted: confirmed
+        # live that deleting it makes the reply keyboard disappear on some clients.
+        await bot.send_message(
+            chat_id, _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
         )
 
-        # Gated here, inline, rather than by the blanket SubscriptionGateMiddleware --
-        # that middleware deliberately lets /start straight through so the referral/
-        # acquisition-source capture above (which only ever happens on a brand-new
-        # user's very first /start) isn't lost behind the gate. Admins bypass, same as
-        # everywhere else billing.is_admin-style checks apply.
-        if required_channel_id is not None and message.chat.id not in admin_chat_ids:
-            if not await is_subscribed(bot, required_channel_id, message.chat.id):
+        if required_channel_id is not None and chat_id not in admin_chat_ids:
+            if not await is_subscribed(bot, required_channel_id, chat_id):
                 text, keyboard = _subscription_gate_view(required_channel_username)
-                await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+                await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
                 return
 
-        if is_new_user:
-            # A one-off exception to the single-message UI: a permanent welcome note
-            # explaining the trial/subscription policy, sent once per user, left in the
-            # chat as a standing reference rather than folded into the dashboard panel.
-            trial_days = billing.REFERRED_TRIAL_DAYS if referred_by is not None else billing.TRIAL_DAYS
-            trial_note = " (по реферальной ссылке — дольше обычного)" if referred_by is not None else ""
-            await message.answer(
+        if send_welcome:
+            trial_days = billing.REFERRED_TRIAL_DAYS if user.referred_by is not None else billing.TRIAL_DAYS
+            trial_note = " (по реферальной ссылке — дольше обычного)" if user.referred_by is not None else ""
+            await bot.send_message(
+                chat_id,
                 "👋 <b>Добро пожаловать!</b>\n\n"
                 f"Первые {trial_days} дн.{trial_note} — бесплатный доступ ко всем "
                 "функциям. Дальше — платная подписка (кнопка «💳 Подписка» на главном "
@@ -1037,25 +1051,18 @@ def register_handlers(
                 parse_mode="HTML",
             )
 
-        # /start always plants a fresh message at the bottom of the chat rather than
-        # editing a possibly-scrolled-away-from old one.
         if user.menu_message_id:
             try:
-                await bot.delete_message(message.chat.id, user.menu_message_id)
+                await bot.delete_message(chat_id, user.menu_message_id)
             except Exception:
                 pass
-            repo.set_menu_message_id(message.chat.id, None)
+            repo.set_menu_message_id(chat_id, None)
 
         text, keyboard = _dashboard_view(user, admin_chat_ids)
-        sent = await message.answer_photo(
-            FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
+        sent = await bot.send_photo(
+            chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
-        repo.set_menu_message_id(message.chat.id, sent.message_id)
-
-        try:
-            await message.delete()
-        except Exception:
-            pass
+        repo.set_menu_message_id(chat_id, sent.message_id)
 
     async def _dismiss(message: Message) -> None:
         try:
@@ -1079,8 +1086,7 @@ def register_handlers(
         user = repo.get_user(chat_id)
         if user is None:
             repo.upsert_user(chat_id)
-            user = repo.get_user(chat_id)
-        text, keyboard = _language_menu_view(user.language)
+        text, keyboard = _language_menu_view()
         await message.answer(text, reply_markup=keyboard)
 
     @router.callback_query(F.data.startswith(LANG_SELECT_CALLBACK_PREFIX))
@@ -1096,34 +1102,23 @@ def register_handlers(
         if user is None:
             repo.upsert_user(chat_id)
             user = repo.get_user(chat_id)
-        if user.language == new_language:
-            await callback.answer()
-            return
 
+        was_first = not user.lang_chosen
         repo.set_language(chat_id, new_language)
+        repo.set_lang_chosen(chat_id)
         user.language = new_language
-        await callback.answer("✅")
+        user.lang_chosen = True
+        await callback.answer()
 
-        text, keyboard = _language_menu_view(new_language)
+        # The picker was a one-off prompt -- drop it so it doesn't linger in the chat.
         try:
-            await callback.message.edit_text(text, reply_markup=keyboard)
-        except TelegramBadRequest:
+            await callback.message.delete()
+        except Exception:
             pass
 
-        await bot.send_message(
-            chat_id, _buttons_below_text(new_language), reply_markup=_main_menu_keyboard(new_language)
-        )
-
-        if user.menu_message_id:
-            try:
-                await bot.delete_message(chat_id, user.menu_message_id)
-            except Exception:
-                pass
-            repo.set_menu_message_id(chat_id, None)
-
-        text, keyboard = _dashboard_view(user, admin_chat_ids)
-        sent = await bot.send_photo(chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML")
-        repo.set_menu_message_id(chat_id, sent.message_id)
+        # Rebuild the working UI (keyboard with the new labels + dashboard) as the last
+        # messages in the chat. On the very first pick this also runs the gate + welcome.
+        await _send_start_ui(bot, chat_id, user, send_welcome=was_first)
 
     @router.message(F.text.in_(set(_PROFILE_BUTTON_TEXT.values())))
     async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
