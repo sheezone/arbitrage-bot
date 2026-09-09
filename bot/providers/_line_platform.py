@@ -129,12 +129,20 @@ def parse_line_dump(
             over, under = factors.get(TOTAL_OVER_FACTOR), factors.get(TOTAL_UNDER_FACTOR)
             if not over or not under:
                 continue
-            odds_over, odds_under, line_str = over.get("v"), under.get("v"), over.get("pt")
-            if not odds_over or not odds_under or line_str is None:
+            odds_over, odds_under = over.get("v"), under.get("v")
+            over_pt, under_pt = over.get("pt"), under.get("pt")
+            if not odds_over or not odds_under or over_pt is None or under_pt is None:
                 continue
+            # The over (930) and under (931) factor slots are meant to be the same main
+            # line, but the feed has been seen handing back two different `pt` values for
+            # one event -- taking the line off `over` alone then mislabels the under price
+            # as belonging to a line it isn't, producing a phantom arb against another
+            # book's real line. Require them to agree; skip rather than guess.
             try:
-                line = float(line_str)
+                line, line_under = float(over_pt), float(under_pt)
             except ValueError:
+                continue
+            if line != line_under:
                 continue
             if not (PLAUSIBLE_TOTAL_LINE_RANGE[0] <= line <= PLAUSIBLE_TOTAL_LINE_RANGE[1]):
                 continue  # not a real match goal total (e.g. a special/outright reusing this factor slot)

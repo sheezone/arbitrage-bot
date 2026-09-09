@@ -164,3 +164,34 @@ def test_football_rejects_stat_prop_matches_with_a_plausible_line():
         raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
     )
     assert quotes == []
+
+
+def test_football_skips_total_when_over_and_under_lines_disagree():
+    # Seen live: the 930 (over) and 931 (under) slots for one event carried different
+    # `pt` values. Taking the line off `over` alone mislabelled the under price and
+    # produced a phantom arb against another book's real line -- now skipped.
+    raw = _raw(
+        sports=[{"id": 400, "kind": "segment", "parentId": 1, "sportCategoryId": None, "name": "EPL"}],
+        events=[{"id": 9, "sportId": 400, "team1": "Arsenal", "team2": "Chelsea", "place": "line", "startTime": 0}],
+        custom_factors=[
+            {"e": 9, "factors": [{"f": 930, "v": 2.35, "pt": "3.5"}, {"f": 931, "v": 1.86, "pt": "4"}]}
+        ],
+    )
+    quotes = parse_line_dump(
+        raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
+    )
+    assert quotes == []
+
+
+def test_football_keeps_total_when_lines_agree_as_int_and_half_string():
+    raw = _raw(
+        sports=[{"id": 400, "kind": "segment", "parentId": 1, "sportCategoryId": None, "name": "EPL"}],
+        events=[{"id": 10, "sportId": 400, "team1": "Arsenal", "team2": "Chelsea", "place": "line", "startTime": 0}],
+        custom_factors=[
+            {"e": 10, "factors": [{"f": 930, "v": 1.9, "pt": "3"}, {"f": 931, "v": 1.95, "pt": "3.0"}]}
+        ],
+    )
+    quotes = parse_line_dump(
+        raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
+    )
+    assert {q.market for q in quotes} == {"total_3.0"}
