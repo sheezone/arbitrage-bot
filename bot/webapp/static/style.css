@@ -626,53 +626,33 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 .calc-margin b, .calc-payout b { font-variant-numeric: tabular-nums; }
 
 .h2h-events { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
-.h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 8px; }
-.h2h-event-row { color: var(--text); font-size: 12px; margin-bottom: 4px; }
-.h2h-event-minute { color: var(--hint); font-variant-numeric: tabular-nums; margin-right: 4px; }
-.h2h-event-team { color: var(--hint); }
+.h2h-events-title { font-size: 12px; font-weight: 600; color: var(--hint); margin-bottom: 10px; }
 
-/* 0-90' timeline: a thin center track with emoji markers above it (home team's
-   events) or below (away team's) at their minute's horizontal position, a faint
-   halftime guide, and end/mid axis labels so the scale is self-explanatory. */
-.h2h-timeline { position: relative; height: 52px; margin: 8px 4px 4px; }
-.h2h-timeline-track {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateY(-50%);
-}
-.h2h-timeline-half {
-  position: absolute;
-  top: 6px;
-  bottom: 14px;
-  left: 50%;
-  width: 1px;
+/* Vertical event timeline: a rail down the left, one row per event with a minute
+   pill, an icon node on the rail (accent for the home team, red for the away one),
+   then player + detail + team. */
+.tl { position: relative; padding-left: 4px; }
+.tl-row { position: relative; display: grid; grid-template-columns: 30px 26px 1fr; align-items: start; column-gap: 8px; padding: 5px 0; }
+.tl-row::before {
+  content: ""; position: absolute; left: 54px; top: 0; bottom: 0; width: 2px;
   background: rgba(255, 255, 255, 0.08);
 }
-.h2h-timeline-axis {
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  font-size: 9px;
-  color: var(--hint);
-  font-variant-numeric: tabular-nums;
+.tl-row:first-child::before { top: 18px; }
+.tl-row:last-child::before { bottom: calc(100% - 18px); }
+.tl-row:only-child::before { display: none; }
+.tl-min { font-size: 11px; color: var(--hint); font-variant-numeric: tabular-nums; text-align: right; padding-top: 4px; }
+.tl-node {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; font-size: 13px; line-height: 1;
+  background: var(--card-bg-hi); box-shadow: 0 0 0 2px var(--card-bg);
 }
-.h2h-marker {
-  position: absolute;
-  top: 6px;
-  transform: translateX(-50%);
-  font-size: 13px;
-  cursor: default;
-  line-height: 1;
-}
-.h2h-marker-top { top: 6px; }
-.h2h-marker-bottom { bottom: 16px; }
+.tl-node.tl-home { box-shadow: 0 0 0 2px var(--accent); }
+.tl-node.tl-away { box-shadow: 0 0 0 2px var(--red); }
+.tl-body { font-size: 12px; color: var(--text); line-height: 1.35; padding-top: 3px; }
+.tl-body b { font-weight: 700; }
+.tl-detail { color: var(--hint); }
+.tl-team { display: block; font-size: 10px; color: var(--hint); margin-top: 1px; }
 
 .analyze-btn {
   width: 100%;

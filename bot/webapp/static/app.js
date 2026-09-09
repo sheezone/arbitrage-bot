@@ -1106,24 +1106,32 @@ an_news: "News (injuries, form, suspensions)",
     return `<div class="h2h-form">${chips}</div>`;
   }
 
-  // Horizontal 0-90' timeline with axis labels and a halftime guide -- markers
-  // positioned by minute (capped at 90 so extra time doesn't push off the track),
-  // grouped visually by which side each event belongs to (dot above the track for the
-  // home-listed team's events, below for away).
+  // Clean vertical timeline: a rail on the left, one row per event with a minute pill,
+  // an icon on the rail, then player + team. Home-team events sit on an accent dot,
+  // away on a red one, so a match can be read at a glance without a cramped 0-90 track.
+  function h2hEventIcon(ev) {
+    const d = (ev.detail || "").toLowerCase();
+    if (d.includes("red")) return "🟥";
+    if (d.includes("own")) return "🥅";
+    if (d.includes("penalt") && ev.emoji === "⚽") return "🎯";
+    return ev.emoji || "▪️";
+  }
   function renderH2hTimeline(events, homeTeam) {
-    const markers = events
+    const rows = events
+      .slice()
+      .sort((a, b) => (a.minute || 0) - (b.minute || 0))
       .map((ev) => {
-        const pct = Math.min(100, (ev.minute / 90) * 100);
-        const side = ev.team === homeTeam ? "h2h-marker-top" : "h2h-marker-bottom";
-        return `<div class="h2h-marker ${side}" style="left:${pct}%" title="${ev.minute}' ${esc(ev.player || "")} ${esc(ev.detail || "")} (${esc(ev.team || "")})">${ev.emoji}</div>`;
+        const home = ev.team === homeTeam;
+        return `<div class="tl-row">
+            <span class="tl-min">${ev.minute || 0}'</span>
+            <span class="tl-node ${home ? "tl-home" : "tl-away"}">${h2hEventIcon(ev)}</span>
+            <span class="tl-body"><b>${esc(ev.player || "")}</b>${
+              ev.detail ? ` <span class="tl-detail">${esc(ev.detail)}</span>` : ""
+            }<span class="tl-team">${esc(ev.team || "")}</span></span>
+          </div>`;
       })
       .join("");
-    return `<div class="h2h-timeline">
-        ${markers}
-        <div class="h2h-timeline-track"></div>
-        <div class="h2h-timeline-half"></div>
-        <div class="h2h-timeline-axis"><span>0'</span><span>45'</span><span>90'</span></div>
-      </div>`;
+    return `<div class="tl">${rows}</div>`;
   }
 
   // Market-implied win split -- (1/odds) per outcome, normalised. Labelled as coming
@@ -1204,12 +1212,6 @@ an_news: "News (injuries, form, suspensions)",
       ? `<div class="h2h-events">
           <div class="h2h-events-title">${t("recent_meeting_events")}</div>
           ${renderH2hTimeline(recentEvents, h2h.matches[0].home)}
-          ${recentEvents
-            .map(
-              (ev) =>
-                `<div class="h2h-event-row"><span class="h2h-event-minute">${ev.minute}'</span> ${ev.emoji} <b>${esc(ev.player || "")}</b> ${esc(ev.detail || "")} <span class="h2h-event-team">— ${esc(ev.team || "")}</span></div>`
-            )
-            .join("")}
         </div>`
       : "";
 
