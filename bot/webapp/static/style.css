@@ -14,6 +14,16 @@
   --card-bg-hi: rgba(255, 255, 255, 0.065);
   --border: rgba(255, 255, 255, 0.08);
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* Design tokens */
+  --radius-card: 16px;
+  --radius-inner: 12px;
+  --radius-pill: 999px;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
+  --fs-xs: 11px; --fs-sm: 12px; --fs-md: 13px; --fs-lg: 15px; --fs-xl: 18px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --tabs-h: 92px; /* topbar + tab row, for sticky offsets */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -262,7 +272,7 @@ html, body {
 .tab:disabled { opacity: 0.35; cursor: default; }
 
 .content-wrap { position: relative; flex: 1; }
-main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-action: pan-y; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform, opacity; }
+main#content { padding: 12px 14px calc(36px + var(--safe-b)); position: relative; z-index: 1; touch-action: pan-y; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform, opacity; }
 
 /* Pull-to-refresh indicator -- a plain rotating icon pinned above the content, revealed
    by translating #content down as the user drags (see app.js's touch handlers). No
@@ -287,7 +297,16 @@ main#content { padding: 12px 14px 30px; position: relative; z-index: 1; touch-ac
 /* Quick filter bar at the top of the Вилки tab -- min-% input plus sport chips built
    from whatever sports are actually present in the current fetch (no point offering a
    chip for a sport with zero matches right now). */
-.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; animation: rise-in 0.3s ease both; }
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 0 -14px 12px; padding: 8px 14px;
+  position: sticky; top: var(--tabs-h); z-index: 8;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  animation: rise-in 0.3s ease both;
+}
+.filter-sort { display: flex; gap: 6px; margin-left: auto; }
 .filter-pct {
   width: 78px;
   background: var(--secondary-bg);
@@ -907,3 +926,101 @@ input:checked + .slider::before { transform: translateX(19px); background: #0c0f
   box-shadow: var(--shadow);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+
+/* ============ UX pass ============ */
+
+/* Vilka card: profit as a solid colored pill, legs as an aligned mini-table. */
+.card-top { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.card-top .game-label { font-weight: 700; font-size: var(--fs-md); }
+.card-top .share-btn { position: static; margin-left: auto; }
+.profit-pill {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 4px 10px; border-radius: var(--radius-pill);
+  font-weight: 800; font-size: var(--fs-lg); font-variant-numeric: tabular-nums;
+  background: rgba(70, 211, 155, 0.14); color: var(--accent);
+}
+.profit-pill.mid { background: rgba(53, 184, 224, 0.14); color: var(--accent-2); }
+.profit-pill.high { background: rgba(244, 192, 74, 0.16); color: var(--gold); }
+.card-payout { font-size: var(--fs-sm); color: var(--hint); margin: 6px 0 10px; }
+.card-payout b { color: var(--red); font-variant-numeric: tabular-nums; }
+
+.legs-tbl { background: rgba(255, 255, 255, 0.035); border-radius: var(--radius-inner); padding: 4px 12px; }
+.leg {
+  display: grid; grid-template-columns: 1fr auto;
+  column-gap: 10px; row-gap: 2px; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.leg:last-child { border-bottom: none; }
+.leg-name { grid-column: 1 / -1; font-weight: 600; font-size: var(--fs-md); }
+.leg-price { font-size: var(--fs-sm); color: var(--hint); }
+.leg-price b { color: var(--text); font-variant-numeric: tabular-nums; }
+.leg-bk {
+  display: inline-block; padding: 1px 7px; border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06); font-size: var(--fs-xs);
+}
+.leg-bk a { color: var(--accent); text-decoration: none; }
+.leg-stk { text-align: right; font-weight: 700; font-size: var(--fs-md); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.card-foot { display: flex; align-items: center; gap: var(--sp-2); margin-top: 10px; }
+.card-foot .odds-warning { flex: 1; margin: 0; }
+.copyall-btn {
+  flex: none; background: none; border: 1px solid var(--border); color: var(--hint);
+  border-radius: 9px; padding: 6px 10px; font-size: var(--fs-sm); cursor: pointer;
+  transition: transform 0.12s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.copyall-btn:active { transform: scale(0.94); color: var(--accent); border-color: var(--accent); }
+
+/* Sort chips in the filter bar */
+.sort-chip {
+  background: var(--secondary-bg); border: 1px solid var(--border); color: var(--hint);
+  border-radius: var(--radius-pill); padding: 5px 11px; font-size: var(--fs-sm); cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.sort-chip:active { transform: scale(0.93); }
+.sort-chip.selected { border-color: var(--accent); color: var(--accent); background: rgba(70, 211, 155, 0.1); }
+
+/* Live "updated N ago" */
+.data-age { color: var(--hint); }
+
+/* Empty state gets an action */
+.empty-cta {
+  margin-top: 18px; background: none; border: 1px solid var(--border); color: var(--text);
+  border-radius: var(--radius-pill); padding: 9px 20px; font-size: var(--fs-md); cursor: pointer;
+}
+.empty-cta:active { transform: scale(0.96); border-color: var(--accent); color: var(--accent); }
+
+/* Settings: cards per section, sticky save */
+.settings-section {
+  background: linear-gradient(160deg, var(--card-bg-hi), var(--card-bg));
+  border: 1px solid var(--border); border-radius: var(--radius-card);
+  padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow-card);
+}
+.settings-section .section-title { margin-top: 0; }
+.settings-section .field:last-child, .settings-section .toggle-row:last-child { margin-bottom: 0; }
+.save-bar {
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 4px -14px calc(-36px - var(--safe-b)); padding: 12px 14px calc(12px + var(--safe-b));
+  background: linear-gradient(180deg, transparent, var(--bg) 40%);
+}
+.save-bar .save-btn { margin-top: 0; }
+
+/* Shaped skeletons that echo the real layout so content doesn't jump on load */
+.sk-vilka { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px; margin-bottom: 12px; }
+.sk-line { height: 12px; border-radius: 6px; margin-bottom: 10px; }
+.sk-line.w40 { width: 40%; } .sk-line.w60 { width: 60%; } .sk-line.w75 { width: 75%; } .sk-line.w90 { width: 90%; }
+.sk-pill { height: 26px; width: 92px; border-radius: var(--radius-pill); margin-bottom: 12px; }
+.sk-block { height: 88px; border-radius: var(--radius-inner); }
+.sk-analysis .sk-block { height: 120px; margin-bottom: 12px; }
+
+/* First-run hint bar */
+.hint-bar {
+  position: fixed; left: 12px; right: 12px; bottom: calc(14px + var(--safe-b)); z-index: 90;
+  background: var(--secondary-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px 14px; font-size: var(--fs-md); color: var(--text);
+  box-shadow: var(--shadow-card); display: flex; align-items: center; gap: 10px;
+  animation: rise-in 0.3s ease both;
+}
+.hint-bar button {
+  margin-left: auto; flex: none; background: var(--accent); color: var(--button-text);
+  border: none; border-radius: 9px; padding: 7px 14px; font-weight: 700; font-size: var(--fs-sm); cursor: pointer;
+}

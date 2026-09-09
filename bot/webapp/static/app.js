@@ -168,6 +168,14 @@
       calc_payout: "Возврат при любом исходе",
       calc_err_odds: "Коэффициенты должны быть больше 1",
             an_title: "Анализ матча",
+      sort_pct: "% ↓",
+      sort_time: "⏱ раньше",
+      copy_all: "Копировать",
+      copied_all: "Скопировано ✅",
+      age_now: "обновлено {n} сек назад",
+      age_min: "обновлено {n} мин назад",
+      hint_swipe: "Листайте вкладки свайпом влево-вправо. 🧮 вверху — калькулятор.",
+      hint_ok: "Понятно",
 an_news: "Новости (травмы, форма, дисквалификации)",
       an_lineups: "Составы и расстановка",
       an_lineups_none: "Составы станут известны ближе к началу матча. Структурные составы/травмы доступны только на платном источнике данных.",
@@ -271,6 +279,14 @@ an_news: "Новости (травмы, форма, дисквалификаци
       calc_payout: "Бозгашт дар ҳар натиҷа",
       calc_err_odds: "Коэффисиентҳо бояд аз 1 зиёд бошанд",
             an_title: "Таҳлили бозӣ",
+      sort_pct: "% ↓",
+      sort_time: "⏱ пештар",
+      copy_all: "Нусха",
+      copied_all: "Нусхабардорӣ шуд ✅",
+      age_now: "{n} сон пеш нав шуд",
+      age_min: "{n} дақ пеш нав шуд",
+      hint_swipe: "Бахшҳоро бо свайп чап-рост варақ занед. 🧮 боло — ҳисобкунак.",
+      hint_ok: "Фаҳмидам",
 an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалификатсия)",
       an_lineups: "Ҳайат ва ҷобаҷогузорӣ",
       an_lineups_none: "Ҳайатҳо наздик ба оғози бозӣ маълум мешаванд. Ҳайат/ҷароҳатҳои сохторӣ танҳо дар манбаи пулакӣ дастрасанд.",
@@ -374,6 +390,14 @@ an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалифика
       calc_payout: "Return on either outcome",
       calc_err_odds: "Odds must be greater than 1",
             an_title: "Match analysis",
+      sort_pct: "% ↓",
+      sort_time: "⏱ sooner",
+      copy_all: "Copy",
+      copied_all: "Copied ✅",
+      age_now: "updated {n}s ago",
+      age_min: "updated {n}m ago",
+      hint_swipe: "Swipe left/right to change tabs. 🧮 up top is the calculator.",
+      hint_ok: "Got it",
 an_news: "News (injuries, form, suspensions)",
       an_lineups: "Lineups & formation",
       an_lineups_none: "Lineups appear closer to kickoff. Structured lineups/injuries are only available on a paid data source.",
@@ -495,12 +519,19 @@ an_news: "News (injuries, form, suspensions)",
     if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(type);
   }
 
+  // Shaped skeletons that echo the real layout so content doesn't jump when it loads.
+  const skVilka = `<div class="sk-vilka">
+      <div class="skeleton sk-line w40"></div>
+      <div class="skeleton sk-line w75"></div>
+      <div class="skeleton sk-pill"></div>
+      <div class="skeleton sk-block"></div>
+    </div>`;
   const skeletons = {
-    vilki: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
-    news: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
-    settings: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
+    vilki: skVilka.repeat(3),
+    news: skVilka.repeat(2),
+    settings: `<div class="skeleton sk-block" style="height:120px;margin-bottom:12px"></div>`.repeat(3),
     stats: `<div class="stat-grid"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div>`,
-    admin: `<div class="skeleton skeleton-card" style="height:280px"></div>`,
+    admin: `<div class="skeleton sk-block" style="height:120px;margin-bottom:12px"></div>`.repeat(2),
   };
 
   document.querySelectorAll(".tab").forEach((btn) => {
@@ -520,6 +551,11 @@ an_news: "News (injuries, form, suspensions)",
 
   function switchTab(tab) {
     currentTab = tab;
+    try {
+      localStorage.setItem("last_tab", tab);
+    } catch (e) {
+      /* per-viewer convenience only */
+    }
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     content.innerHTML = skeletons[tab] || "";
     loadTab(tab);
@@ -815,9 +851,10 @@ an_news: "News (injuries, form, suspensions)",
   const VILKI_FILTER_KEY = "vilki_filter_v1";
   function readVilkiFilter() {
     try {
-      return JSON.parse(localStorage.getItem(VILKI_FILTER_KEY)) || { minPct: 0, sport: "" };
+      const f = JSON.parse(localStorage.getItem(VILKI_FILTER_KEY)) || {};
+      return { minPct: f.minPct || 0, sport: f.sport || "", sort: f.sort || "pct" };
     } catch (e) {
-      return { minPct: 0, sport: "" };
+      return { minPct: 0, sport: "", sort: "pct" };
     }
   }
   function writeVilkiFilter(f) {
@@ -845,46 +882,49 @@ an_news: "News (injuries, form, suspensions)",
     else window.open(url, "_blank");
   }
 
+  function vilkaCopyText(m) {
+    const legs = m.legs
+      .map((l) => `${l.outcome_name}: ${l.odds} @ ${l.bookmaker} — ${fmtMoney(l.stake)}`)
+      .join("\n");
+    return `${m.game_emoji} ${m.team_a} vs ${m.team_b}\n${t("profit")}${m.profit_pct.toFixed(2)}% · ${fmtMoney(m.profit_amount)}\n\n${legs}`;
+  }
+
   function renderVilkiCards(matches) {
-    return matches.map((m, i) => {
-      const isHigh = m.profit_pct > HIGH_PROFIT_THRESHOLD;
-      const profitClass = isHigh ? "match-profit high" : "match-profit";
-      const profitEmoji = isHigh ? `<span class="emoji-shake">‼️</span>` : `<span class="emoji-pulse">🚀</span>`;
-      const legs = m.legs
-        .map(
-          // Outcome name (e.g. a double-chance "Team A или Team B") gets its own line,
-          // however long -- odds/bookmaker/stake always stay together on one line below
-          // it. Previously all of it was one flex row with the stake pinned to the
-          // right; a long name wrapping pushed "odds @ bookmaker" onto its own visual
-          // line with the stake next to it, which read like a separate 3rd bet.
-          (leg) => `
-        <div class="leg-row">
-          <div class="leg-outcome">${copyable(leg.outcome_name)}</div>
-          <div class="leg-details">
-            <span><b>${leg.odds}</b> @ ${
-              leg.bookmaker_url
-                ? `<a href="${esc(leg.bookmaker_url)}" target="_blank" rel="noopener">${esc(leg.bookmaker)}</a>`
-                : esc(leg.bookmaker)
-            }</span>
-            <span class="leg-stake">${fmtMoney(leg.stake)}</span>
-          </div>
-        </div>`
-        )
-        .join("");
-      return `
+    return matches
+      .map((m, i) => {
+        const isHigh = m.profit_pct > HIGH_PROFIT_THRESHOLD;
+        const pillCls = isHigh ? "profit-pill high" : m.profit_pct >= 3 ? "profit-pill mid" : "profit-pill";
+        const legs = m.legs
+          .map((leg) => {
+            const bk = leg.bookmaker_url
+              ? `<a href="${esc(leg.bookmaker_url)}" target="_blank" rel="noopener">${esc(leg.bookmaker)}</a>`
+              : esc(leg.bookmaker);
+            return `<div class="leg">
+              <div class="leg-name">${copyable(leg.outcome_name)}</div>
+              <div class="leg-price"><b>${leg.odds}</b> · <span class="leg-bk">${bk}</span></div>
+              <div class="leg-stk">${fmtMoney(leg.stake)}</div>
+            </div>`;
+          })
+          .join("");
+        return `
         <div class="card${isHigh ? " high-profit" : ""}" style="animation-delay:${Math.min(i * 45, 360)}ms">
-          <div class="match-header">
-            <span class="emoji-wiggle">${m.game_emoji}</span><span>${esc(m.game_label)}</span>
+          <div class="card-top">
+            <span class="emoji-wiggle">${m.game_emoji}</span>
+            <span class="game-label">${esc(m.game_label)}</span>
             <button type="button" class="share-btn" data-share-idx="${i}" title="${t("share_btn")}">📤</button>
           </div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${teamBadge(m.team_a_logo, m.team_a_flag)}${copyable(m.team_a)} vs ${teamBadge(m.team_b_logo, m.team_b_flag)}${copyable(m.team_b)}</div>
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
-          <div class="${profitClass}">${profitEmoji} ${t("profit")}${m.profit_pct.toFixed(2)}%</div>
-          <div class="match-amount"><span class="emoji-bounce">💸</span> ${t("possible_win")}<span class="amount-value">${fmtMoney(m.profit_amount)}</span></div>
-          <div class="legs">${legs}</div>
-          <div class="odds-warning">⚠️ ${t("odds_warning")}</div>
+          <div><span class="${pillCls}">${isHigh ? "‼️" : "🚀"} ${m.profit_pct.toFixed(2)}%</span></div>
+          <div class="card-payout">${t("possible_win")}<b>${fmtMoney(m.profit_amount)}</b></div>
+          <div class="legs-tbl">${legs}</div>
+          <div class="card-foot">
+            <div class="odds-warning">⚠️ ${t("odds_warning")}</div>
+            <button type="button" class="copyall-btn" data-copyall-idx="${i}">${t("copy_all")}</button>
+          </div>
         </div>`;
-    }).join("");
+      })
+      .join("");
   }
 
   function renderVilkiFilterBar(sports, filter) {
@@ -897,6 +937,10 @@ an_news: "News (injuries, form, suspensions)",
     return `
       <div class="filter-bar">
         <input type="number" class="filter-pct" id="filter-pct-input" placeholder="${t("filter_min_profit")}" min="0" step="0.1" value="${filter.minPct || ""}">
+        <div class="filter-sort">
+          <button type="button" class="sort-chip${filter.sort === "pct" ? " selected" : ""}" data-sort="pct">${t("sort_pct")}</button>
+          <button type="button" class="sort-chip${filter.sort === "time" ? " selected" : ""}" data-sort="time">${t("sort_time")}</button>
+        </div>
         <div class="filter-sport-row">
           <button type="button" class="filter-chip${filter.sport ? "" : " selected"}" data-sport="">${t("filter_all_sports")}</button>
           ${sportChips}
@@ -905,14 +949,20 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   function applyVilkiFilter(matches, filter) {
-    return matches.filter((m) => {
+    const out = matches.filter((m) => {
       if (filter.minPct && m.profit_pct < filter.minPct) return false;
       if (filter.sport && m.game_emoji !== filter.sport) return false;
       return true;
     });
+    if (filter.sort === "time") {
+      out.sort((a, b) => (a.start_time_utc || "9") .localeCompare(b.start_time_utc || "9") || b.profit_pct - a.profit_pct);
+    } else {
+      out.sort((a, b) => b.profit_pct - a.profit_pct);
+    }
+    return out;
   }
 
-  function bindVilkiControls(allMatches, filter) {
+  function bindVilkiControls(allMatches, shownMatches, filter) {
     const pctInput = document.getElementById("filter-pct-input");
     if (pctInput) {
       pctInput.addEventListener("change", () => {
@@ -929,11 +979,30 @@ an_news: "News (injuries, form, suspensions)",
         renderVilkiBody(allMatches, filter);
       });
     });
+    document.querySelectorAll(".sort-chip[data-sort]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        haptic("light");
+        filter.sort = chip.dataset.sort;
+        writeVilkiFilter(filter);
+        renderVilkiBody(allMatches, filter);
+      });
+    });
     content.querySelectorAll(".share-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const m = allMatches[Number(btn.dataset.shareIdx)];
+        const m = shownMatches[Number(btn.dataset.shareIdx)];
         if (m) shareVilka(m);
+      });
+    });
+    content.querySelectorAll(".copyall-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const m = shownMatches[Number(btn.dataset.copyallIdx)];
+        if (!m) return;
+        copyToClipboard(vilkaCopyText(m)).then((ok) => {
+          haptic(ok ? "light" : "medium");
+          toast(ok ? t("copied_all") : t("copy_failed"));
+        });
       });
     });
   }
@@ -948,14 +1017,17 @@ an_news: "News (injuries, form, suspensions)",
     });
     const sports = Array.from(sportsSeen, ([emoji, label]) => ({ emoji, label }));
     const filtered = applyVilkiFilter(allMatches, filter);
-    const filterBar = sports.length > 1 || filter.minPct ? renderVilkiFilterBar(sports, filter) : "";
+    const filterBar = renderVilkiFilterBar(sports, filter);
 
     const body = filtered.length
       ? renderVilkiCards(filtered)
-      : `<div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
+      : `<div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}
+           <button type="button" class="empty-cta" id="empty-refresh">🔄 ${t("refresh_btn")}</button></div>`;
 
     content.innerHTML = `${metaLineHtml || ""}${filterBar}<div${isStale ? ' class="stale"' : ""}>${body}</div><div class="meta-line disclaimer">${t("disclaimer")}</div>`;
-    bindVilkiControls(allMatches, filter);
+    bindVilkiControls(allMatches, filtered, filter);
+    const er = document.getElementById("empty-refresh");
+    if (er) er.addEventListener("click", () => { haptic("light"); loadTab("vilki", true); });
 
     // Success haptic once per *newly seen* high-profit find, not on every 20s poll
     // that still shows the same one.
@@ -982,16 +1054,20 @@ an_news: "News (injuries, form, suspensions)",
     const data = await api("/api/vilki");
     const checkedAt = data.updated_at ? fmtMoscowTime(data.updated_at) + t("msk") : "—";
     writeVilkiCache({ matches: data.matches, checkedAt });
+    lastVilkiFetchTs = Date.now();
 
     if (!data.matches.length) {
       content.innerHTML = `
-        <div class="meta-line">${t("data_at")}${checkedAt}</div>
-        <div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}</div>`;
+        <div class="meta-line">${t("data_at")}${checkedAt}<span class="data-age" id="data-age"></span></div>
+        <div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}
+          <button type="button" class="empty-cta" id="empty-refresh">🔄 ${t("refresh_btn")}</button></div>`;
+      const er = document.getElementById("empty-refresh");
+      if (er) er.addEventListener("click", () => { haptic("light"); loadTab("vilki", true); });
       lastHighProfitKey = null;
       return;
     }
 
-    const metaLine = `<div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})</div>`;
+    const metaLine = `<div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})<span class="data-age" id="data-age"></span></div>`;
     renderVilkiBody(data.matches, filter, metaLine, false);
   }
 
@@ -1353,7 +1429,12 @@ an_news: "News (injuries, form, suspensions)",
     const teamA = btn.dataset.teamA;
     const teamB = btn.dataset.teamB;
     haptic("light");
-    analysisBody.innerHTML = `<div class="an-loading">${t("loading")}</div>`;
+    analysisBody.innerHTML = `<div class="sk-analysis">
+        <div class="skeleton sk-line w40"></div>
+        <div class="skeleton sk-block"></div>
+        <div class="skeleton sk-block"></div>
+        <div class="skeleton sk-block"></div>
+      </div>`;
     analysisModal.hidden = false;
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
@@ -1570,35 +1651,45 @@ an_news: "News (injuries, form, suspensions)",
       .join("");
 
     content.innerHTML = `
-      <div class="section-title">${t("bankroll")}</div>
-      <div class="field">
-        <input type="number" id="bankroll-input" value="${me.bankroll}" min="1" step="1">
-        <div class="preset-row">${presetRow}</div>
+      <div class="settings-section">
+        <div class="section-title">${t("bankroll")}</div>
+        <div class="field">
+          <input type="number" id="bankroll-input" value="${me.bankroll}" min="1" step="1">
+          <div class="preset-row">${presetRow}</div>
+        </div>
       </div>
 
-      <div class="section-title">${t("profit_threshold")}</div>
-      <div class="field">
-        <label>${t("profit_threshold_label")}</label>
-        <input type="number" id="threshold-input" value="${me.min_profit_pct}" min="0" step="0.1" placeholder="0.6">
-        <div class="field-hint">${t("profit_threshold_hint")}</div>
+      <div class="settings-section">
+        <div class="section-title">${t("profit_threshold")}</div>
+        <div class="field">
+          <label>${t("profit_threshold_label")}</label>
+          <input type="number" id="threshold-input" value="${me.min_profit_pct}" min="0" step="0.1" placeholder="0.6">
+          <div class="field-hint">${t("profit_threshold_hint")}</div>
+        </div>
       </div>
 
-      <div class="section-title">${t("period")}</div>
-      ${horizonRows}
-
-      <div class="section-title">${t("my_bookmakers")}</div>
-      <div class="chip-grid" id="bk-grid">${bkChips}</div>
-
-      <div class="section-title">${t("notifications")}</div>
-      <div class="toggle-row">
-        <span>${t("muted_label")}</span>
-        <label class="switch">
-          <input type="checkbox" id="muted-input" ${me.muted ? "checked" : ""}>
-          <span class="slider"></span>
-        </label>
+      <div class="settings-section">
+        <div class="section-title">${t("period")}</div>
+        ${horizonRows}
       </div>
 
-      <button class="save-btn" id="save-settings-btn">${t("save")}</button>
+      <div class="settings-section">
+        <div class="section-title">${t("my_bookmakers")}</div>
+        <div class="chip-grid" id="bk-grid">${bkChips}</div>
+      </div>
+
+      <div class="settings-section">
+        <div class="section-title">${t("notifications")}</div>
+        <div class="toggle-row">
+          <span>${t("muted_label")}</span>
+          <label class="switch">
+            <input type="checkbox" id="muted-input" ${me.muted ? "checked" : ""}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="save-bar"><button class="save-btn" id="save-settings-btn">${t("save")}</button></div>
     `;
 
     document.querySelectorAll(".preset-btn").forEach((btn) => {
@@ -1829,13 +1920,68 @@ an_news: "News (injuries, form, suspensions)",
     // confirms is_admin, so a non-admin never even sees the tab exist.
     if (me.is_admin) document.getElementById("admin-tab").hidden = false;
 
-    content.innerHTML = skeletons.vilki;
-    loadTab("vilki");
+    // Reopen on the tab the user left, if it still exists / is allowed.
+    let startTab = "vilki";
+    try {
+      const saved = localStorage.getItem("last_tab");
+      const ok = Array.from(document.querySelectorAll(".tab")).some(
+        (b) => !b.hidden && b.dataset.tab === saved
+      );
+      if (ok) startTab = saved;
+    } catch (e) {
+      /* default vilki */
+    }
+    currentTab = startTab;
+    document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === startTab));
+    content.innerHTML = skeletons[startTab] || "";
+    loadTab(startTab);
     if (!refreshTimer) {
       refreshTimer = setInterval(() => {
         if (currentTab === "vilki") loadTab("vilki");
       }, 20000);
     }
+    startDataAgeTicker();
+    maybeShowHint();
+  }
+
+  // "обновлено N назад" -- refreshes the #data-age span every few seconds so the
+  // freshness of the Вилки list is always visible without another fetch.
+  let lastVilkiFetchTs = 0;
+  function ageText(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return t("age_now").replace("{n}", s);
+    const m = Math.round(s / 60);
+    return t("age_min").replace("{n}", m);
+  }
+  function startDataAgeTicker() {
+    setInterval(() => {
+      const el = document.getElementById("data-age");
+      if (el && lastVilkiFetchTs) el.textContent = " · " + ageText(Date.now() - lastVilkiFetchTs);
+    }, 5000);
+  }
+
+  function maybeShowHint() {
+    try {
+      if (localStorage.getItem("hint_v1")) return;
+    } catch (e) {
+      return;
+    }
+    setTimeout(showHintBar, 1600); // let the greeting toast clear first
+  }
+  function showHintBar() {
+    const bar = document.createElement("div");
+    bar.className = "hint-bar";
+    bar.innerHTML = `<span>${esc(t("hint_swipe"))}</span><button type="button">${esc(t("hint_ok"))}</button>`;
+    bar.querySelector("button").addEventListener("click", () => {
+      bar.remove();
+      try {
+        localStorage.setItem("hint_v1", "1");
+      } catch (e) {
+        /* ignore */
+      }
+    });
+    document.body.appendChild(bar);
+    setTimeout(() => bar.isConnected && bar.remove(), 12000);
   }
 
   boot();
