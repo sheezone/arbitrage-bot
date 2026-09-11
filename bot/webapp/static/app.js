@@ -185,6 +185,7 @@ an_news: "Новости (травмы, форма, дисквалификаци
       loading: "Загрузка…",
       daily_limit_reached: "Лимит на сегодня исчерпан",
       analyze_btn: "🔍 Проанализировать",
+      view_analysis: "📊 Посмотреть анализ",
       error_prefix: "Ошибка: ",
       no_fresh_news: "За последние 24 часа свежих новостей не нашлось.",
       no_news_data: "Пока нет данных для новостной сводки.",
@@ -299,6 +300,7 @@ an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалифика
       loading: "Боргирӣ…",
       daily_limit_reached: "Лимити имрӯза тамом шуд",
       analyze_btn: "🔍 Таҳлил кардан",
+      view_analysis: "📊 Дидани таҳлил",
       error_prefix: "Хато: ",
       no_fresh_news: "Дар 24 соати охир хабарҳои нав ёфт нашуданд.",
       no_news_data: "Ҳоло барои хулосаи хабарҳо маълумот нест.",
@@ -413,6 +415,7 @@ an_news: "News (injuries, form, suspensions)",
       loading: "Loading…",
       daily_limit_reached: "Today's limit reached",
       analyze_btn: "🔍 Analyze",
+      view_analysis: "📊 View analysis",
       error_prefix: "Error: ",
       no_fresh_news: "No fresh news in the last 24 hours.",
       no_news_data: "No data for the news digest yet.",
@@ -1499,13 +1502,58 @@ an_news: "News (injuries, form, suspensions)",
     `;
   }
 
-  // Gated to 1 analysis/day/user (see /api/analysis) -- deliberately not fetched for
-  // all 3 matches up front, only for the one the user actually clicks on. Opens a
-  // full-screen modal.
+  // The server only lets a given match be analysed once per day (see /api/analysis) --
+  // that's a fetch quota, not a "you may only ever look at this once" rule. So the
+  // result is cached client-side per (match, day): closing the modal, leaving the tab,
+  // or reopening the Mini App later the same day all reopen the SAME result instead of
+  // the button just vanishing with no way back to it (confirmed-live complaint,
+  // 2026-09-11 -- closing the modal left no way to see the analysis again).
+  const ANALYSIS_CACHE_KEY = "analysis_cache_v1";
+  function _todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+  function _analysisMatchKey(teamA, teamB) {
+    return `${teamA}|${teamB}`;
+  }
+  function readAnalysisCache() {
+    try {
+      return JSON.parse(localStorage.getItem(ANALYSIS_CACHE_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function getCachedAnalysis(teamA, teamB) {
+    const entry = readAnalysisCache()[_analysisMatchKey(teamA, teamB)];
+    return entry && entry.date === _todayStr() ? entry.result : null;
+  }
+  function setCachedAnalysis(teamA, teamB, result) {
+    const cache = readAnalysisCache();
+    const today = _todayStr();
+    cache[_analysisMatchKey(teamA, teamB)] = { date: today, result };
+    Object.keys(cache).forEach((k) => {
+      if (cache[k].date !== today) delete cache[k]; // don't grow forever
+    });
+    try {
+      localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+      /* best-effort */
+    }
+  }
+
+  // Deliberately not fetched for all 3 matches up front, only for the one the user
+  // actually clicks on. Opens a full-screen modal.
   async function onAnalyzeClick(btn) {
     const teamA = btn.dataset.teamA;
     const teamB = btn.dataset.teamB;
     haptic("light");
+
+    const cached = getCachedAnalysis(teamA, teamB);
+    if (cached) {
+      analysisBody.innerHTML = renderAnalysis(cached, teamA, teamB);
+      analysisModal.hidden = false;
+      return;
+    }
+
     analysisBody.innerHTML = `<div class="sk-analysis">
         <div class="skeleton sk-line w40"></div>
         <div class="skeleton sk-block"></div>
@@ -1516,11 +1564,9 @@ an_news: "News (injuries, form, suspensions)",
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
       analysisBody.innerHTML = renderAnalysis(result, teamA, teamB);
-      // The quota is per-match (server-side, see /api/analysis), not per-user -- only
-      // THIS button needs to go away; the other matches' buttons stay clickable. A
-      // fresh /api/news call (re-entering the tab) will bring back already_analyzed
-      // per match, in case this same list re-renders without a full reload.
-      btn.remove();
+      setCachedAnalysis(teamA, teamB, result);
+      // Stays a real, clickable button -- reopens the cached result, doesn't refetch.
+      btn.textContent = t("view_analysis");
     } catch (e) {
       closeAnalysis();
       btn.disabled = false;
@@ -1566,12 +1612,16 @@ an_news: "News (injuries, form, suspensions)",
         : `<div class="news-empty">${t("no_fresh_news")}</div>`;
 
       // Full analysis is fetched only on click, gated to 1/day *per match* (not per
-      // user -- see /api/analysis), and opens in a full-screen modal.
+      // user -- see /api/analysis), and opens in a full-screen modal. If today's result
+      // is still cached locally (getCachedAnalysis), the button stays live and reopens
+      // it instead of turning into a dead "limit reached" state.
       let analyzeBlock = "";
       if (m.can_analyze) {
-        analyzeBlock = m.already_analyzed
-          ? `<button type="button" class="analyze-btn" disabled>${t("daily_limit_reached")}</button>`
-          : `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}">${t("analyze_btn")}</button>`;
+        const label = getCachedAnalysis(m.team_a, m.team_b) ? t("view_analysis") : t("analyze_btn");
+        analyzeBlock =
+          m.already_analyzed && !getCachedAnalysis(m.team_a, m.team_b)
+            ? `<button type="button" class="analyze-btn" disabled>${t("daily_limit_reached")}</button>`
+            : `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}">${label}</button>`;
       }
 
       return `
