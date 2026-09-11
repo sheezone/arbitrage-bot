@@ -115,8 +115,6 @@ async def _user_out(
         "has_access": billing.has_access(user, now, admin_chat_ids),
         "on_trial": billing.on_trial(user, now),
         "days_left": billing.days_left(user, now),
-        # Admins bypass the 1/day analysis quota entirely -- always "available".
-        "analysis_available": is_admin or user.last_analysis_date != now.date().isoformat(),
         # Mandatory-subscription gate (bot/core/subscription.py) -- mirrors the button
         # bot UI's gate. channel_required tells the frontend whether to even show a gate
         # screen at all; channel_username is what it links "📢 Подписаться" to.
@@ -262,74 +260,92 @@ def register_api(
         await _require_subscribed(chat_id)
 
         if news_cache["payload"] is not None and time.time() - news_cache["at"] < NEWS_CACHE_TTL_SECONDS:
-            return news_cache["payload"]
+            entries = news_cache["payload"]
+        else:
+            if fixtures_cache["payload"] is None or time.time() - fixtures_cache["at"] >= FIXTURES_CACHE_TTL_SECONDS:
+                async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
+                    fixtures_cache["payload"] = await get_popular_upcoming_fixtures(client, api_football_key, limit=3)
+                fixtures_cache["at"] = time.time()
+            football_fixtures = fixtures_cache["payload"] or []
 
-        if fixtures_cache["payload"] is None or time.time() - fixtures_cache["at"] >= FIXTURES_CACHE_TTL_SECONDS:
             async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
-                fixtures_cache["payload"] = await get_popular_upcoming_fixtures(client, api_football_key, limit=3)
-            fixtures_cache["at"] = time.time()
-        football_fixtures = fixtures_cache["payload"] or []
-
-        async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
-            entries = []
-            for fx in football_fixtures:
-                headlines = await fetch_team_news(client, fx["team_a"], fx["team_b"])
-                entries.append({
-                    "game": "football",
-                    "game_label": "Футбол",
-                    "game_emoji": GAME_EMOJI.get("football", "⚽"),
-                    "team_a": fx["team_a"],
-                    "team_b": fx["team_b"],
-                    "start_time_label": format_match_start(fx["start_time_utc"]),
-                    "headlines": headlines,
-                    # H2H (the heavier part -- extra API-Football requests, rate-limited
-                    # to 1/day/user) is deliberately NOT fetched here for all 3 matches on
-                    # every page load -- see /api/analysis, fetched only on click.
-                    "can_analyze": True,
-                })
-
-            existing_pairs = {(e["team_a"], e["team_b"]) for e in entries}
-            remaining = 3 - len(entries)
-            if remaining > 0:
-                for m in pick_popular_matches(state.matches, limit=remaining + len(entries)):
-                    if len(entries) >= 3:
-                        break
-                    if (m.team_a, m.team_b) in existing_pairs:
-                        continue
-                    headlines = await fetch_team_news(client, m.team_a, m.team_b)
+                entries = []
+                for fx in football_fixtures:
+                    headlines = await fetch_team_news(client, fx["team_a"], fx["team_b"])
                     entries.append({
-                        "game": m.game,
-                        "game_label": GAME_LABELS.get(m.game, m.game.upper()),
-                        "game_emoji": GAME_EMOJI.get(m.game, "🏆"),
-                        "team_a": m.team_a,
-                        "team_b": m.team_b,
-                        "start_time_label": format_match_start(m.start_time_utc),
+                        "game": "football",
+                        "game_label": "Футбол",
+                        "game_emoji": GAME_EMOJI.get("football", "⚽"),
+                        "team_a": fx["team_a"],
+                        "team_b": fx["team_b"],
+                        "start_time_label": format_match_start(fx["start_time_utc"]),
                         "headlines": headlines,
-                        "can_analyze": m.game == "football",
+                        # H2H (the heavier part -- extra API-Football requests, rate-limited
+                        # to 1/day/match) is deliberately NOT fetched here for all 3 matches
+                        # on every page load -- see /api/analysis, fetched only on click.
+                        "can_analyze": True,
                     })
 
-        payload = {"matches": entries}
-        news_cache["payload"] = payload
-        news_cache["at"] = time.time()
-        return payload
+                existing_pairs = {(e["team_a"], e["team_b"]) for e in entries}
+                remaining = 3 - len(entries)
+                if remaining > 0:
+                    for m in pick_popular_matches(state.matches, limit=remaining + len(entries)):
+                        if len(entries) >= 3:
+                            break
+                        if (m.team_a, m.team_b) in existing_pairs:
+                            continue
+                        headlines = await fetch_team_news(client, m.team_a, m.team_b)
+                        entries.append({
+                            "game": m.game,
+                            "game_label": GAME_LABELS.get(m.game, m.game.upper()),
+                            "game_emoji": GAME_EMOJI.get(m.game, "🏆"),
+                            "team_a": m.team_a,
+                            "team_b": m.team_b,
+                            "start_time_label": format_match_start(m.start_time_utc),
+                            "headlines": headlines,
+                            "can_analyze": m.game == "football",
+                        })
+
+            # `entries` itself is cached process-wide (shared across every user), so it
+            # must never carry a per-user field -- already_analyzed is overlaid fresh
+            # below, on every request, from this same cached list.
+            news_cache["payload"] = entries
+            news_cache["at"] = time.time()
+
+        user = _get_user(repo, chat_id)
+        is_admin = billing.is_admin(user, admin_chat_ids)
+        today = datetime.now(timezone.utc).date().isoformat()
+        out = [
+            {
+                **e,
+                "already_analyzed": (
+                    not is_admin and e["can_analyze"] and repo.has_analyzed_today(chat_id, e["team_a"], e["team_b"], today)
+                ),
+            }
+            for e in entries
+        ]
+        return {"matches": out}
 
     @app.get("/api/analysis")
     async def get_analysis(
         team_a: str, team_b: str, authorization: str | None = Header(default=None)
     ):
-        """On-demand H2H analysis for one of the 3 currently-popular matches -- gated to
-        once per user per UTC day (see last_analysis_date) so a click doesn't become an
-        unlimited way to burn API-Football's 100-req/day free quota. Deliberately not part
-        of /api/news's payload for that reason -- see the docstring there. Admins bypass
-        the quota entirely (unlimited analyses), at the user's request."""
+        """On-demand H2H/form analysis for one of the 3 currently-popular matches --
+        gated to once per (user, match) per UTC day so a click doesn't become an
+        unlimited way to burn API-Football's 100-req/day free quota, but analysing one
+        of the 3 popular matches doesn't lock out the other two the same day (confirmed
+        live 2026-09-11: a single per-user flag made the button vanish for every OTHER
+        match too, not just the one just analysed). Deliberately not part of /api/news's
+        payload for that reason -- see the docstring there. Admins bypass the quota
+        entirely (unlimited analyses), at the user's request."""
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
         is_admin = billing.is_admin(user, admin_chat_ids)
 
         today = datetime.now(timezone.utc).date().isoformat()
-        if not is_admin and user.last_analysis_date == today:
-            raise HTTPException(status_code=429, detail="Дневной лимит анализа исчерпан (1 в день)")
+        if not is_admin and repo.has_analyzed_today(chat_id, team_a, team_b, today):
+            raise HTTPException(status_code=429, detail="Этот матч уже анализировали сегодня (1 раз в день на матч)")
 
         # A valid pair is either one of the real upcoming fixtures currently cached (see
         # /api/news) or, for non-football, one from the arb-derived pool -- mirrors
@@ -366,7 +382,7 @@ def register_api(
             headlines = await fetch_team_news(client, team_a, team_b)
 
         if not is_admin:
-            repo.set_last_analysis_date(chat_id, today)
+            repo.record_analysis_use(chat_id, team_a, team_b, today)
         return {
             "team_a": team_a,
             "team_b": team_b,

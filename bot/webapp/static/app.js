@@ -1516,16 +1516,11 @@ an_news: "News (injuries, form, suspensions)",
     try {
       const result = await api(`/api/analysis?team_a=${encodeURIComponent(teamA)}&team_b=${encodeURIComponent(teamB)}`);
       analysisBody.innerHTML = renderAnalysis(result, teamA, teamB);
+      // The quota is per-match (server-side, see /api/analysis), not per-user -- only
+      // THIS button needs to go away; the other matches' buttons stay clickable. A
+      // fresh /api/news call (re-entering the tab) will bring back already_analyzed
+      // per match, in case this same list re-renders without a full reload.
       btn.remove();
-      if (!meCache || !meCache.is_admin) {
-        if (meCache) meCache.analysis_available = false;
-        document.querySelectorAll(".analyze-btn").forEach((b) => {
-          if (b !== btn) {
-            b.disabled = true;
-            b.textContent = t("daily_limit_reached");
-          }
-        });
-      }
     } catch (e) {
       closeAnalysis();
       btn.disabled = false;
@@ -1570,13 +1565,13 @@ an_news: "News (injuries, form, suspensions)",
             .join("")
         : `<div class="news-empty">${t("no_fresh_news")}</div>`;
 
-      // Full analysis is fetched only on click, gated to 1/day/user, and opens in a
-      // full-screen modal -- see /api/analysis and onAnalyzeClick above.
+      // Full analysis is fetched only on click, gated to 1/day *per match* (not per
+      // user -- see /api/analysis), and opens in a full-screen modal.
       let analyzeBlock = "";
       if (m.can_analyze) {
-        analyzeBlock = me.analysis_available
-          ? `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}">${t("analyze_btn")}</button>`
-          : `<button type="button" class="analyze-btn" disabled>${t("daily_limit_reached")}</button>`;
+        analyzeBlock = m.already_analyzed
+          ? `<button type="button" class="analyze-btn" disabled>${t("daily_limit_reached")}</button>`
+          : `<button type="button" class="analyze-btn" data-team-a="${esc(m.team_a)}" data-team-b="${esc(m.team_b)}">${t("analyze_btn")}</button>`;
       }
 
       return `

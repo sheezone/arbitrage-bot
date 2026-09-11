@@ -444,7 +444,8 @@ def test_analysis_endpoint_returns_h2h_and_consumes_daily_quota(setup, monkeypat
     )
     assert resp.status_code == 200
     assert resp.json()["h2h"]["total"] == 3
-    assert repo.get_user(1).last_analysis_date == datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
+    assert repo.has_analyzed_today(1, "Реал Мадрид", "Барселона", today)
 
 
 def test_analysis_endpoint_rejects_a_second_call_same_day(setup, monkeypatch):
@@ -462,6 +463,58 @@ def test_analysis_endpoint_rejects_a_second_call_same_day(setup, monkeypatch):
     assert resp2.status_code == 429
 
 
+def test_analysis_quota_is_per_match_not_per_user(setup, monkeypatch):
+    # Confirmed-live bug (2026-09-11): analysing one popular match made the button
+    # vanish for the OTHER popular matches too, for the rest of the day. The quota must
+    # only block re-analysing the SAME match.
+    app, repo, state = setup
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    best_odds = [OutcomeOdds("Реал Мадрид", "fonbet", 2.1), OutcomeOdds("Барселона", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    best_odds2 = [OutcomeOdds("Ливерпуль", "fonbet", 2.1), OutcomeOdds("Челси", "olimpbet", 2.05)]
+    arb2 = ArbitrageResult(best_odds=best_odds2, arb_ratio=0.9, profit_pct=5.0)
+    state.matches = [
+        MatchSnapshot("football", "Реал Мадрид", "Барселона", arb, "2026-08-29T20:00:00+00:00"),
+        MatchSnapshot("football", "Ливерпуль", "Челси", arb2, "2026-08-29T20:00:00+00:00"),
+    ]
+
+    async def fake_get_match_h2h(client, team_a, team_b, api_key):
+        return {"total": 1, "team_a_wins": 1, "team_b_wins": 0, "draws": 0, "matches": []}
+
+    monkeypatch.setattr("bot.webapp.api.get_match_h2h", fake_get_match_h2h)
+
+    resp1 = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(1)))
+    assert resp1.status_code == 200
+    # Same match again -> still blocked.
+    resp_repeat = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(1)))
+    assert resp_repeat.status_code == 429
+    # A DIFFERENT match, same user, same day -> must go through.
+    resp2 = _run(_get(app, "/api/analysis?team_a=Ливерпуль&team_b=Челси", headers=_auth_header(1)))
+    assert resp2.status_code == 200
+
+
+def test_news_endpoint_marks_already_analyzed_per_match(setup, monkeypatch):
+    app, repo, state = setup
+    _football_state(state)
+
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return []
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    repo.record_analysis_use(1, "Реал Мадрид", "Барселона", today)
+
+    resp = _run(_get(app, "/api/news", headers=_auth_header(1)))
+    assert resp.json()["matches"][0]["already_analyzed"] is True
+
+    # A different user hasn't used their quota on this match.
+    resp2 = _run(_get(app, "/api/news", headers=_auth_header(2)))
+    assert resp2.json()["matches"][0]["already_analyzed"] is False
+
+
 def test_analysis_endpoint_lets_admins_bypass_the_daily_quota(setup, monkeypatch):
     app, repo, state = setup  # setup's admin_chat_ids = frozenset({99})
     _football_state(state)
@@ -475,17 +528,25 @@ def test_analysis_endpoint_lets_admins_bypass_the_daily_quota(setup, monkeypatch
     assert resp1.status_code == 200
     resp2 = _run(_get(app, "/api/analysis?team_a=Реал Мадрид&team_b=Барселона", headers=_auth_header(99)))
     assert resp2.status_code == 200  # a normal user would get 429 here, see the test above
-    assert repo.get_user(99).last_analysis_date is None  # never recorded for an admin
+    today = datetime.now(timezone.utc).date().isoformat()
+    assert not repo.has_analyzed_today(99, "Реал Мадрид", "Барселона", today)  # never recorded for an admin
 
 
-def test_me_reports_analysis_available_for_admin_even_after_use(setup):
+def test_news_endpoint_never_marks_already_analyzed_for_admins(setup, monkeypatch):
     app, repo, state = setup
     repo.upsert_user(99)
-    from datetime import datetime, timezone
+    _football_state(state)
 
-    repo.set_last_analysis_date(99, datetime.now(timezone.utc).date().isoformat())
-    resp = _run(_get(app, "/api/me", headers=_auth_header(99)))
-    assert resp.json()["analysis_available"] is True
+    async def fake_fetch_team_news(client, team_a, team_b):
+        return []
+
+    monkeypatch.setattr("bot.webapp.api.fetch_team_news", fake_fetch_team_news)
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    repo.record_analysis_use(99, "Реал Мадрид", "Барселона", today)  # shouldn't happen, but even if it did:
+
+    resp = _run(_get(app, "/api/news", headers=_auth_header(99)))
+    assert resp.json()["matches"][0]["already_analyzed"] is False
 
 
 def test_analysis_endpoint_rejects_a_match_not_currently_popular(setup):

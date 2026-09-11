@@ -321,6 +321,23 @@ class Repository:
         )
         self._conn.commit()
 
+    def has_analyzed_today(self, chat_id: int, team_a: str, team_b: str, today: str) -> bool:
+        """The 1/day quota on /api/analysis (bot/webapp/api.py) is per-match, not a
+        single flag for the whole user -- analysing one popular match must not lock the
+        other two shown the same day."""
+        row = self._conn.execute(
+            "SELECT 1 FROM match_analysis_uses WHERE chat_id = ? AND team_a = ? AND team_b = ? AND used_on = ?",
+            (chat_id, team_a, team_b, today),
+        ).fetchone()
+        return row is not None
+
+    def record_analysis_use(self, chat_id: int, team_a: str, team_b: str, today: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO match_analysis_uses (chat_id, team_a, team_b, used_on) VALUES (?, ?, ?, ?)",
+            (chat_id, team_a, team_b, today),
+        )
+        self._conn.commit()
+
     def set_allowed_bookmakers(self, chat_id: int, bookmakers: list[str]) -> None:
         self._conn.execute(
             "UPDATE users SET allowed_bookmakers = ? WHERE chat_id = ?", (",".join(bookmakers), chat_id)

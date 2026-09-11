@@ -61,3 +61,15 @@ CREATE TABLE IF NOT EXISTS payments (
     paid_at TEXT NOT NULL,
     PRIMARY KEY (telegram_charge_id)
 );
+
+-- One row per (user, match, day) a Mini App analysis was actually used for -- the
+-- 1/day quota (see bot/webapp/api.py's /api/analysis) is scoped to a single match, not
+-- the whole user, so analysing one popular match doesn't lock out the other two shown
+-- the same day.
+CREATE TABLE IF NOT EXISTS match_analysis_uses (
+    chat_id INTEGER NOT NULL,
+    team_a TEXT NOT NULL,
+    team_b TEXT NOT NULL,
+    used_on TEXT NOT NULL,
+    PRIMARY KEY (chat_id, team_a, team_b, used_on)
+);
