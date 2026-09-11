@@ -570,9 +570,16 @@ main#content { padding: 12px 14px calc(36px + var(--safe-b)); position: relative
 .form-team { padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .form-team:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
 .form-team-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--text); font-size: 13px; margin-bottom: 6px; }
-.form-team-head .h2h-form { margin-bottom: 0; }
-.form-rec { font-size: 11px; color: var(--hint); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
-.form-standing { font-size: 11px; color: var(--text); margin-bottom: 8px; }
+.form-team-head .h2h-form { margin-bottom: 0; margin-left: auto; }
+.form-rec { font-size: 11px; color: var(--hint); font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+/* League position -- a visible pill right next to the team name, not a easy-to-miss
+   grey line further down (that read as "position isn't shown at all"). */
+.standing-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 9px; border-radius: var(--radius-pill);
+  background: rgba(244, 192, 74, 0.16); color: var(--gold);
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
 
 .meta-line.disclaimer { margin-top: 16px; font-size: 10px; line-height: 1.5; color: var(--hint); opacity: 0.85; }
 

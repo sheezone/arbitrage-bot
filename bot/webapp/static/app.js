@@ -1367,10 +1367,13 @@ an_news: "News (injuries, form, suspensions)",
         return `<span class="h2h-chip ${chip(m.result)}" title="${esc(`${m.date} ${ha} ${m.gf}:${m.ga} ${m.opponent}`)}">${m.result}</span>`;
       })
       .join("");
+    // League position as a visible badge right next to the team name -- it used to be
+    // a small grey line below the form chips and was easy to miss entirely (confirmed-
+    // live complaint, 2026-09-11: read as "position isn't shown at all").
     const st = form.standing;
-    const stLine =
+    const standingBadge =
       st && st.rank
-        ? `<div class="form-standing">🏆 ${st.rank} ${t("standing_label")} · ${st.points != null ? st.points : "—"} ${t("pts_short")}</div>`
+        ? `<span class="standing-badge">🏆 ${st.rank} ${t("standing_label")} · ${st.points != null ? st.points : "—"} ${t("pts_short")}</span>`
         : "";
     const rows = (form.matches || [])
       .map((m) => {
@@ -1380,9 +1383,8 @@ an_news: "News (injuries, form, suspensions)",
       })
       .join("");
     return `<div class="form-team">
-        <div class="form-team-head"><b>${esc(form.team)}</b><span class="h2h-form">${chips}</span></div>
+        <div class="form-team-head"><b>${esc(form.team)}</b>${standingBadge}<span class="h2h-form">${chips}</span></div>
         <div class="form-rec">${form.wins}–${form.draws}–${form.losses} · ${t("goals_short")} ${form.gf}:${form.ga}</div>
-        ${stLine}
         <div class="h2h-matches">${rows}</div>
       </div>`;
   }
