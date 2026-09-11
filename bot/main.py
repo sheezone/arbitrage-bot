@@ -84,9 +84,10 @@ async def main() -> None:
     if not config.licensed_bookmakers_only:
         sources.append(TheOddsApiProvider(api_key=config.the_odds_api_key))
     # Opt-in, heavier than everything else here (drives a real headless Chromium) --
-    # see bot/providers/melbet.py's module docstring. Also NOT an RF-registered operator,
-    # so it stays off whenever licensed_bookmakers_only is on regardless of ENABLE_MELBET.
-    if config.enable_melbet and not config.licensed_bookmakers_only:
+    # see bot/providers/melbet.py's module docstring. Melbet IS an RF-registered
+    # operator (see bot/core/bookmakers.py), so unlike The Odds API above this one
+    # isn't tied to licensed_bookmakers_only at all -- ENABLE_MELBET alone decides it.
+    if config.enable_melbet:
         sources.append(MelbetProvider())
     surebet_finder = SurebetFinder(api_token=config.surebet_api_token)
     # Off unless BOTH a token is set AND enable_crypto_payment is on -- 259-ФЗ ст. 14

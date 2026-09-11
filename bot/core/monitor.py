@@ -144,8 +144,11 @@ _OUTCOME_MARKERS = ["📈", "📉", "🔹", "🔸"]
 # instead of just naming it. A key with no entry here still renders, just not as a link.
 # Only RF-registered (ЕРАИ / ЦУПИС) operators -- deep-linking to an unlicensed
 # bookmaker is the sharpest "promoting illegal gambling" risk, so foreign books
-# (bet365, 1xbet, Pinnacle) and Melbet are intentionally NOT here even though quotes
-# from them would normally be dropped upstream anyway (see bot/core/bookmakers.py).
+# (bet365, 1xbet.com, Pinnacle) stay out even though quotes from them would normally
+# be dropped upstream anyway (see bot/core/bookmakers.py). Melbet IS licensed in RF
+# (ФНС since 2012, ЦУПИС/ЕРАИ member) under sport.melbet.ru/mel.bet -- a different
+# entity from the blocked international melbet.com -- so it's back in as of 2026-09-11
+# after wrongly being lumped in with the foreign books.
 BOOKMAKER_URLS = {
     "fonbet": "https://www.fonbet.ru",
     "pari": "https://pari.ru",
@@ -158,6 +161,7 @@ BOOKMAKER_URLS = {
     "betcity": "https://betcity.ru",
     "betboom": "https://betboom.ru",
     "ligastavok": "https://www.ligastavok.ru",
+    "melbet": "https://sport.melbet.ru",
 }
 
 
