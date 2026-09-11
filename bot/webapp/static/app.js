@@ -1392,11 +1392,17 @@ an_news: "News (injuries, form, suspensions)",
     const fa = renderTeamForm(result.form_a);
     const fb = renderTeamForm(result.form_b);
     if (!impl && !fa && !fb) return "";
+    // Both teams always get a slot -- if just one of them didn't resolve (ESPN/
+    // football-data.org don't cover the same set of leagues/spellings for every club),
+    // showing nothing for it read as "only one team's results loaded" (confirmed-live
+    // complaint, 2026-09-11) instead of "no data for this one team". renderTeamForm's
+    // own success output already names the team, so the fallback names it instead.
+    const naBlock = (name) => `<div class="news-empty">${esc(name)}: ${t("form_none")}</div>`;
     return `<div class="h2h-block form-block">
         <div class="h2h-title">${t("form_title")}</div>
         ${impl}
-        ${fa || `<div class="news-empty">${t("form_none")}</div>`}
-        ${fb}
+        ${fa || naBlock(teamA)}
+        ${fb || naBlock(teamB)}
       </div>`;
   }
 
