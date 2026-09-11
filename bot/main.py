@@ -14,7 +14,7 @@ from bot.config import load_config
 from bot.core.monitor import run_monitor_loop
 from bot.core.state import LatestState
 from bot.db.repository import Repository
-from bot.handlers.commands import register_handlers
+from bot.handlers.commands import _main_menu_keyboard, register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.cryptobot import CryptoPayClient
 from bot.providers.fonbet import FonbetProvider
@@ -153,6 +153,10 @@ async def main() -> None:
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
             licensed_bookmakers_only=config.licensed_bookmakers_only,
+            # Silently refreshes the persistent bottom keyboard on every notification a
+            # user gets -- see _notify_group's docstring for why (Telegram clients have
+            # been seen dropping it with no action on our side that would explain it).
+            keyboard_factory=_main_menu_keyboard,
         )
     )
 

@@ -6,6 +6,7 @@ import html
 import logging
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Callable
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError
@@ -343,6 +344,7 @@ async def _notify_group(
     bot: Bot,
     admin_chat_ids: frozenset[int] = frozenset(),
     market: str = "winner",
+    keyboard_factory: Callable[[str], object] | None = None,
 ) -> None:
     match_id = f"{game}:{team_a}:{team_b}:{start_time_utc}:{market}"
     bh = _bookmakers_hash(arb.best_odds)
@@ -369,6 +371,14 @@ async def _notify_group(
             await _send_message_with_retries(
                 bot, user.chat_id, message, parse_mode="HTML", protect_content=True,
                 link_preview_options=LinkPreviewOptions(is_disabled=True), disable_notification=user.muted,
+                # Silently re-attaches the persistent bottom keyboard on every single
+                # notification -- Telegram clients have been seen dropping a custom
+                # reply keyboard on their own (confirmed live, 2026-09-11 report: the
+                # bottom buttons vanish with no action on our side that would remove
+                # them). Piggybacking the SAME keyboard on the most frequent message
+                # type these users get self-heals that within one poll cycle, with no
+                # visible change to the message itself.
+                reply_markup=keyboard_factory(user.language) if keyboard_factory else None,
             )
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
@@ -414,6 +424,7 @@ async def _recheck_and_notify_high_profit(
     bot: Bot,
     admin_chat_ids: frozenset[int],
     licensed_bookmakers_only: bool = True,
+    keyboard_factory: Callable[[str], object] | None = None,
 ) -> list[MatchSnapshot]:
     logger.info(
         "%d suspiciously high-profit match(es) found (>%.0f%%) -- rechecking in %ds before notifying",
@@ -446,7 +457,10 @@ async def _recheck_and_notify_high_profit(
                 fresh_arb = stale_arb
             found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
             try:
-                await _notify_group(game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids, market)
+                await _notify_group(
+                    game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids, market,
+                    keyboard_factory=keyboard_factory,
+                )
             except Exception:
                 logger.exception("Failed to notify rechecked match group")
 
@@ -472,7 +486,10 @@ async def _recheck_and_notify_high_profit(
                 fresh_arb = stale_arb
             found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
             try:
-                await _notify_group(game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids)
+                await _notify_group(
+                    game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids,
+                    keyboard_factory=keyboard_factory,
+                )
             except Exception:
                 logger.exception("Failed to notify rechecked SureBet match")
 
@@ -487,7 +504,10 @@ EXPIRY_REMINDER_WINDOW_HOURS = 24
 EXPIRY_CHECK_INTERVAL_SECONDS = 3600
 
 
-async def _send_expiry_reminders(repo: Repository, bot: Bot, admin_chat_ids: frozenset[int]) -> None:
+async def _send_expiry_reminders(
+    repo: Repository, bot: Bot, admin_chat_ids: frozenset[int],
+    keyboard_factory: Callable[[str], object] | None = None,
+) -> None:
     now = datetime.now(timezone.utc)
     for user in repo.get_all_users():
         if billing.is_admin(user, admin_chat_ids):
@@ -512,7 +532,10 @@ async def _send_expiry_reminders(repo: Repository, bot: Bot, admin_chat_ids: fro
             "пропустить уведомления о новых вилках."
         )
         try:
-            await _send_message_with_retries(bot, user.chat_id, message, parse_mode="HTML")
+            await _send_message_with_retries(
+                bot, user.chat_id, message, parse_mode="HTML",
+                reply_markup=keyboard_factory(user.language) if keyboard_factory else None,
+            )
             repo.set_expiry_reminder_sent(user.chat_id, end_key)
         except Exception:
             logger.exception("Failed to send expiry reminder to chat_id=%s", user.chat_id)
@@ -613,6 +636,7 @@ async def run_monitor_loop(
     required_channel_id: int | None = None,
     required_channel_username: str = "",
     licensed_bookmakers_only: bool = True,
+    keyboard_factory: Callable[[str], object] | None = None,
 ) -> None:
     empty_streaks: dict[str, int] = {}
     # Persisted (not just in-memory) so a process restart -- a deploy, which happens
@@ -650,7 +674,7 @@ async def run_monitor_loop(
 
         if time.time() - last_expiry_check >= EXPIRY_CHECK_INTERVAL_SECONDS:
             try:
-                await _send_expiry_reminders(repo, bot, admin_chat_ids)
+                await _send_expiry_reminders(repo, bot, admin_chat_ids, keyboard_factory)
             except Exception:
                 logger.exception("Failed to send expiry reminders")
             last_expiry_check = time.time()
@@ -674,7 +698,10 @@ async def run_monitor_loop(
                     continue
                 found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc))
                 try:
-                    await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids, market)
+                    await _notify_group(
+                        game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids, market,
+                        keyboard_factory=keyboard_factory,
+                    )
                 except Exception:
                     logger.exception("Failed to notify match group")
 
@@ -694,7 +721,10 @@ async def run_monitor_loop(
                     continue
                 found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc))
                 try:
-                    await _notify_group(game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids)
+                    await _notify_group(
+                        game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids,
+                        keyboard_factory=keyboard_factory,
+                    )
                 except Exception:
                     logger.exception("Failed to notify SureBet match")
 
@@ -703,7 +733,7 @@ async def run_monitor_loop(
                 found.extend(
                     await _recheck_and_notify_high_profit(
                         suspicious, surebet_suspicious, sources, games, empty_streaks, surebet_finder,
-                        repo, bot, admin_chat_ids, licensed_bookmakers_only,
+                        repo, bot, admin_chat_ids, licensed_bookmakers_only, keyboard_factory,
                     )
                 )
             except Exception:

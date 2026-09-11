@@ -11,6 +11,8 @@ from bot.core.monitor import (
     MIN_DISPLAYABLE_PROFIT_PCT,
     _evaluate_group,
     _format_message,
+    _notify_group,
+    _send_expiry_reminders,
     _showcase_key,
     format_match_start,
     tg_emoji,
@@ -18,6 +20,7 @@ from bot.core.monitor import (
     within_time_horizon,
 )
 from bot.core.state import MatchSnapshot
+from bot.db.repository import Repository
 from bot.providers.models import SourceQuote
 
 
@@ -188,3 +191,73 @@ def test_evaluate_group_keeps_arbs_at_or_below_the_max_displayable_ceiling():
     results = _evaluate_group(_quote_group(2.24, 2.24))
     assert len(results) == 1
     assert results[0][4].profit_pct <= MAX_DISPLAYABLE_PROFIT_PCT
+
+
+# ---- keyboard_factory: silently re-attaches the persistent bottom keyboard ----
+# (confirmed-live 2026-09-11: the reply keyboard was seen vanishing on its own; every
+# per-user DM the monitor loop sends now carries it again, invisibly, as a self-heal.)
+
+import asyncio
+
+
+class _FakeBot:
+    def __init__(self):
+        self.calls = []
+
+    async def send_message(self, chat_id, text, **kwargs):
+        self.calls.append({"chat_id": chat_id, "text": text, **kwargs})
+
+        class _Sent:
+            message_id = 1
+
+        return _Sent()
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def test_notify_group_attaches_the_keyboard_factorys_markup(tmp_path):
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    repo.upsert_user(1)  # defaults: active, no bookmaker restriction, min_profit_pct 1.0
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    bot = _FakeBot()
+
+    _run(_notify_group(
+        "football", "Team A", "Team B", arb, "", repo, bot,
+        keyboard_factory=lambda lang: f"KEYBOARD:{lang}",
+    ))
+
+    assert len(bot.calls) == 1
+    assert bot.calls[0]["chat_id"] == 1
+    assert bot.calls[0]["reply_markup"] == "KEYBOARD:ru"
+
+
+def test_notify_group_sends_no_markup_without_a_factory(tmp_path):
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    repo.upsert_user(1)
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    bot = _FakeBot()
+
+    _run(_notify_group("football", "Team A", "Team B", arb, "", repo, bot))
+
+    assert bot.calls[0]["reply_markup"] is None
+
+
+def test_send_expiry_reminders_attaches_the_keyboard_factorys_markup(tmp_path):
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    repo.upsert_user(1)
+    # Push the trial to expire in under 24h so the reminder actually fires.
+    soon = (datetime.now(timezone.utc) - timedelta(days=4, hours=23)).isoformat()
+    repo._conn.execute("UPDATE users SET trial_started_at = ? WHERE chat_id = ?", (soon, 1))
+    repo._conn.commit()
+
+    bot = _FakeBot()
+    _run(_send_expiry_reminders(repo, bot, frozenset(), keyboard_factory=lambda lang: f"KEYBOARD:{lang}"))
+
+    assert len(bot.calls) == 1
+    assert bot.calls[0]["reply_markup"] == "KEYBOARD:ru"
