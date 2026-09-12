@@ -1,4 +1,4 @@
-"""FreeKassa (freekassa.ru / pay.freekassa.ru) -- an aggregator payment gateway offering
+"""FreeKassa (freekassa.net / pay.fk.money) -- an aggregator payment gateway offering
 SBP/card/crypto without requiring the seller to have an ИП/self-employed registration
 (unlike Prodamus, which needs НПД status for its auto-fiscalization). Same shape as
 prodamus.py: build a signed pay-page link, then a POST notification (IPN) with its own
@@ -27,7 +27,9 @@ from __future__ import annotations
 import hashlib
 from urllib.parse import urlencode
 
-PAY_URL = "https://pay.freekassa.ru/"
+PAY_URL = "https://pay.fk.money/"  # freekassa.ru's old pay.freekassa.ru domain is dead/unreachable
+# (confirmed live 2026-09-12, both from the VPS and the user's own device) -- fk.money
+# is the current domain per docs.freekassa.net's own SCI demo link.
 
 
 def build_payment_url(

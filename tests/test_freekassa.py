@@ -10,7 +10,7 @@ def test_build_payment_url_has_core_params_and_valid_signature():
         order_id="fk-42-30d-1700000000",
         amount=999.0,
     )
-    assert url.startswith("https://pay.freekassa.ru/?")
+    assert url.startswith("https://pay.fk.money/?")
     assert "m=12345" in url
     assert "oa=999.00" in url
     assert "o=fk-42-30d-1700000000" in url
