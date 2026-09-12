@@ -8,6 +8,17 @@ may exist (the site's own football category page fetches via POST to a batched `
 RPC multiplexer, not a plain GET), but wasn't found in the time spent looking -- this is
 the "top events" tier, not full coverage.
 
+**Anti-bot handshake (added by Leon ~2026-09-10, confirmed live 2026-09-12)**: the first
+request to this endpoint now 307-redirects to itself while setting `spid`/`spsc` cookies
+(a bot-mitigation vendor, "sp" prefix on its headers) -- a bare request with only a
+User-Agent gets a hard 403 "Forbidden" page instead of even the redirect, so the request
+also needs realistic browser-shaped headers (Accept/Accept-Language/Referer). A client
+with `follow_redirects=True` and a persistent cookie jar (httpx.AsyncClient does both
+automatically) handles this transparently in one `get()` call: the redirect response's
+Set-Cookie is stored and replayed on the auto-followed retry to the same URL, which then
+returns 200 with real data. Confirmed via curl: bare UA-only request -> 403; full headers
++ `-L` + cookie jar -> 200 in one shot.
+
 Football and hockey use the "Тотал" market (`typeTag: "TOTAL"`, exact name match -- there
 are several similarly-named markets per match: "Тотал хозяев"/"Тотал гостей" (per-team),
 "1-й тайм: Тотал" (half only) -- only the plain "Тотал" is the full-match total we want),
@@ -38,7 +49,20 @@ PLAUSIBLE_TOTAL_LINE_RANGE = (0.5, 8.5)  # real match goal/puck totals; guards a
 
 class LeonProvider(OddsProvider):
     def __init__(self, base_url: str = BASE_URL):
-        self._client = httpx.AsyncClient(base_url=base_url, timeout=20.0, headers={"User-Agent": "Mozilla/5.0"})
+        self._client = httpx.AsyncClient(
+            base_url=base_url,
+            timeout=20.0,
+            follow_redirects=True,  # needed for the anti-bot 307 handshake, see module docstring
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/json",
+                "Accept-Language": "ru-RU,ru;q=0.9",
+                "Referer": f"{base_url}/",
+            },
+        )
 
     async def fetch_quotes(self, games: list[str]) -> list[SourceQuote]:
         wanted = [g for g in games if g in SPORT_FAMILIES]
