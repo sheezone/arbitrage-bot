@@ -35,7 +35,7 @@ from bot.handlers.commands import (
     _AGGREGATOR_BOOKMAKERS,
     _DIRECT_BOOKMAKERS,
 )
-from bot.providers import prodamus
+from bot.providers import freekassa, prodamus
 from bot.webapp.auth import validate_init_data
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
@@ -141,6 +141,8 @@ def register_api(
     required_channel_id: int | None = None,
     required_channel_username: str = "",
     prodamus_secret_key: str = "",
+    freekassa_merchant_id: str = "",
+    freekassa_secret_word_2: str = "",
     football_data_key: str = "",
 ) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
@@ -582,6 +584,83 @@ def register_api(
                 logger.exception("Prodamus webhook: failed to notify chat_id=%s", chat_id)
 
         return PlainTextResponse("OK")
+
+    @app.post("/api/freekassa/webhook")
+    async def freekassa_webhook(request: Request):
+        """FreeKassa payment notification (form-urlencoded, MD5 `SIGN` field -- see
+        bot/providers/freekassa.py's module docstring for the two-secret-word scheme).
+        Verifies the signature, then extends the buyer's subscription and credits
+        referral bookkeeping. MERCHANT_ORDER_ID is the order_id we set when building the
+        link: "fk-<chat_id>-<plan_id>-<ts>"."""
+        if not (freekassa_merchant_id and freekassa_secret_word_2):
+            raise HTTPException(status_code=404, detail="Not configured")
+
+        raw = await request.body()
+        # FreeKassa posts application/x-www-form-urlencoded, flat keys (no PHP-style
+        # nesting, unlike Prodamus) -- a plain dict is all parse_php_form's generality
+        # would buy us here.
+        data = dict(parse_qsl(raw.decode("utf-8", "replace"), keep_blank_values=True))
+
+        if not freekassa.verify_signature(data, freekassa_merchant_id, freekassa_secret_word_2):
+            logger.warning(
+                "FreeKassa webhook signature mismatch: received=%r computed=%r body=%r",
+                data.get("SIGN"),
+                freekassa.compute_notification_signature(
+                    freekassa_merchant_id,
+                    str(data.get("AMOUNT") or ""),
+                    freekassa_secret_word_2,
+                    str(data.get("MERCHANT_ORDER_ID") or ""),
+                ),
+                raw[:2000],
+            )
+            raise HTTPException(status_code=403, detail="bad signature")
+
+        # Unlike Prodamus (which also notifies on pending/failed states), FreeKassa only
+        # ever calls the notification URL once a payment has actually cleared -- no
+        # separate "is_paid" status field to check.
+        order_id = str(data.get("MERCHANT_ORDER_ID") or "")
+        parts = order_id.split("-")
+        if len(parts) < 4 or parts[0] != "fk" or not parts[1].isdigit():
+            logger.warning("FreeKassa webhook: unrecognised MERCHANT_ORDER_ID %r", order_id)
+            return PlainTextResponse("YES")
+        chat_id = int(parts[1])
+        plan_id = parts[2]
+        plan = billing.PLANS_BY_ID.get(plan_id)
+        if plan is None:
+            logger.warning("FreeKassa webhook: unknown plan_id %r (order %r)", plan_id, order_id)
+            return PlainTextResponse("YES")
+
+        charge_key = f"freekassa:{order_id}"
+        if repo.has_payment(charge_key):
+            return PlainTextResponse("YES")  # already credited -- webhook can be re-delivered
+
+        try:
+            amount = float(str(data.get("AMOUNT") or plan.price_rub))
+        except (TypeError, ValueError):
+            amount = float(plan.price_rub)
+
+        repo.extend_subscription(chat_id, plan.days)
+        repo.record_payment(chat_id, plan.id, "freekassa", amount, "RUB", charge_key)
+
+        discount_used = max(0.0, float(plan.price_rub) - amount)
+        if discount_used > 0:
+            repo.consume_referral_balance(chat_id, discount_used)
+        buyer = repo.get_user(chat_id)
+        if buyer is not None and buyer.referred_by is not None:
+            repo.credit_referral_balance(
+                buyer.referred_by, billing.referral_commission_rub(amount, "RUB")
+            )
+
+        if bot is not None:
+            try:
+                await bot.send_message(chat_id, f"✅ Подписка продлена на {plan.label}. Спасибо!")
+            except Exception:
+                logger.exception("FreeKassa webhook: failed to notify chat_id=%s", chat_id)
+
+        # FreeKassa's IPN spec requires the literal string "YES" in the response body to
+        # acknowledge -- anything else (including our own "OK" used for Prodamus) is
+        # treated as a failed delivery and gets retried.
+        return PlainTextResponse("YES")
 
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

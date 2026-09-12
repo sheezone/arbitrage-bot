@@ -114,6 +114,8 @@ async def main() -> None:
             required_channel_username=config.required_channel_username,
             prodamus_form_url=config.prodamus_form_url,
             prodamus_npd_income_type=config.prodamus_npd_income_type,
+            freekassa_merchant_id=config.freekassa_merchant_id,
+            freekassa_secret_word_1=config.freekassa_secret_word_1,
         )
     )
 
@@ -133,6 +135,8 @@ async def main() -> None:
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
             prodamus_secret_key=config.prodamus_secret_key,
+            freekassa_merchant_id=config.freekassa_merchant_id,
+            freekassa_secret_word_2=config.freekassa_secret_word_2,
             football_data_key=config.football_data_key,
         )
         uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")

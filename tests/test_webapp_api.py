@@ -780,3 +780,73 @@ def test_prodamus_webhook_ignores_non_success_status(tmp_path, monkeypatch):
     resp = _run(_post_form(app, "/api/prodamus/webhook", fields, headers={"Sign": sign}))
     assert resp.status_code == 200
     assert not repo.has_payment("prodamus:sbp-5-7d-1")
+
+
+# ---- FreeKassa webhook ----
+
+def _freekassa_app(tmp_path, monkeypatch, merchant_id="12345", secret2="skey2"):
+    monkeypatch.setenv("BOT_TOKEN", BOT_TOKEN)
+    from bot.core.state import LatestState
+    from bot.db.repository import Repository
+    from bot.webapp.api import register_api
+
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    app = register_api(
+        repo, LatestState(), admin_chat_ids=frozenset({99}),
+        freekassa_merchant_id=merchant_id, freekassa_secret_word_2=secret2,
+    )
+    return app, repo
+
+
+def _fk_signed_form(merchant_id, secret2, order_id, amount):
+    from bot.providers import freekassa
+
+    sign = freekassa.compute_notification_signature(merchant_id, amount, secret2, order_id)
+    fields = {"MERCHANT_ORDER_ID": order_id, "AMOUNT": amount, "SIGN": sign, "MERCHANT_ID": merchant_id}
+    return fields
+
+
+def test_freekassa_webhook_extends_subscription_on_success(tmp_path, monkeypatch):
+    app, repo = _freekassa_app(tmp_path, monkeypatch)
+    repo.upsert_user(42)
+    before = repo.get_user(42).subscription_expires_at
+
+    fields = _fk_signed_form("12345", "skey2", "fk-42-30d-1700000000", "999.00")
+    resp = _run(_post_form(app, "/api/freekassa/webhook", fields))
+    assert resp.status_code == 200
+    after = repo.get_user(42).subscription_expires_at
+    assert after != before and after is not None
+    assert repo.has_payment("freekassa:fk-42-30d-1700000000")
+
+
+def test_freekassa_webhook_rejects_bad_signature(tmp_path, monkeypatch):
+    app, repo = _freekassa_app(tmp_path, monkeypatch)
+    repo.upsert_user(42)
+    resp = _run(_post_form(
+        app, "/api/freekassa/webhook",
+        {"MERCHANT_ORDER_ID": "fk-42-30d-1", "AMOUNT": "999.00", "SIGN": "deadbeef"},
+    ))
+    assert resp.status_code == 403
+    assert not repo.has_payment("freekassa:fk-42-30d-1")
+
+
+def test_freekassa_webhook_is_idempotent(tmp_path, monkeypatch):
+    app, repo = _freekassa_app(tmp_path, monkeypatch)
+    repo.upsert_user(7)
+    fields = _fk_signed_form("12345", "skey2", "fk-7-7d-1", "299.00")
+    _run(_post_form(app, "/api/freekassa/webhook", fields))
+    first = repo.get_user(7).subscription_expires_at
+    _run(_post_form(app, "/api/freekassa/webhook", fields))
+    assert repo.get_user(7).subscription_expires_at == first  # not extended twice
+
+
+def test_freekassa_webhook_404s_when_not_configured(tmp_path, monkeypatch):
+    monkeypatch.setenv("BOT_TOKEN", BOT_TOKEN)
+    from bot.core.state import LatestState
+    from bot.db.repository import Repository
+    from bot.webapp.api import register_api
+
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    app = register_api(repo, LatestState(), admin_chat_ids=frozenset({99}))
+    resp = _run(_post_form(app, "/api/freekassa/webhook", {"MERCHANT_ORDER_ID": "fk-1-7d-1", "AMOUNT": "1"}))
+    assert resp.status_code == 404

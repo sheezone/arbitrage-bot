@@ -23,6 +23,9 @@ class Config:
     prodamus_form_url: str
     prodamus_secret_key: str
     prodamus_npd_income_type: str
+    freekassa_merchant_id: str
+    freekassa_secret_word_1: str
+    freekassa_secret_word_2: str
     football_data_key: str
     webapp_url: str
     webapp_port: int
@@ -69,6 +72,14 @@ def load_config() -> Config:
         prodamus_form_url=os.environ.get("PRODAMUS_FORM_URL", "").rstrip("/"),
         prodamus_secret_key=os.environ.get("PRODAMUS_SECRET_KEY", ""),
         prodamus_npd_income_type=os.environ.get("PRODAMUS_NPD_INCOME_TYPE", ""),
+        # FreeKassa -- alternative SBP/card aggregator that doesn't require ИП/self-
+        # employed registration (unlike Prodamus). All three must be set for the
+        # "FreeKassa" method to appear. Secret word 1 signs outgoing pay links, word 2
+        # verifies incoming payment notifications -- these are two different values in
+        # the FreeKassa merchant dashboard, don't swap them.
+        freekassa_merchant_id=os.environ.get("FREEKASSA_MERCHANT_ID", ""),
+        freekassa_secret_word_1=os.environ.get("FREEKASSA_SECRET_WORD_1", ""),
+        freekassa_secret_word_2=os.environ.get("FREEKASSA_SECRET_WORD_2", ""),
         # football-data.org free API key -- adds authoritative table/form/recent
         # results for ~10 top competitions to the analysis view. Empty = skip, ESPN
         # stays the fallback. See bot/webapp/football_data.py.
