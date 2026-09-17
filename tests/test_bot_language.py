@@ -147,3 +147,63 @@ def test_profile_view_has_a_language_button(tmp_path):
     _text, kb = _profile_view(repo.get_user(1))
     datas = [b.callback_data for row in kb.inline_keyboard for b in row]
     assert NAV_LANGUAGE in datas
+
+
+# ---- _maybe_reattach_keyboard: throttled self-heal of the persistent bottom keyboard ----
+# (Telegram clients have been seen dropping the reply keyboard on their own with no
+# action on our side that would explain it -- see bot/core/monitor.py's _notify_group
+# docstring for the notification-side self-heal this complements.)
+
+import asyncio
+
+
+class _FakeBot:
+    def __init__(self):
+        self.sent = []
+
+    async def send_message(self, chat_id, text, **kwargs):
+        self.sent.append({"chat_id": chat_id, "text": text, **kwargs})
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def test_maybe_reattach_keyboard_sends_it_when_never_attached_before(tmp_path):
+    from bot.handlers.commands import _maybe_reattach_keyboard
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    bot = _FakeBot()
+
+    _run(_maybe_reattach_keyboard(bot, repo, repo.get_user(1)))
+
+    assert len(bot.sent) == 1
+    assert repo.get_user(1).keyboard_reattached_at is not None
+
+
+def test_maybe_reattach_keyboard_is_throttled_within_the_cooldown(tmp_path):
+    from bot.handlers.commands import _maybe_reattach_keyboard
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.set_keyboard_reattached_at(1, datetime.now(timezone.utc).isoformat())
+    bot = _FakeBot()
+
+    _run(_maybe_reattach_keyboard(bot, repo, repo.get_user(1)))
+
+    assert bot.sent == []  # too soon since the last reattach -- no spam
+
+
+def test_maybe_reattach_keyboard_fires_again_once_the_cooldown_has_passed(tmp_path):
+    from bot.handlers.commands import _maybe_reattach_keyboard
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    long_ago = (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat()
+    repo.set_keyboard_reattached_at(1, long_ago)
+    bot = _FakeBot()
+
+    _run(_maybe_reattach_keyboard(bot, repo, repo.get_user(1)))
+
+    assert len(bot.sent) == 1

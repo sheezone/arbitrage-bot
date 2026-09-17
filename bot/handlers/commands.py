@@ -932,6 +932,29 @@ async def _render(
     repo.set_menu_message_id(chat_id, sent.message_id)
 
 
+# How often _maybe_reattach_keyboard is allowed to silently re-send the persistent
+# bottom keyboard to one user -- a visible one-line chat message each time, so this
+# caps it well below "every button tap" while still healing a dropped keyboard within
+# a session or two, not just whenever a vilka notification happens to fire.
+KEYBOARD_REATTACH_COOLDOWN = timedelta(hours=6)
+
+
+async def _maybe_reattach_keyboard(bot: Bot, repo: Repository, user: UserSettings) -> None:
+    """Self-heal the persistent 🔍/👤 reply keyboard on user-initiated taps too, not
+    only on the (much rarer, per-user) vilka notifications monitor.py already covers --
+    see bot/core/monitor.py's _notify_group docstring for the underlying Telegram-client
+    quirk this works around. Throttled via keyboard_reattached_at so tapping the same
+    button repeatedly doesn't spam a fresh chat message every time."""
+    now = datetime.now(timezone.utc)
+    last = datetime.fromisoformat(user.keyboard_reattached_at) if user.keyboard_reattached_at else None
+    if last is not None and now - last < KEYBOARD_REATTACH_COOLDOWN:
+        return
+    await bot.send_message(
+        user.chat_id, _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
+    )
+    repo.set_keyboard_reattached_at(user.chat_id, now.isoformat())
+
+
 async def _render_dashboard(
     bot: Bot, repo: Repository, chat_id: int, admin_chat_ids: frozenset[int] = frozenset()
 ) -> None:
@@ -1097,6 +1120,7 @@ def register_handlers(
         await state.clear()
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
+        await _maybe_reattach_keyboard(bot, repo, user)
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
@@ -1158,6 +1182,7 @@ def register_handlers(
         await state.clear()
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
+        await _maybe_reattach_keyboard(bot, repo, user)
         text, keyboard = _profile_view(user, admin_chat_ids)
         try:
             await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=_status_banner(user))

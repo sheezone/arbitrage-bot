@@ -284,3 +284,12 @@ def test_get_recent_users_orders_newest_first(tmp_path):
 
     recent = repo.get_recent_users(limit=10)
     assert [u.chat_id for u in recent] == [2, 1]
+
+
+def test_keyboard_reattached_at_defaults_to_none_and_round_trips(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    assert repo.get_user(1).keyboard_reattached_at is None
+
+    repo.set_keyboard_reattached_at(1, "2026-01-01T00:00:00+00:00")
+    assert repo.get_user(1).keyboard_reattached_at == "2026-01-01T00:00:00+00:00"

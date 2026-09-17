@@ -29,6 +29,7 @@ class UserSettings:
     acquisition_source: str | None = None
     language: str = "ru"
     lang_chosen: bool = False
+    keyboard_reattached_at: str | None = None
 
 
 class Repository:
@@ -106,6 +107,15 @@ class Repository:
             # users are already onboarded, so backfill them to 1.
             self._conn.execute("ALTER TABLE users ADD COLUMN lang_chosen INTEGER NOT NULL DEFAULT 0")
             self._conn.execute("UPDATE users SET lang_chosen = 1")
+        if "keyboard_reattached_at" not in columns:
+            # When the persistent bottom keyboard (🔍 Поиск вилок / 👤 Мой профиль) was
+            # last silently re-sent to this user -- see set_keyboard_reattached_at and
+            # handlers/commands.py's _maybe_reattach_keyboard. Telegram clients have been
+            # seen dropping that keyboard on their own (no ReplyKeyboardRemove anywhere
+            # in this codebase); re-sending it on every single button tap would spam a
+            # visible chat message each time, so this timestamp throttles it to at most
+            # once per KEYBOARD_REATTACH_COOLDOWN.
+            self._conn.execute("ALTER TABLE users ADD COLUMN keyboard_reattached_at TEXT")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None, acquisition_source: str | None = None) -> None:
         """`referred_by`/`acquisition_source` only ever take effect for a genuinely new
@@ -180,6 +190,10 @@ class Repository:
 
     def set_lang_chosen(self, chat_id: int) -> None:
         self._conn.execute("UPDATE users SET lang_chosen = 1 WHERE chat_id = ?", (chat_id,))
+        self._conn.commit()
+
+    def set_keyboard_reattached_at(self, chat_id: int, when: str) -> None:
+        self._conn.execute("UPDATE users SET keyboard_reattached_at = ? WHERE chat_id = ?", (when, chat_id))
         self._conn.commit()
 
     def set_time_horizons(self, chat_id: int, days: list[int]) -> None:
@@ -428,6 +442,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         acquisition_source=row["acquisition_source"],
         language=row["language"] or "ru",
         lang_chosen=bool(row["lang_chosen"]),
+        keyboard_reattached_at=row["keyboard_reattached_at"],
     )
 
 
