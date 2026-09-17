@@ -35,7 +35,16 @@ PLANS: list[Plan] = [
     Plan(id="360d", days=360, label="360 дней", price_rub=6990, price_stars=5000, price_usdt=78.0),
 ]
 
-PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in PLANS}
+# Admin-only, 30₽ for 1 day -- exists purely to let an admin run a real payment through a
+# gateway (FreeKassa, Prodamus, Stars, crypto) end-to-end without spending a real plan's
+# worth of money. Deliberately NOT in PLANS (never rendered on the public subscription
+# screen -- _subscription_method_view appends it itself only when the viewer is an
+# admin), but IS in PLANS_BY_ID below so every existing plan_id -> Plan lookup (webhooks,
+# Stars pre-checkout, /api endpoints) resolves it exactly like a real plan without any of
+# them needing to special-case it.
+TEST_PLAN = Plan(id="test30", days=1, label="Тест (админ)", price_rub=30, price_stars=21, price_usdt=0.35)
+
+PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in [*PLANS, TEST_PLAN]}
 
 # Referral program: 1 tier only (no sub-referrals), credited as a discount balance the
 # referrer can spend on their own future subscription purchases -- not a cash payout,

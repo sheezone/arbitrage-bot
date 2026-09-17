@@ -675,8 +675,11 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
             f'<a href="{STARS_SHOP_BOT_URL}">@starslly_bot</a> (часто дешевле, чем в приложении), '
             "потом вернитесь сюда и оплатите."
         )
+    plans = list(billing.PLANS)
+    if billing.is_admin(user, admin_chat_ids):
+        plans.append(billing.TEST_PLAN)
     rows = []
-    for plan in billing.PLANS:
+    for plan in plans:
         if method == "stars":
             price = f"{plan.price_stars} ⭐"
         elif method in ("rub", "sbp", "fk"):
