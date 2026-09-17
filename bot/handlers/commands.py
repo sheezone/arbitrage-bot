@@ -641,7 +641,7 @@ def _subscription_view(
     if sbp_enabled:
         rows.append([_btn("💳 СБП", f"{NAV_SUB_METHOD_PREFIX}sbp")])
     if freekassa_enabled:
-        rows.append([_btn("💰 FreeKassa (без ИП)", f"{NAV_SUB_METHOD_PREFIX}fk")])
+        rows.append([_btn("💳 Картой или СБП", f"{NAV_SUB_METHOD_PREFIX}fk")])
     if yookassa_enabled:
         rows.append([_btn("💳 Банковская карта", f"{NAV_SUB_METHOD_PREFIX}rub")])
     if crypto_enabled:
@@ -655,7 +655,7 @@ _METHOD_LABELS = {
     "rub": "💳 БАНКОВСКАЯ КАРТА",
     "crypto": "💎 КРИПТОВАЛЮТА (USDT)",
     "sbp": "💳 СБП",
-    "fk": "💰 FREEKASSA",
+    "fk": "💳 КАРТОЙ ИЛИ СБП",
 }
 
 
