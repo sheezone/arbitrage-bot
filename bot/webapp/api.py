@@ -429,6 +429,21 @@ def register_api(
         ]
         matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
+        # Free daily cap once trial/subscription has lapsed (billing.FREE_DAILY_VILKI_LIMIT,
+        # shared with the button-bot UI's _search_view and monitor.py's push notifications)
+        # -- re-showing a match already counted today never costs another slot.
+        daily_limit_hit = False
+        if not billing.has_access(user, now, admin_chat_ids):
+            today = now.date().isoformat()
+            allowed = []
+            for m in matches:
+                key = billing.opportunity_key(m.game, m.team_a, m.team_b, m.start_time_utc)
+                if repo.register_daily_vilki_view(chat_id, key, today, billing.FREE_DAILY_VILKI_LIMIT):
+                    allowed.append(m)
+                else:
+                    daily_limit_hit = True
+            matches = allowed
+
         async def _match_out(client: httpx.AsyncClient, m) -> dict:
             stakes = calc_stakes(user.bankroll, m.arb.best_odds)
             if m.game == "basketball":
@@ -470,6 +485,8 @@ def register_api(
         return {
             "updated_at": state.updated_at,
             "matches": match_outs,
+            "daily_limit_hit": daily_limit_hit,
+            "daily_limit": billing.FREE_DAILY_VILKI_LIMIT if not billing.has_access(user, now, admin_chat_ids) else None,
         }
 
     @app.get("/api/admin/stats")

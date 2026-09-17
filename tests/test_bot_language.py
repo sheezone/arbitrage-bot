@@ -207,3 +207,58 @@ def test_maybe_reattach_keyboard_fires_again_once_the_cooldown_has_passed(tmp_pa
     _run(_maybe_reattach_keyboard(bot, repo, repo.get_user(1)))
 
     assert len(bot.sent) == 1
+
+
+# ---- _search_view: free daily vilki cap once trial/subscription has lapsed ----
+
+def test_search_view_caps_lapsed_user_at_free_daily_limit(tmp_path):
+    from bot.core import billing
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import LatestState, MatchSnapshot
+    from bot.handlers.commands import _search_view
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    past = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    repo._conn.execute("UPDATE users SET trial_started_at = ? WHERE chat_id = ?", (past, 1))
+    repo._conn.commit()
+
+    def _match(i):
+        best_odds = [OutcomeOdds(f"A{i}", "fonbet", 2.1), OutcomeOdds(f"B{i}", "olimpbet", 2.05)]
+        arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0 + i)
+        return MatchSnapshot("football", f"A{i}", f"B{i}", arb, f"2026-08-29T20:0{i}:00+00:00")
+
+    state = LatestState()
+    state.updated_at = 1.0
+    state.matches = [_match(i) for i in range(billing.FREE_DAILY_VILKI_LIMIT + 2)]
+
+    user = repo.get_user(1)
+    text, _ = _search_view(user, state, 150, repo, frozenset())
+
+    assert text.count("Расчётная разница") == billing.FREE_DAILY_VILKI_LIMIT
+    assert "Бесплатный лимит на сегодня исчерпан" in text
+
+
+def test_search_view_does_not_cap_a_user_with_active_access(tmp_path):
+    from bot.core import billing
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import LatestState, MatchSnapshot
+    from bot.handlers.commands import _search_view
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)  # fresh -- still on trial
+
+    def _match(i):
+        best_odds = [OutcomeOdds(f"A{i}", "fonbet", 2.1), OutcomeOdds(f"B{i}", "olimpbet", 2.05)]
+        arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0 + i)
+        return MatchSnapshot("football", f"A{i}", f"B{i}", arb, f"2026-08-29T20:0{i}:00+00:00")
+
+    state = LatestState()
+    state.updated_at = 1.0
+    state.matches = [_match(i) for i in range(billing.FREE_DAILY_VILKI_LIMIT + 2)]
+
+    user = repo.get_user(1)
+    text, _ = _search_view(user, state, 150, repo, frozenset())
+
+    assert text.count("Расчётная разница") == billing.FREE_DAILY_VILKI_LIMIT + 2
+    assert "лимит" not in text.lower()

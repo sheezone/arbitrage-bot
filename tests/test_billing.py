@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bot.core.billing import (
+    FREE_DAILY_VILKI_LIMIT,
     PLANS,
     REFERRED_TRIAL_DAYS,
     TRIAL_DAYS,
@@ -13,6 +14,7 @@ from bot.core.billing import (
     has_access,
     is_admin,
     on_trial,
+    opportunity_key,
     referral_commission_rub,
     referral_discount,
     to_rub_equivalent,
@@ -188,3 +190,12 @@ def test_user_stats_buckets_each_user_correctly():
     assert stats["expired"] == 1
     assert stats["paused"] == 1
     assert stats["referred"] == 1
+
+
+def test_opportunity_key_is_stable_and_distinguishes_different_matches():
+    assert opportunity_key("football", "A", "B", "t1") == opportunity_key("football", "A", "B", "t1")
+    assert opportunity_key("football", "A", "B", "t1") != opportunity_key("football", "A", "C", "t1")
+
+
+def test_free_daily_vilki_limit_is_a_small_positive_number():
+    assert 0 < FREE_DAILY_VILKI_LIMIT <= 20

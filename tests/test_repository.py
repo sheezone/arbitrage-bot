@@ -286,6 +286,36 @@ def test_get_recent_users_orders_newest_first(tmp_path):
     assert [u.chat_id for u in recent] == [2, 1]
 
 
+def test_daily_vilki_view_allows_up_to_the_limit_then_blocks(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    today = "2026-01-01"
+
+    assert repo.register_daily_vilki_view(1, "m1", today, 2) is True
+    assert repo.register_daily_vilki_view(1, "m2", today, 2) is True
+    assert repo.register_daily_vilki_view(1, "m3", today, 2) is False  # 3rd distinct match, limit is 2
+    assert repo.get_daily_vilki_seen_count(1, today) == 2
+
+
+def test_daily_vilki_view_reshowing_the_same_match_is_free(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    today = "2026-01-01"
+
+    repo.register_daily_vilki_view(1, "m1", today, 1)
+    assert repo.register_daily_vilki_view(1, "m1", today, 1) is True  # same match again -- still allowed
+    assert repo.get_daily_vilki_seen_count(1, today) == 1
+
+
+def test_daily_vilki_view_resets_on_a_new_day(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+
+    repo.register_daily_vilki_view(1, "m1", "2026-01-01", 1)
+    assert repo.register_daily_vilki_view(1, "m2", "2026-01-01", 1) is False  # limit hit for day 1
+    assert repo.register_daily_vilki_view(1, "m2", "2026-01-02", 1) is True  # fresh quota on day 2
+
+
 def test_keyboard_reattached_at_defaults_to_none_and_round_trips(tmp_path):
     repo = _repo(tmp_path)
     repo.upsert_user(1)

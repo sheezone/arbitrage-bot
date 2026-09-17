@@ -136,6 +136,7 @@
       msk: " МСК",
       no_vilki: "Сейчас подходящих вилок нет.",
       check_later: "Загляните чуть позже.",
+      daily_limit_hit: "🔒 Бесплатный дневной лимит исчерпан. Оформите подписку в боте (Мой профиль → Подписка) для вилок без ограничений.",
       found_vilki: "Найдено вилок: ",
       disclaimer: "18+. Информационно-аналитический сервис сравнения коэффициентов лицензированных БК. Не букмекер, ставки не принимает, доход не гарантирует. Не является призывом к участию в азартных играх.",
       profit: "Расчётная разница: ",
@@ -251,6 +252,7 @@ an_news: "Новости (травмы, форма, дисквалификаци
       msk: " МСК",
       no_vilki: "Ҳоло вилкаҳои мувофиқ нест.",
       check_later: "Баъд аз каме вақт дубора нигаред.",
+      daily_limit_hit: "🔒 Ҳадди ройгони рӯзона тамом шуд. Дар бот обуна харед (Профили ман → Обуна) барои вилкаҳои беохир.",
       found_vilki: "Вилкаҳои ёфтшуда: ",
       disclaimer: "18+. Хидмати иттилоотӣ-таҳлилии муқоисаи коэффисиентҳои БК-и иҷозатдор. Букмекер нест, ставка қабул намекунад, даромадро кафолат намедиҳад. Даъват ба бозии қиморӣ нест.",
       profit: "Фарқи ҳисобӣ: ",
@@ -366,6 +368,7 @@ an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалифика
       msk: " MSK",
       no_vilki: "No suitable arbs right now.",
       check_later: "Check back a little later.",
+      daily_limit_hit: "🔒 Free daily limit reached. Subscribe in the bot (My Profile → Subscription) for unlimited arbs.",
       found_vilki: "Arbs found: ",
       disclaimer: "18+. An information and analytics service comparing licensed bookmakers' odds. Not a bookmaker, takes no bets, guarantees no income. Not a call to gamble.",
       profit: "Calc. margin: ",
@@ -1137,9 +1140,10 @@ an_news: "News (injuries, form, suspensions)",
     lastVilkiFetchTs = Date.now();
 
     if (!data.matches.length) {
+      const emptyMsg = data.daily_limit_hit ? t("daily_limit_hit") : `${t("no_vilki")}<br>${t("check_later")}`;
       content.innerHTML = `
         <div class="meta-line">${t("data_at")}${checkedAt}<span class="data-age" id="data-age"></span></div>
-        <div class="empty-state"><span class="empty-icon">🔍</span>${t("no_vilki")}<br>${t("check_later")}
+        <div class="empty-state"><span class="empty-icon">${data.daily_limit_hit ? "🔒" : "🔍"}</span>${emptyMsg}
           <button type="button" class="empty-cta" id="empty-refresh">🔄 ${t("refresh_btn")}</button></div>`;
       const er = document.getElementById("empty-refresh");
       if (er) er.addEventListener("click", () => { haptic("light"); loadTab("vilki", true); });
@@ -1147,7 +1151,8 @@ an_news: "News (injuries, form, suspensions)",
       return;
     }
 
-    const metaLine = `<div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})<span class="data-age" id="data-age"></span></div>`;
+    const metaLine = `<div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})<span class="data-age" id="data-age"></span></div>`
+      + (data.daily_limit_hit ? `<div class="daily-limit-banner">${t("daily_limit_hit")}</div>` : "");
     renderVilkiBody(data.matches, filter, metaLine, false);
   }
 

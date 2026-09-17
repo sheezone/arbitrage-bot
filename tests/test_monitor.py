@@ -261,3 +261,42 @@ def test_send_expiry_reminders_attaches_the_keyboard_factorys_markup(tmp_path):
 
     assert len(bot.calls) == 1
     assert bot.calls[0]["reply_markup"] == "KEYBOARD:ru"
+
+
+# ---- lapsed users get billing.FREE_DAILY_VILKI_LIMIT distinct notifications/day, not zero ----
+
+def _expire(repo, chat_id):
+    past = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    repo._conn.execute("UPDATE users SET trial_started_at = ? WHERE chat_id = ?", (past, chat_id))
+    repo._conn.commit()
+
+
+def test_notify_group_still_notifies_a_lapsed_user_up_to_the_free_daily_limit(tmp_path):
+    from bot.core import billing
+
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    repo.upsert_user(1)
+    _expire(repo, 1)
+    bot = _FakeBot()
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    for i in range(billing.FREE_DAILY_VILKI_LIMIT + 2):
+        arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+        _run(_notify_group("football", f"A{i}", f"B{i}", arb, "", repo, bot))
+
+    assert len(bot.calls) == billing.FREE_DAILY_VILKI_LIMIT
+
+
+def test_notify_group_never_stops_notifying_a_user_with_active_access(tmp_path):
+    from bot.core import billing
+
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    repo.upsert_user(1)  # fresh -- still on trial, unlimited
+    bot = _FakeBot()
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    for i in range(billing.FREE_DAILY_VILKI_LIMIT + 2):
+        arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+        _run(_notify_group("football", f"A{i}", f"B{i}", arb, "", repo, bot))
+
+    assert len(bot.calls) == billing.FREE_DAILY_VILKI_LIMIT + 2

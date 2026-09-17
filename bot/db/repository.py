@@ -116,6 +116,14 @@ class Repository:
             # visible chat message each time, so this timestamp throttles it to at most
             # once per KEYBOARD_REATTACH_COOLDOWN.
             self._conn.execute("ALTER TABLE users ADD COLUMN keyboard_reattached_at TEXT")
+        if "daily_vilki_date" not in columns:
+            # Free-tier daily cap (billing.FREE_DAILY_VILKI_LIMIT) on distinct vilki a
+            # user past their trial/subscription can see -- see register_daily_vilki_view.
+            # daily_vilki_seen is a comma-joined list of opportunity keys (billing.
+            # opportunity_key) already shown today; reset (implicitly, by date mismatch)
+            # rather than cleared by a cron job, so no scheduled task is needed.
+            self._conn.execute("ALTER TABLE users ADD COLUMN daily_vilki_date TEXT")
+            self._conn.execute("ALTER TABLE users ADD COLUMN daily_vilki_seen TEXT NOT NULL DEFAULT ''")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None, acquisition_source: str | None = None) -> None:
         """`referred_by`/`acquisition_source` only ever take effect for a genuinely new
@@ -195,6 +203,38 @@ class Repository:
     def set_keyboard_reattached_at(self, chat_id: int, when: str) -> None:
         self._conn.execute("UPDATE users SET keyboard_reattached_at = ? WHERE chat_id = ?", (when, chat_id))
         self._conn.commit()
+
+    def _todays_seen_vilki(self, chat_id: int, today: str) -> list[str]:
+        row = self._conn.execute(
+            "SELECT daily_vilki_date, daily_vilki_seen FROM users WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        if row is None or row["daily_vilki_date"] != today:
+            return []
+        return [k for k in (row["daily_vilki_seen"] or "").split(",") if k]
+
+    def get_daily_vilki_seen_count(self, chat_id: int, today: str) -> int:
+        """Read-only -- for showing "N/limit today" without consuming a slot (dashboard/
+        search headers)."""
+        return len(self._todays_seen_vilki(chat_id, today))
+
+    def register_daily_vilki_view(self, chat_id: int, match_key: str, today: str, limit: int) -> bool:
+        """Free-tier daily cap on distinct vilki (see billing.FREE_DAILY_VILKI_LIMIT):
+        returns whether `match_key` may be shown to this user today. Showing the SAME
+        match again today is always free (doesn't consume another slot) -- only a
+        genuinely new opportunity counts against `limit`. Callers with full access
+        (billing.has_access) should never call this at all, not pass a huge limit."""
+        seen = self._todays_seen_vilki(chat_id, today)
+        if match_key in seen:
+            return True
+        if len(seen) >= limit:
+            return False
+        seen.append(match_key)
+        self._conn.execute(
+            "UPDATE users SET daily_vilki_date = ?, daily_vilki_seen = ? WHERE chat_id = ?",
+            (today, ",".join(seen), chat_id),
+        )
+        self._conn.commit()
+        return True
 
     def set_time_horizons(self, chat_id: int, days: list[int]) -> None:
         self._conn.execute(

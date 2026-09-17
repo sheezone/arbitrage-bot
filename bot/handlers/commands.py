@@ -248,17 +248,27 @@ class SubscriptionGateMiddleware(BaseMiddleware):
         return None
 
 
-def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
+def _dashboard_view(
+    user: UserSettings, admin_chat_ids: frozenset[int] = frozenset(), daily_vilki_remaining: int | None = None
+) -> View:
     now = datetime.now(timezone.utc)
     lang = user.language
     profile_btn = _profile_button_text(lang)
     if not billing.has_access(user, now, admin_chat_ids):
+        # No longer a hard lock -- a lapsed trial/subscription still gets
+        # billing.FREE_DAILY_VILKI_LIMIT distinct vilki/day for free (see
+        # bot/core/monitor.py's _notify_group and _search_view). `daily_vilki_remaining`
+        # is None only when a caller genuinely couldn't compute it (defensive fallback);
+        # every real call site passes it through from the repo.
+        remaining = daily_vilki_remaining if daily_vilki_remaining is not None else billing.FREE_DAILY_VILKI_LIMIT
         if lang == "tg":
             text = (
                 "🎰 <b>БОТИ АРБИТРАЖӢ</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ Давраи озмоишӣ ба охир расид.\n"
-                "Обуна харед, то бот огоҳиномаҳои вилкаҳоро фиристодан идома диҳад "
+                f"Ба таври ройгон боқӣ мондааст: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b> "
+                "вилка барои имрӯз.\n"
+                "Барои вилкаҳои беохир обуна харед "
                 f"(тугмаи «{profile_btn}» дар поён → «💳 Обуна»)."
             )
         elif lang == "en":
@@ -266,7 +276,8 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
                 "🎰 <b>ARBITRAGE BOT</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ Your trial period is over.\n"
-                "Subscribe to keep receiving arbitrage alerts "
+                f"Free vilki left today: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b>.\n"
+                "Subscribe for unlimited vilki "
                 f"(the «{profile_btn}» button below → «💳 Subscription»)."
             )
         else:
@@ -274,7 +285,8 @@ def _dashboard_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozens
                 "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ Пробный период закончился.\n"
-                "Оформите подписку, чтобы бот продолжил присылать уведомления о вилках "
+                f"Бесплатно осталось сегодня: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b> вилок.\n"
+                "Оформите подписку, чтобы получать вилки без ограничений "
                 f"(кнопка «{profile_btn}» снизу → «💳 Подписка»)."
             )
         return text, None
@@ -817,7 +829,13 @@ def _next_update_note(latest_state: LatestState, poll_interval_seconds: int) -> 
     return f"~{max(1, round(remaining))} сек" if remaining > 3 else "скоро"
 
 
-def _search_view(user: UserSettings, latest_state: LatestState, poll_interval_seconds: int = 150) -> View:
+def _search_view(
+    user: UserSettings,
+    latest_state: LatestState,
+    poll_interval_seconds: int = 150,
+    repo: Repository | None = None,
+    admin_chat_ids: frozenset[int] = frozenset(),
+) -> View:
     if latest_state.updated_at == 0:
         text = "🔍 <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
         return text, _search_keyboard()
@@ -834,9 +852,31 @@ def _search_view(user: UserSettings, latest_state: LatestState, poll_interval_se
     ]
     matches.sort(key=lambda m: m.arb.profit_pct, reverse=True)
 
+    # Free daily cap once trial/subscription has lapsed (billing.FREE_DAILY_VILKI_LIMIT)
+    # -- re-showing a match already counted today is always free (register_daily_vilki_view),
+    # so this only ever trims matches the user hasn't seen yet today, best-profit-first.
+    hit_daily_limit = False
+    if repo is not None and not billing.has_access(user, now, admin_chat_ids):
+        today = now.date().isoformat()
+        allowed = []
+        for m in matches:
+            key = billing.opportunity_key(m.game, m.team_a, m.team_b, m.start_time_utc)
+            if repo.register_daily_vilki_view(user.chat_id, key, today, billing.FREE_DAILY_VILKI_LIMIT):
+                allowed.append(m)
+            else:
+                hit_daily_limit = True
+        matches = allowed
+
     header = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
-        header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at} · след. проверка {next_update}.")
+        if hit_daily_limit:
+            header.append(
+                f"Бесплатный лимит на сегодня исчерпан ({billing.FREE_DAILY_VILKI_LIMIT}/"
+                f"{billing.FREE_DAILY_VILKI_LIMIT}).\nОформите подписку для вилок без ограничений — "
+                f"«{_profile_button_text(user.language)}» снизу → «💳 Подписка»."
+            )
+        else:
+            header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at} · след. проверка {next_update}.")
         return "\n".join(header), _search_keyboard()
 
     header.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at} · след. проверка {next_update})\n")
@@ -874,6 +914,13 @@ def _search_view(user: UserSettings, latest_state: LatestState, poll_interval_se
 
     if shown < len(matches):
         lines.append(f"…и ещё {len(matches) - shown} вилок (показаны лучшие по проценту прибыли).")
+
+    if hit_daily_limit:
+        lines.append(
+            f"🔒 Бесплатный лимит на сегодня исчерпан ({billing.FREE_DAILY_VILKI_LIMIT}/"
+            f"{billing.FREE_DAILY_VILKI_LIMIT}). Остальные вилки скрыты — оформите подписку "
+            f"(«{_profile_button_text(user.language)}» снизу → «💳 Подписка»)."
+        )
 
     return "\n".join(lines), _search_keyboard()
 
@@ -955,11 +1002,21 @@ async def _maybe_reattach_keyboard(bot: Bot, repo: Repository, user: UserSetting
     repo.set_keyboard_reattached_at(user.chat_id, now.isoformat())
 
 
+def _daily_vilki_remaining(repo: Repository, user: UserSettings, admin_chat_ids: frozenset[int]) -> int | None:
+    """None when the user has full access (trial/subscribed/admin) -- the caller only
+    needs a number for the lapsed-access dashboard copy."""
+    now = datetime.now(timezone.utc)
+    if billing.has_access(user, now, admin_chat_ids):
+        return None
+    seen = repo.get_daily_vilki_seen_count(user.chat_id, now.date().isoformat())
+    return max(0, billing.FREE_DAILY_VILKI_LIMIT - seen)
+
+
 async def _render_dashboard(
     bot: Bot, repo: Repository, chat_id: int, admin_chat_ids: frozenset[int] = frozenset()
 ) -> None:
     user = repo.get_user(chat_id)
-    text, keyboard = _dashboard_view(user, admin_chat_ids)
+    text, keyboard = _dashboard_view(user, admin_chat_ids, _daily_vilki_remaining(repo, user, admin_chat_ids))
     await _render(bot, repo, chat_id, user.menu_message_id, text, keyboard, photo_path=BANNER_PATH)
 
 
@@ -1007,7 +1064,7 @@ def register_handlers(
             chat_id, _buttons_below_text(user.language), reply_markup=_main_menu_keyboard(user.language)
         )
 
-        text, keyboard = _dashboard_view(user, admin_chat_ids)
+        text, keyboard = _dashboard_view(user, admin_chat_ids, _daily_vilki_remaining(repo, user, admin_chat_ids))
         sent = await callback.message.answer_photo(
             FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
@@ -1103,7 +1160,7 @@ def register_handlers(
                 pass
             repo.set_menu_message_id(chat_id, None)
 
-        text, keyboard = _dashboard_view(user, admin_chat_ids)
+        text, keyboard = _dashboard_view(user, admin_chat_ids, _daily_vilki_remaining(repo, user, admin_chat_ids))
         sent = await bot.send_photo(
             chat_id, FSInputFile(BANNER_PATH), caption=text, reply_markup=keyboard, parse_mode="HTML"
         )
@@ -1121,7 +1178,7 @@ def register_handlers(
         await _dismiss(message)
         user = repo.get_user(message.chat.id)
         await _maybe_reattach_keyboard(bot, repo, user)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(F.text == LANG_BUTTON_TEXT)
@@ -1412,7 +1469,7 @@ def register_handlers(
         repo.set_bankroll(callback.message.chat.id, amount)
         await state.clear()
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SEARCH_PATH,
@@ -1446,7 +1503,7 @@ def register_handlers(
     async def on_nav_cancel(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SEARCH_PATH,
@@ -1747,7 +1804,7 @@ def register_handlers(
     @router.callback_query(F.data == NAV_SEARCH)
     async def on_nav_search(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SEARCH_PATH,
@@ -1775,7 +1832,7 @@ def register_handlers(
         repo.set_bankroll(message.chat.id, amount)
         await state.clear()
         user = repo.get_user(message.chat.id)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(Settings.waiting_threshold)
@@ -1803,7 +1860,7 @@ def register_handlers(
         repo.set_min_profit_pct(message.chat.id, pct)
         await state.clear()
         user = repo.get_user(message.chat.id)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
 
     @router.message(Settings.waiting_calc_bankroll)

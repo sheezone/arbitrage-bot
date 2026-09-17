@@ -356,9 +356,16 @@ async def _notify_group(
         return
 
     now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
     for user in repo.get_active_users():
         if not billing.has_access(user, now, admin_chat_ids):
-            continue
+            # Trial/subscription lapsed -- not a hard cutoff any more, just capped to
+            # FREE_DAILY_VILKI_LIMIT distinct matches/day (see billing.py's docstring).
+            # Skips silently once the day's quota is used; no upsell spam per match --
+            # the dashboard/search screen already surfaces the remaining count.
+            key = billing.opportunity_key(game, team_a, team_b, start_time_utc)
+            if not repo.register_daily_vilki_view(user.chat_id, key, today, billing.FREE_DAILY_VILKI_LIMIT):
+                continue
         if arb.profit_pct < user.min_profit_pct:
             continue
         if not within_time_horizon(start_time_utc, user.time_horizons, now):

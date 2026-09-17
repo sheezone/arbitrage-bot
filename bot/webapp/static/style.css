@@ -730,6 +730,16 @@ main#content { padding: 12px 14px calc(36px + var(--safe-b)); position: relative
 .gate-check-btn:disabled { background: rgba(255, 255, 255, 0.08); color: var(--hint); cursor: default; box-shadow: none; }
 
 .meta-line { color: var(--hint); font-size: 13px; margin-bottom: 12px; animation: rise-in 0.3s ease both; }
+.daily-limit-banner {
+  background: rgba(244, 192, 74, 0.12);
+  border: 1px solid rgba(244, 192, 74, 0.35);
+  color: var(--gold, #f4c04a);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 8px 0 12px;
+  animation: rise-in 0.3s ease both;
+}
 .meta-line b { color: var(--text); }
 
 .section-title {

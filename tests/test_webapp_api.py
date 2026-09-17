@@ -195,6 +195,65 @@ def test_vilki_endpoint_includes_team_flags_for_recognized_teams(setup):
     assert m["team_b_flag"] == "🇪🇸"
 
 
+def _expire_trial(repo, chat_id):
+    from datetime import timedelta
+
+    past = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    repo._conn.execute("UPDATE users SET trial_started_at = ? WHERE chat_id = ?", (past, chat_id))
+    repo._conn.commit()
+
+
+def test_vilki_endpoint_caps_lapsed_users_at_the_free_daily_limit(setup):
+    """See billing.FREE_DAILY_VILKI_LIMIT -- a lapsed trial/subscription still gets this
+    many distinct matches/day for free rather than a hard 403/empty response."""
+    app, repo, state = setup
+    from bot.core import billing
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    _run(_get(app, "/api/me", headers=_auth_header(1)))
+    _expire_trial(repo, 1)
+
+    def _match(i):
+        best_odds = [OutcomeOdds(f"A{i}", "fonbet", 2.1), OutcomeOdds(f"B{i}", "olimpbet", 2.05)]
+        arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0 + i)
+        return MatchSnapshot("football", f"A{i}", f"B{i}", arb, f"2026-08-29T20:0{i}:00+00:00")
+
+    state.matches = [_match(i) for i in range(billing.FREE_DAILY_VILKI_LIMIT + 2)]
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    body = resp.json()
+    assert len(body["matches"]) == billing.FREE_DAILY_VILKI_LIMIT
+    assert body["daily_limit_hit"] is True
+
+    # Same fetch again (unchanged match set) shouldn't consume any further slots -- the
+    # exact same FREE_DAILY_VILKI_LIMIT matches come back, not zero.
+    resp2 = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    assert len(resp2.json()["matches"]) == billing.FREE_DAILY_VILKI_LIMIT
+
+
+def test_vilki_endpoint_does_not_cap_users_with_active_access(setup):
+    app, repo, state = setup
+    from bot.core import billing
+    from bot.core.arbitrage import ArbitrageResult, OutcomeOdds
+    from bot.core.state import MatchSnapshot
+
+    _run(_get(app, "/api/me", headers=_auth_header(1)))  # fresh user -- still on trial
+
+    def _match(i):
+        best_odds = [OutcomeOdds(f"A{i}", "fonbet", 2.1), OutcomeOdds(f"B{i}", "olimpbet", 2.05)]
+        arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0 + i)
+        return MatchSnapshot("football", f"A{i}", f"B{i}", arb, f"2026-08-29T20:0{i}:00+00:00")
+
+    state.matches = [_match(i) for i in range(billing.FREE_DAILY_VILKI_LIMIT + 2)]
+
+    resp = _run(_get(app, "/api/vilki", headers=_auth_header(1)))
+    body = resp.json()
+    assert len(body["matches"]) == billing.FREE_DAILY_VILKI_LIMIT + 2
+    assert body["daily_limit_hit"] is False
+    assert body["daily_limit"] is None
+
+
 def test_vilki_endpoint_includes_nba_logos_for_basketball(setup):
     app, repo, state = setup
     from bot.core.arbitrage import ArbitrageResult, OutcomeOdds

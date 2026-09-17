@@ -44,6 +44,21 @@ PLANS: list[Plan] = [
 # them needing to special-case it.
 TEST_PLAN = Plan(id="test30", days=1, label="Тест (админ)", price_rub=30, price_stars=21, price_usdt=0.35)
 
+# Once a user's trial/subscription lapses, they aren't fully cut off any more -- they
+# keep seeing this many DISTINCT vilki per calendar day for free, forever, as a
+# perpetual freemium tier (see Repository.register_daily_vilki_view for the actual
+# per-user counter). Admins and anyone with billing.has_access()==True are unlimited
+# and never consult this at all.
+FREE_DAILY_VILKI_LIMIT = 5
+
+
+def opportunity_key(game: str, team_a: str, team_b: str, start_time_utc: str) -> str:
+    """Stable per-match identity for the free daily-vilki counter -- deliberately looser
+    than monitor.py's own bookmaker-hash-including dedup key (that one exists to avoid
+    re-notifying on an unchanged price; this one just needs to recognise "the same
+    match again today" so re-showing it never costs the user a free slot)."""
+    return f"{game}:{team_a}:{team_b}:{start_time_utc}"
+
 PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in [*PLANS, TEST_PLAN]}
 
 # Referral program: 1 tier only (no sub-referrals), credited as a discount balance the
