@@ -19,6 +19,20 @@ def test_resolve_search_name_passes_through_unknown_name():
     assert fs.resolve_search_name("FC Something Unmapped") == "FC Something Unmapped"
 
 
+def test_resolve_search_name_covers_the_full_current_premier_league():
+    # Regression: only the "big 6" were mapped at first, silently breaking form/
+    # standings lookups (via football_data.py) for every other EPL club -- confirmed
+    # live 2026-09-21 with "Сандерленд" (promoted this season) showing no data at all.
+    for cyrillic, english in [
+        ("Сандерленд", "Sunderland"),
+        ("Астон Вилла", "Aston Villa"),
+        ("Ньюкасл", "Newcastle"),
+        ("Вест Хэм", "West Ham"),
+        ("Вулверхэмптон", "Wolverhampton Wanderers"),
+    ]:
+        assert fs.resolve_search_name(cyrillic) == english
+
+
 def _mock_transport(handler):
     return httpx.MockTransport(handler)
 
