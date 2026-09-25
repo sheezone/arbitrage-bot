@@ -148,6 +148,23 @@ class Repository:
         )
         self._conn.commit()
 
+    def grant_bonus_days(self, chat_id: int, days: int) -> None:
+        """Add free days on top of whatever access the user has now -- unlike
+        extend_subscription, counted from the end of an active TRIAL too, so a user
+        still on trial actually gains the days instead of them vanishing inside it."""
+        from bot.core import billing
+
+        user = self.get_user(chat_id)
+        if user is None:
+            return
+        now = datetime.now(timezone.utc)
+        base = max(now, billing.access_end(user, now))
+        self._conn.execute(
+            "UPDATE users SET subscription_expires_at = ? WHERE chat_id = ?",
+            ((base + timedelta(days=days)).isoformat(), chat_id),
+        )
+        self._conn.commit()
+
     def record_payment(
         self, chat_id: int, plan_id: str, provider: str, amount: float, currency: str, telegram_charge_id: str
     ) -> None:

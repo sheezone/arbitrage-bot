@@ -484,8 +484,10 @@ def _referral_view(user: UserSettings, repo: Repository, bot_username: str) -> V
     link = f"https://t.me/{bot_username}?start={user.chat_id}" if bot_username else "—"
     text = (
         f"{vi('crown')} <b>ПАРТНЁРСКАЯ ПРОГРАММА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Приглашайте друзей — получайте {billing.REFERRAL_COMMISSION_PCT:.0%} с каждой их "
-        "оплаты подписки в виде скидки на свою следующую покупку (не вывод деньгами).\n\n"
+        f"{vi('party')} За каждого друга, который запустит бота по вашей ссылке, — "
+        f"<b>+{billing.REFERRAL_BONUS_DAYS} дня бесплатного доступа</b>.\n\n"
+        f"Плюс {billing.REFERRAL_COMMISSION_PCT:.0%} с каждой оплаты подписки друга — в виде "
+        "скидки на свою следующую покупку (не вывод деньгами).\n\n"
         f"👥 Приглашено: <b>{referrals}</b>\n"
         f"{vi('money_bag')} Баланс скидки: <b>{user.referral_balance_rub:.2f}₽</b>\n\n"
         f"{vi('link')} Ваша ссылка:\n{link}"
@@ -1173,6 +1175,17 @@ def register_handlers(
                     acquisition_source = payload[:64]
         repo.upsert_user(message.chat.id, referred_by=referred_by, acquisition_source=acquisition_source)
         user = repo.get_user(message.chat.id)
+        if is_new_user and referred_by is not None:
+            repo.grant_bonus_days(referred_by, billing.REFERRAL_BONUS_DAYS)
+            try:
+                await bot.send_message(
+                    referred_by,
+                    f"{vi('party')} По вашей ссылке пришёл новый пользователь — "
+                    f"<b>+{billing.REFERRAL_BONUS_DAYS} дня</b> бесплатного доступа начислено!",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
 
         # First launch ever: show ONLY the language picker. Everything else (keyboard,
         # welcome note, dashboard) is sent once a language is picked -- see
@@ -1213,6 +1226,11 @@ def register_handlers(
                 f"Первые {trial_days} дн.{trial_note} — бесплатный доступ ко всем "
                 "функциям. Дальше — платная подписка (кнопка «💳 Подписка» на главном "
                 "экране).\n\n"
+                f"{vi('crown')} <b>Пригласите друга — получите ещё {billing.REFERRAL_BONUS_DAYS} дня бесплатно!</b>\n"
+                "Отправьте ему свою ссылку — дни начислятся, как только он запустит бота:\n"
+                + (f"https://t.me/{bot_username}?start={chat_id}" if bot_username
+                   else "«👤 Мой профиль» → «Партнёрская программа»")
+                + "\n\n"
                 f"{vi('warn_color')} <b>18+.</b> Это информационно-аналитический сервис сравнения "
                 "коэффициентов лицензированных букмекеров. Он не принимает ставки, не "
                 "гарантирует доход и не является призывом к участию в азартных играх. "

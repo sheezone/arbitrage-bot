@@ -323,3 +323,17 @@ def test_keyboard_reattached_at_defaults_to_none_and_round_trips(tmp_path):
 
     repo.set_keyboard_reattached_at(1, "2026-01-01T00:00:00+00:00")
     assert repo.get_user(1).keyboard_reattached_at == "2026-01-01T00:00:00+00:00"
+
+
+def test_grant_bonus_days_counts_from_trial_end(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from bot.core import billing
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    user = repo.get_user(1)
+    trial_end = billing.access_end(user, datetime.now(timezone.utc))
+    repo.grant_bonus_days(1, 3)
+    new_end = billing.access_end(repo.get_user(1), datetime.now(timezone.utc))
+    assert abs((new_end - trial_end) - timedelta(days=3)) < timedelta(seconds=5)

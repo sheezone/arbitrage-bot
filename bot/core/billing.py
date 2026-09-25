@@ -14,6 +14,8 @@ TRIAL_DAYS = 5
 # to actually use a referral link instead of just starting the bot cold. Kept strictly
 # above TRIAL_DAYS so "referred = more" stays true.
 REFERRED_TRIAL_DAYS = 7
+# Free days credited to the referrer for each new user who starts the bot via their link.
+REFERRAL_BONUS_DAYS = 3
 
 
 @dataclass(frozen=True)
