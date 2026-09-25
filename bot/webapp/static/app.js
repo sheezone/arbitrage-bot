@@ -535,7 +535,7 @@ an_news: "News (injuries, form, suspensions)",
     document.querySelector('[data-tab="vilki"]').textContent = t("tab_vilki");
     document.querySelector('[data-tab="news"]').textContent = t("tab_news");
     document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
-    document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
+    document.getElementById("stats-modal-title").textContent = t("tab_stats");
     document.querySelector('[data-tab="sub"]').textContent = t("tab_sub");
     calcBtn.title = t("tab_calc");
     document.getElementById("calc-modal-title").textContent = t("tab_calc");
@@ -717,7 +717,7 @@ an_news: "News (injuries, form, suspensions)",
     }
 
     content.addEventListener("touchstart", (e) => {
-      if (e.touches.length !== 1 || animating || !calcModal.hidden || !analysisModal.hidden) return;
+      if (e.touches.length !== 1 || animating || !calcModal.hidden || !analysisModal.hidden || !statsModal.hidden) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startT = Date.now();
@@ -1196,6 +1196,7 @@ an_news: "News (injuries, form, suspensions)",
     if (!data.matches.length) {
       const emptyMsg = data.daily_limit_hit ? t("daily_limit_hit") : `${t("no_vilki")}<br>${t("check_later")}`;
       content.innerHTML = `
+        <div class="vilki-tools"><button type="button" class="chip open-stats-btn">📊 ${t("tab_stats")}</button></div>
         <div class="meta-line">${t("data_at")}${checkedAt}<span class="data-age" id="data-age"></span></div>
         <div class="empty-state"><span class="empty-icon">${data.daily_limit_hit ? "🔒" : "🔍"}</span>${emptyMsg}
           <button type="button" class="empty-cta" id="empty-refresh">🔄 ${t("refresh_btn")}</button></div>`;
@@ -1205,7 +1206,7 @@ an_news: "News (injuries, form, suspensions)",
       return;
     }
 
-    const metaLine = `<div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})<span class="data-age" id="data-age"></span></div>`
+    const metaLine = `<div class="vilki-tools"><button type="button" class="chip open-stats-btn">📊 ${t("tab_stats")}</button></div><div class="meta-line">${t("found_vilki")}<b>${data.matches.length}</b> (${t("data_at").toLowerCase()}${checkedAt})<span class="data-age" id="data-age"></span></div>`
       + (data.daily_limit_hit ? `<div class="daily-limit-banner">${t("daily_limit_hit")}</div>` : "");
     renderVilkiBody(data.matches, filter, metaLine, false);
   }
@@ -2059,9 +2060,10 @@ an_news: "News (injuries, form, suspensions)",
     }
   }
 
-  async function renderStats() {
+  async function renderStats(target) {
+    target = target || content;
     const s = await api("/api/stats");
-    content.innerHTML = `
+    target.innerHTML = `
       <div class="section-title">${t("today")}</div>
       <div class="stat-grid stat-grid-3">
         <div class="stat-card" style="animation-delay:0ms"><div class="stat-value" data-v="${s.today_count}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("stat_found_vilki")}</div></div>
@@ -2074,10 +2076,32 @@ an_news: "News (injuries, form, suspensions)",
         <div class="stat-card" style="animation-delay:160ms"><div class="stat-value" data-v="${s.alltime_avg_profit}" data-suf="%" data-dec="2">0%</div><div class="stat-label">${t("stat_avg_profit")}</div></div>
       </div>
     `;
-    content.querySelectorAll(".stat-value").forEach((el) => {
+    target.querySelectorAll(".stat-value").forEach((el) => {
       animateValue(el, parseFloat(el.dataset.v) || 0, el.dataset.suf, Number(el.dataset.dec));
     });
   }
+
+  // Статистика lives in a modal opened from the Вилки tab (no separate tab any more).
+  const statsModal = document.getElementById("stats-modal");
+  const statsBody = document.getElementById("stats-body");
+  async function openStats() {
+    haptic("light");
+    statsBody.innerHTML = skeletons.stats;
+    statsModal.hidden = false;
+    try {
+      await renderStats(statsBody);
+    } catch (e) {
+      toast(t("error_prefix") + e.message);
+    }
+  }
+  function closeStats() {
+    statsModal.hidden = true;
+  }
+  document.getElementById("stats-close").addEventListener("click", closeStats);
+  statsModal.querySelector(".modal-backdrop").addEventListener("click", closeStats);
+  content.addEventListener("click", (e) => {
+    if (e.target.closest(".open-stats-btn")) openStats();
+  });
 
   // ---------- Админ ----------
 

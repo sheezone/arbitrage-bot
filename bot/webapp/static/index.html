@@ -40,7 +40,6 @@
     <button class="tab active" data-tab="vilki">Вилки</button>
     <button class="tab" data-tab="news">Новости</button>
     <button class="tab" data-tab="settings">Настройки</button>
-    <button class="tab" data-tab="stats">Статистика</button>
     <button class="tab" data-tab="sub">Подписка</button>
     <button class="tab" data-tab="admin" id="admin-tab" hidden>Админ</button>
   </nav>
@@ -51,6 +50,16 @@
   </div>
   <div id="toast" class="toast"></div>
 
+  <div id="stats-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span id="stats-modal-title">Статистика</span>
+        <button id="stats-close" class="modal-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div id="stats-body"></div>
+    </div>
+  </div>
   <div id="calc-modal" class="modal" hidden>
     <div class="modal-backdrop"></div>
     <div class="modal-panel" role="dialog" aria-modal="true">
