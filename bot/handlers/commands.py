@@ -871,7 +871,7 @@ def _next_update_note(latest_state: LatestState, poll_interval_seconds: int) -> 
 def _search_view(
     user: UserSettings,
     latest_state: LatestState,
-    poll_interval_seconds: int = 150,
+    poll_interval_seconds: int = 20,
     repo: Repository | None = None,
     admin_chat_ids: frozenset[int] = frozenset(),
 ) -> View:
@@ -1103,7 +1103,7 @@ def register_handlers(
     yookassa_provider_token: str = "",
     admin_chat_ids: frozenset[int] = frozenset(),
     bot_username: str = "",
-    poll_interval_seconds: int = 150,
+    poll_interval_seconds: int = 20,
     crypto_pay_client: CryptoPayClient | None = None,
     yookassa_client: YooKassaClient | None = None,
     webapp_url: str = "",

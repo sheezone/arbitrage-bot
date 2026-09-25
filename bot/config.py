@@ -95,7 +95,7 @@ def load_config() -> Config:
             int(os.environ["REQUIRED_CHANNEL_ID"]) if os.environ.get("REQUIRED_CHANNEL_ID", "").strip() else None
         ),
         required_channel_username=os.environ.get("REQUIRED_CHANNEL_USERNAME", "").lstrip("@"),
-        poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "150")),
+        poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "20")),
         default_min_profit_pct=float(os.environ.get("DEFAULT_MIN_PROFIT_PCT", "1.0")),
         db_path=os.environ.get("DB_PATH", "arbitrage_bot.sqlite3"),
         enable_melbet=os.environ.get("ENABLE_MELBET", "").strip().lower() in ("1", "true", "yes"),
