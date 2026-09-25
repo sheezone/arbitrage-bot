@@ -1062,3 +1062,7 @@ input:checked + .slider::before { transform: translateX(19px); background: #0c0f
 .sub-plan-methods { display: flex; flex-wrap: wrap; gap: 8px; }
 .pay-btn { cursor: pointer; }
 .pay-btn:disabled { opacity: 0.5; }
+.pay-open-btn { margin-top: 4px; }
+.pay-open-btn.open { opacity: 0.7; }
+.sub-plan-methods:not([hidden]) { margin-top: 10px; }
+.sub-plan-methods[hidden] { display: none; }

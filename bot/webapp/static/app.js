@@ -128,6 +128,7 @@
       sub_expired: "Доступ истёк — оформите подписку",
       sub_days: " дн.",
       sub_choose: "Выберите тариф и способ оплаты",
+      pay_btn: "💳 Оплатить",
       pay_stars: "⭐ Stars",
       pay_card: "💳 Картой",
       pay_sbp: "⚡ СБП",
@@ -260,6 +261,7 @@ an_news: "Новости (травмы, форма, дисквалификаци
       sub_expired: "Дастрасӣ тамом шуд — обуна харед",
       sub_days: " рӯз",
       sub_choose: "Тариф ва усули пардохтро интихоб кунед",
+      pay_btn: "💳 Пардохт",
       pay_stars: "⭐ Stars",
       pay_card: "💳 Корт",
       pay_sbp: "⚡ СБП",
@@ -392,6 +394,7 @@ an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалифика
       sub_expired: "Access expired — subscribe to continue",
       sub_days: " days",
       sub_choose: "Choose a plan and payment method",
+      pay_btn: "💳 Pay",
       pay_stars: "⭐ Stars",
       pay_card: "💳 Card",
       pay_sbp: "⚡ SBP",
@@ -1963,7 +1966,8 @@ an_news: "News (injuries, form, suspensions)",
         (p) => `
         <div class="card sub-plan">
           <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.price_rub} ₽</span></div>
-          <div class="sub-plan-methods">
+          <button type="button" class="save-btn pay-open-btn">${t("pay_btn")}</button>
+          <div class="sub-plan-methods" hidden>
             ${methods
               .map((m) => `<button type="button" class="chip pay-btn" data-plan="${esc(p.id)}" data-method="${m}">${t("pay_" + m)} · ${priceFor(p, m)}</button>`)
               .join("")}
@@ -1981,6 +1985,14 @@ an_news: "News (injuries, form, suspensions)",
       <div id="pay-status"></div>
       ${methods.length ? plans : ""}`;
 
+    content.querySelectorAll(".pay-open-btn").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        haptic("light");
+        const box = btn.nextElementSibling;
+        box.hidden = !box.hidden;
+        btn.classList.toggle("open", !box.hidden);
+      })
+    );
     content.querySelectorAll(".pay-btn").forEach((btn) =>
       btn.addEventListener("click", () => startPayment(btn.dataset.plan, btn.dataset.method, btn))
     );
