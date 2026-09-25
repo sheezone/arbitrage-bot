@@ -262,3 +262,57 @@ def test_search_view_does_not_cap_a_user_with_active_access(tmp_path):
 
     assert text.count("Расчётная разница") == billing.FREE_DAILY_VILKI_LIMIT + 2
     assert "лимит" not in text.lower()
+
+
+# ---- move_menu_to_bottom: the menu panel is re-planted under each new vilka ----
+
+class _MenuBot:
+    def __init__(self):
+        self.deleted, self.sent = [], []
+
+    async def delete_message(self, chat_id, message_id):
+        self.deleted.append(message_id)
+
+    async def send_message(self, chat_id, text, **kwargs):
+        self.sent.append(("text", text, kwargs))
+
+        class _M:
+            message_id = 555
+
+        return _M()
+
+    async def send_photo(self, chat_id, photo, caption=None, **kwargs):
+        self.sent.append(("photo", caption, kwargs))
+
+        class _M:
+            message_id = 556
+
+        return _M()
+
+
+def test_move_menu_to_bottom_resends_the_last_screen_silently(tmp_path):
+    from bot.handlers.commands import _LAST_VIEW, move_menu_to_bottom
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.set_menu_message_id(1, 42)
+    _LAST_VIEW[1] = ("💳 ПОДПИСКА", None, None)
+    bot = _MenuBot()
+
+    _run(move_menu_to_bottom(bot, repo, 1))
+
+    assert bot.deleted == [42]
+    assert bot.sent[0][1] == "💳 ПОДПИСКА"
+    assert bot.sent[0][2]["disable_notification"] is True
+    assert repo.get_user(1).menu_message_id == 555
+    _LAST_VIEW.pop(1, None)
+
+
+def test_move_menu_to_bottom_does_nothing_without_a_menu(tmp_path):
+    from bot.handlers.commands import move_menu_to_bottom
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    bot = _MenuBot()
+    _run(move_menu_to_bottom(bot, repo, 1))
+    assert bot.sent == [] and bot.deleted == []

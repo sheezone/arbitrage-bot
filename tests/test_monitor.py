@@ -300,3 +300,19 @@ def test_notify_group_never_stops_notifying_a_user_with_active_access(tmp_path):
         _run(_notify_group("football", f"A{i}", f"B{i}", arb, "", repo, bot))
 
     assert len(bot.calls) == billing.FREE_DAILY_VILKI_LIMIT + 2
+
+
+def test_notify_group_calls_on_notified_after_each_successful_send(tmp_path):
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    repo.upsert_user(1)
+    bot = _FakeBot()
+    moved = []
+
+    async def on_notified(chat_id):
+        moved.append(chat_id)
+
+    best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
+    arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
+    _run(_notify_group("football", "Team A", "Team B", arb, "", repo, bot, on_notified=on_notified))
+
+    assert moved == [1]

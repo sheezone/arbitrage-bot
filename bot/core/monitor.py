@@ -6,7 +6,7 @@ import html
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Callable
+from typing import Awaitable, Callable
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError
@@ -349,6 +349,7 @@ async def _notify_group(
     admin_chat_ids: frozenset[int] = frozenset(),
     market: str = "winner",
     keyboard_factory: Callable[[str], object] | None = None,
+    on_notified: Callable[[int], Awaitable[None]] | None = None,
 ) -> None:
     match_id = f"{game}:{team_a}:{team_b}:{start_time_utc}:{market}"
     bh = _bookmakers_hash(arb.best_odds)
@@ -393,6 +394,15 @@ async def _notify_group(
             )
         except Exception:
             logger.exception("Failed to notify chat_id=%s", user.chat_id)
+            continue
+        # Keep the bot's menu panel as the LAST message in the chat: the notification
+        # just landed below it, so move the panel back underneath (see
+        # handlers/commands.py's move_menu_to_bottom).
+        if on_notified is not None:
+            try:
+                await on_notified(user.chat_id)
+            except Exception:
+                logger.exception("Failed to move menu below notification for chat_id=%s", user.chat_id)
 
     repo.mark_opportunity_seen(match_id, bh)
     repo.log_opportunity(arb.profit_pct)
@@ -436,6 +446,7 @@ async def _recheck_and_notify_high_profit(
     admin_chat_ids: frozenset[int],
     licensed_bookmakers_only: bool = True,
     keyboard_factory: Callable[[str], object] | None = None,
+    on_notified: Callable[[int], Awaitable[None]] | None = None,
 ) -> list[MatchSnapshot]:
     logger.info(
         "%d suspiciously high-profit match(es) found (>%.0f%%) -- rechecking in %ds before notifying",
@@ -470,7 +481,7 @@ async def _recheck_and_notify_high_profit(
             try:
                 await _notify_group(
                     game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids, market,
-                    keyboard_factory=keyboard_factory,
+                    keyboard_factory=keyboard_factory, on_notified=on_notified,
                 )
             except Exception:
                 logger.exception("Failed to notify rechecked match group")
@@ -499,7 +510,7 @@ async def _recheck_and_notify_high_profit(
             try:
                 await _notify_group(
                     game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids,
-                    keyboard_factory=keyboard_factory,
+                    keyboard_factory=keyboard_factory, on_notified=on_notified,
                 )
             except Exception:
                 logger.exception("Failed to notify rechecked SureBet match")
@@ -518,6 +529,7 @@ EXPIRY_CHECK_INTERVAL_SECONDS = 3600
 async def _send_expiry_reminders(
     repo: Repository, bot: Bot, admin_chat_ids: frozenset[int],
     keyboard_factory: Callable[[str], object] | None = None,
+    on_notified: Callable[[int], Awaitable[None]] | None = None,
 ) -> None:
     now = datetime.now(timezone.utc)
     for user in repo.get_all_users():
@@ -648,6 +660,7 @@ async def run_monitor_loop(
     required_channel_username: str = "",
     licensed_bookmakers_only: bool = True,
     keyboard_factory: Callable[[str], object] | None = None,
+    on_notified: Callable[[int], Awaitable[None]] | None = None,
 ) -> None:
     empty_streaks: dict[str, int] = {}
     # Persisted (not just in-memory) so a process restart -- a deploy, which happens
@@ -711,7 +724,7 @@ async def run_monitor_loop(
                 try:
                     await _notify_group(
                         game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids, market,
-                        keyboard_factory=keyboard_factory,
+                        keyboard_factory=keyboard_factory, on_notified=on_notified,
                     )
                 except Exception:
                     logger.exception("Failed to notify match group")
@@ -734,7 +747,7 @@ async def run_monitor_loop(
                 try:
                     await _notify_group(
                         game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids,
-                        keyboard_factory=keyboard_factory,
+                        keyboard_factory=keyboard_factory, on_notified=on_notified,
                     )
                 except Exception:
                     logger.exception("Failed to notify SureBet match")
@@ -744,7 +757,7 @@ async def run_monitor_loop(
                 found.extend(
                     await _recheck_and_notify_high_profit(
                         suspicious, surebet_suspicious, sources, games, empty_streaks, surebet_finder,
-                        repo, bot, admin_chat_ids, licensed_bookmakers_only, keyboard_factory,
+                        repo, bot, admin_chat_ids, licensed_bookmakers_only, keyboard_factory, on_notified,
                     )
                 )
             except Exception:

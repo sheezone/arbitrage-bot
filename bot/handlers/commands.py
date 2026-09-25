@@ -928,6 +928,43 @@ def _search_view(
     return "\n".join(lines), _search_keyboard()
 
 
+# Last screen rendered into each chat's menu message (text, inline keyboard, banner) --
+# in-memory only, so move_menu_to_bottom can re-send exactly what the user was looking
+# at. Lost on restart; then the dashboard is used as the fallback.
+_LAST_VIEW: dict[int, tuple[str, Any, Path | None]] = {}
+
+
+async def move_menu_to_bottom(
+    bot: Bot, repo: Repository, chat_id: int, admin_chat_ids: frozenset[int] = frozenset()
+) -> None:
+    """Delete the menu message and re-send the same screen as the chat's last message,
+    silently. Called after every vilka notification so the panel (dashboard,
+    subscription, profile...) always stays at the very bottom, below the vilki."""
+    user = repo.get_user(chat_id)
+    if user is None or not user.menu_message_id:
+        return
+    view = _LAST_VIEW.get(chat_id)
+    if view is None:
+        text, keyboard = _dashboard_view(user, admin_chat_ids, _daily_vilki_remaining(repo, user, admin_chat_ids))
+        view = (text, keyboard, BANNER_PATH)
+    text, keyboard, photo_path = view
+    try:
+        await bot.delete_message(chat_id, user.menu_message_id)
+    except Exception:
+        pass
+    if photo_path is not None:
+        sent = await bot.send_photo(
+            chat_id, FSInputFile(photo_path), caption=text, reply_markup=keyboard,
+            parse_mode="HTML", disable_notification=True,
+        )
+    else:
+        sent = await bot.send_message(
+            chat_id, text, reply_markup=keyboard, parse_mode="HTML", disable_notification=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    repo.set_menu_message_id(chat_id, sent.message_id)
+
+
 async def _render(
     bot: Bot,
     repo: Repository,
@@ -951,6 +988,7 @@ async def _render(
     than raising and leaving the screen stuck."""
     if photo_path is not None and len(text) > 1024:
         photo_path = None
+    _LAST_VIEW[chat_id] = (text, keyboard, photo_path)
     if message_id:
         try:
             if photo_path is not None:

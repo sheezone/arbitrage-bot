@@ -14,7 +14,7 @@ from bot.config import load_config
 from bot.core.monitor import run_monitor_loop
 from bot.core.state import LatestState
 from bot.db.repository import Repository
-from bot.handlers.commands import _main_menu_keyboard, register_handlers
+from bot.handlers.commands import _main_menu_keyboard, move_menu_to_bottom, register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.cryptobot import CryptoPayClient
 from bot.providers.yookassa_api import YooKassaClient
@@ -165,6 +165,8 @@ async def main() -> None:
             # user gets -- see _notify_group's docstring for why (Telegram clients have
             # been seen dropping it with no action on our side that would explain it).
             keyboard_factory=_main_menu_keyboard,
+            # Re-plant the menu panel under each new vilka so it always stays last.
+            on_notified=lambda chat_id: move_menu_to_bottom(bot, repo, chat_id, config.admin_chat_ids),
         )
     )
 
