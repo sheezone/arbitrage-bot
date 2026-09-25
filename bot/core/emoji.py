@@ -45,8 +45,7 @@ VI: dict[str, tuple[str, str]] = {
     "wrench": ("5258023599419171861", "🔧"),
     "cross": ("5219805369806629055", "🚫"),
     "mute": ("5278619986238122736", "🔇"),
-    "bell": ("5431374840332302296", "🔔"),
-    "speaker": ("5388632425314140043", "🔈"),
+    "bell": ("5458603043203327669", "🔔"),
     "refresh": ("5292226786229236118", "🔄"),
     # --- News Emoji (colour) ---
     "chart": ("5231200819986047254", "📊"),
@@ -101,7 +100,7 @@ _BUTTON_EXACT = {
 
 _BUTTON_EMOJI = {
     "⭐": "star_color", "⚡": "sbp", "💳": "cart", "💎": "usdt",
-    "⏸": "pause", "▶": "play", "🔔": "bell", "🔕": "mute", "🔊": "speaker",
+    "⏸": "pause", "▶": "play", "🔔": "bell", "🔕": "mute",
     "🤝": "crown", "🌐": "globe", "ℹ": "info", "🛠": "wrench",
     "✅": "check_color", "✉": "mail", "🔄": "refresh",
     "💰": "money_bag", "📊": "chart", "📅": "calendar", "🧮": "calc",

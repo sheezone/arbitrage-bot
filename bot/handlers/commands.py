@@ -369,7 +369,7 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
     if user.is_active and user.muted:
         status += f" ({vi('mute')} без звука)"
     pause_label = "⏸️ Поставить на паузу" if user.is_active else "▶️ Возобновить"
-    mute_label = "🔊 Включить звук" if user.muted else "🔕 Тихий режим"
+    mute_label = "🔔 Включить звук" if user.muted else "🔕 Тихий режим"
     if billing.is_admin(user, admin_chat_ids):
         access_line = f"{vi('crown')} Безлимитный доступ (админ)"
     else:
