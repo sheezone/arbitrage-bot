@@ -45,13 +45,13 @@ from aiogram.types import (
 )
 
 from bot.core import billing
+from bot.core.emoji import button_texts, icon_button, icon_reply_button, vi
 from bot.core.payments import credit_yookassa_sbp, poll_yookassa_sbp
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.subscription import CHECK_CHANNEL_SUB_CALLBACK, gate_view, is_subscribed
 from bot.core.monitor import (
     BOOKMAKER_URLS,
     GAME_EMOJI,
-    vi,
     game_icon,
     format_amount,
     format_match_start,
@@ -164,7 +164,7 @@ def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     (NAV_LANGUAGE) now, not a third bottom-bar button."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=_search_button_text(language)), KeyboardButton(text=_profile_button_text(language))],
+            [icon_reply_button(_search_button_text(language)), icon_reply_button(_profile_button_text(language))],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -198,7 +198,7 @@ View = tuple[str, InlineKeyboardMarkup | None]
 
 
 def _btn(text: str, data: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text=text, callback_data=data)
+    return icon_button(text, callback_data=data)
 
 
 class SubscriptionGateMiddleware(BaseMiddleware):
@@ -272,7 +272,7 @@ def _dashboard_view(
             text = (
                 f"{vi('fire')} <b>БОТИ АРБИТРАЖӢ</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "⏳ Давраи озмоишӣ ба охир расид.\n"
+                f"{vi('hourglass')} Давраи озмоишӣ ба охир расид.\n"
                 f"Ба таври ройгон боқӣ мондааст: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b> "
                 "вилка барои имрӯз.\n"
                 "Барои вилкаҳои беохир обуна харед "
@@ -282,7 +282,7 @@ def _dashboard_view(
             text = (
                 f"{vi('fire')} <b>ARBITRAGE BOT</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "⏳ Your trial period is over.\n"
+                f"{vi('hourglass')} Your trial period is over.\n"
                 f"Free vilki left today: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b>.\n"
                 "Subscribe for unlimited vilki "
                 f"(the «{profile_btn}» button below → «💳 Subscription»)."
@@ -291,7 +291,7 @@ def _dashboard_view(
             text = (
                 f"{vi('fire')} <b>АРБИТРАЖНЫЙ БОТ</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "⏳ Пробный период закончился.\n"
+                f"{vi('hourglass')} Пробный период закончился.\n"
                 f"Бесплатно осталось сегодня: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b> вилок.\n"
                 "Оформите подписку, чтобы получать вилки без ограничений "
                 f"(кнопка «{profile_btn}» снизу → «💳 Подписка»)."
@@ -299,59 +299,59 @@ def _dashboard_view(
         return text, None
 
     if lang == "en":
-        status = "🟢 Active" if user.is_active else "⏸️ Paused"
+        status = "🟢 Active" if user.is_active else f"{vi('pause')} Paused"
         if billing.is_admin(user, admin_chat_ids):
-            access_line = "♾️ Unlimited access"
+            access_line = f"{vi('crown')} Unlimited access"
         else:
             left = billing.days_left(user, now)
             access_line = (
-                f"⏳ Trial period · {left} day(s) left"
+                f"{vi('hourglass')} Trial period · {left} day(s) left"
                 if billing.on_trial(user, now)
-                else f"💳 Subscription active · {left} day(s) left"
+                else f"{vi('check_color')} Subscription active · {left} day(s) left"
             )
         text = (
             f"{vi('fire')} <b>ARBITRAGE BOT</b>\n\n"
             f"{status}  ·  {access_line}\n\n"
             f"Settings — «{profile_btn}» below\n"
-            "⬇️ Controls — the buttons below"
+            f"{vi('down_arrow')} Controls — the buttons below"
         )
         return text, None
 
     if lang == "tg":
-        status = "🟢 Фаъол" if user.is_active else "⏸️ Дар таваққуф"
+        status = "🟢 Фаъол" if user.is_active else f"{vi('pause')} Дар таваққуф"
         if billing.is_admin(user, admin_chat_ids):
-            access_line = "♾️ Дастрасии беохир"
+            access_line = f"{vi('crown')} Дастрасии беохир"
         else:
             left = billing.days_left(user, now)
             access_line = (
-                f"⏳ Давраи озмоишӣ · {left} рӯз монд"
+                f"{vi('hourglass')} Давраи озмоишӣ · {left} рӯз монд"
                 if billing.on_trial(user, now)
-                else f"💳 Обуна фаъол · {left} рӯз монд"
+                else f"{vi('check_color')} Обуна фаъол · {left} рӯз монд"
             )
         text = (
             f"{vi('fire')} <b>БОТИ АРБИТРАЖӢ</b>\n\n"
             f"{status}  ·  {access_line}\n\n"
             f"Танзимот — «{profile_btn}» дар поён\n"
-            "⬇️ Идоракунӣ — тугмаҳои поён"
+            f"{vi('down_arrow')} Идоракунӣ — тугмаҳои поён"
         )
         return text, None
 
-    status = f"{vi('green')} Активен" if user.is_active else "⏸️ На паузе"
+    status = f"{vi('green')} Активен" if user.is_active else f"{vi('pause')} На паузе"
     if billing.is_admin(user, admin_chat_ids):
-        access_line = "♾️ Безлимитный доступ"
+        access_line = f"{vi('crown')} Безлимитный доступ"
     else:
         left = billing.days_left(user, now)
         access_line = (
-            f"⏳ Пробный период · осталось {left} дн."
+            f"{vi('hourglass')} Пробный период · осталось {left} дн."
             if billing.on_trial(user, now)
-            else f"💳 Подписка активна · осталось {left} дн."
+            else f"{vi('check_color')} Подписка активна · осталось {left} дн."
         )
 
     text = (
         f"{vi('fire')} <b>АРБИТРАЖНЫЙ БОТ</b>\n\n"
         f"{status}  ·  {access_line}\n\n"
         f"Настройки — «{profile_btn}» снизу\n"
-        "⬇️ Управление — кнопками снизу"
+        f"{vi('down_arrow')} Управление — кнопками снизу"
     )
     return text, None
 
@@ -364,19 +364,19 @@ def _back_keyboard(extra: list[InlineKeyboardButton] | None = None, target: str 
 
 def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
-    status = f"{vi('green')} Активен" if user.is_active else "⏸️ На паузе"
+    status = f"{vi('green')} Активен" if user.is_active else f"{vi('pause')} На паузе"
     if user.is_active and user.muted:
-        status += " (🔕 без звука)"
+        status += f" ({vi('mute')} без звука)"
     pause_label = "⏸️ Поставить на паузу" if user.is_active else "▶️ Возобновить"
     mute_label = "🔔 Включить звук" if user.muted else "🔕 Тихий режим"
     if billing.is_admin(user, admin_chat_ids):
-        access_line = "♾️ Безлимитный доступ (админ)"
+        access_line = f"{vi('crown')} Безлимитный доступ (админ)"
     else:
         left = billing.days_left(user, now)
         access_line = (
-            f"⏳ Пробный период · осталось {left} дн."
+            f"{vi('hourglass')} Пробный период · осталось {left} дн."
             if billing.on_trial(user, now)
-            else f"💳 Подписка активна · осталось {left} дн."
+            else f"{vi('check_color')} Подписка активна · осталось {left} дн."
             if left > 0
             else "Доступ истёк"
         )
@@ -400,14 +400,14 @@ NAV_STATS = "nav:stats"
 def _stats_view(repo: Repository) -> View:
     s = repo.get_opportunity_stats()
     text = (
-        "📊 <b>СТАТИСТИКА ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{vi('chart')} <b>СТАТИСТИКА ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "<b>Сегодня:</b>\n"
-        f"🔎 Найдено вилок: <b>{s['today_count']}</b>\n"
-        f"📈 Средняя прибыль: <b>{s['today_avg_profit']:.2f}%</b>\n"
-        f"🚀 Лучшая прибыль: <b>{s['today_best_profit']:.2f}%</b>\n\n"
+        f"{vi('search')} Найдено вилок: <b>{s['today_count']}</b>\n"
+        f"{vi('up')} Средняя прибыль: <b>{s['today_avg_profit']:.2f}%</b>\n"
+        f"{vi('top')} Лучшая прибыль: <b>{s['today_best_profit']:.2f}%</b>\n\n"
         "<b>За всё время:</b>\n"
-        f"🔎 Найдено вилок: <b>{s['alltime_count']}</b>\n"
-        f"📈 Средняя прибыль: <b>{s['alltime_avg_profit']:.2f}%</b>"
+        f"{vi('search')} Найдено вилок: <b>{s['alltime_count']}</b>\n"
+        f"{vi('up')} Средняя прибыль: <b>{s['alltime_avg_profit']:.2f}%</b>"
     )
     rows = [
         [_btn("🔄 Обновить", NAV_STATS)],
@@ -427,16 +427,16 @@ def _admin_view(repo: Repository, admin_chat_ids: frozenset[int]) -> View:
     stats = billing.user_stats(users, now, admin_chat_ids)
 
     lines = [
-        "🛠 <b>АДМИН-ПАНЕЛЬ</b>",
+        f"{vi('wrench')} <b>АДМИН-ПАНЕЛЬ</b>",
         "━━━━━━━━━━━━━━━━━━━━",
         "",
         "<b>Пользователи:</b>",
         f"👥 Всего: <b>{stats['total']}</b> (админов: {stats['admin_count']})",
-        f"⏳ На триале: <b>{stats['on_trial']}</b>",
-        f"💳 С подпиской: <b>{stats['paying']}</b>",
-        f"🚫 Доступ истёк: <b>{stats['expired']}</b>",
-        f"⏸️ На паузе: <b>{stats['paused']}</b>",
-        f"🤝 Пришли по рефералке: <b>{stats['referred']}</b>",
+        f"{vi('hourglass')} На триале: <b>{stats['on_trial']}</b>",
+        f"{vi('check_color')} С подпиской: <b>{stats['paying']}</b>",
+        f"{vi('cross')} Доступ истёк: <b>{stats['expired']}</b>",
+        f"{vi('pause')} На паузе: <b>{stats['paused']}</b>",
+        f"{vi('link')} Пришли по рефералке: <b>{stats['referred']}</b>",
         "",
     ]
 
@@ -450,7 +450,7 @@ def _admin_view(repo: Repository, admin_chat_ids: frozenset[int]) -> View:
             label = _PAYMENT_PROVIDER_LABELS.get(p["provider"], p["provider"])
             lines.append(f"{label}: <b>{p['total']:.2f} {p['currency']}</b> ({p['count']} шт.)")
             total_rub += billing.to_rub_equivalent(p["total"], p["currency"])
-        lines.append(f"💰 Итого (≈₽): <b>{total_rub:.2f}₽</b>")
+        lines.append(f"{vi('money_bag')} Итого (≈₽): <b>{total_rub:.2f}₽</b>")
     lines.append("")
 
     recent = repo.get_recent_users(limit=8)
@@ -482,12 +482,12 @@ def _referral_view(user: UserSettings, repo: Repository, bot_username: str) -> V
     referrals = repo.count_referrals(user.chat_id)
     link = f"https://t.me/{bot_username}?start={user.chat_id}" if bot_username else "—"
     text = (
-        "🤝 <b>ПАРТНЁРСКАЯ ПРОГРАММА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{vi('crown')} <b>ПАРТНЁРСКАЯ ПРОГРАММА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Приглашайте друзей — получайте {billing.REFERRAL_COMMISSION_PCT:.0%} с каждой их "
         "оплаты подписки в виде скидки на свою следующую покупку (не вывод деньгами).\n\n"
         f"👥 Приглашено: <b>{referrals}</b>\n"
-        f"💰 Баланс скидки: <b>{user.referral_balance_rub:.2f}₽</b>\n\n"
-        f"🔗 Ваша ссылка:\n{link}"
+        f"{vi('money_bag')} Баланс скидки: <b>{user.referral_balance_rub:.2f}₽</b>\n\n"
+        f"{vi('link')} Ваша ссылка:\n{link}"
     )
     rows = [
         [_btn("🔄 Обновить", NAV_REFERRAL)],
@@ -522,11 +522,11 @@ def _help_view() -> View:
         "(через открытые данные и агрегатор). Чем больше источников, тем больше шанс "
         "увидеть расхождение. Отслеживаются все виды спорта сразу.\n\n"
         "<b>Настройки внутри «🔍 Поиск вилок»:</b>\n"
-        "💰 Банкролл — сумма, под которую бот рассчитывает точные ставки "
+        f"{vi('money_bag')} Банкролл — сумма, под которую бот рассчитывает точные ставки "
         "на каждый исход\n"
-        "📊 Порог прибыли — минимальный % прибыли, при котором придёт "
+        f"{vi('chart')} Порог прибыли — минимальный % прибыли, при котором придёт "
         "уведомление\n"
-        "📅 Период — показывать вилки только на матчи, которые начнутся в течение "
+        f"{vi('calendar')} Период — показывать вилки только на матчи, которые начнутся в течение "
         "24 часов или позже\n\n"
         "<b>Внутри «👤 Мой профиль»:</b> пауза или тихий режим (без звука) для уведомлений, подписка и "
         f"партнёрская программа ({billing.REFERRAL_COMMISSION_PCT:.0%} с оплат "
@@ -538,7 +538,7 @@ def _help_view() -> View:
         f"Первые {billing.TRIAL_DAYS} дн. бесплатно (пробный период), дальше — "
         "платная подписка, раздел «👤 Мой профиль» → «💳 Подписка».\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚠️ <b>18+.</b> Сервис не организует и не проводит азартные игры, не "
+        f"{vi('warn_color')} <b>18+.</b> Сервис не организует и не проводит азартные игры, не "
         "принимает ставки и не является букмекером. Это платный информационно-"
         "аналитический инструмент сравнения коэффициентов. Он не гарантирует доход "
         "и не является призывом к участию в азартных играх. Ставки вы делаете "
@@ -551,12 +551,12 @@ def _help_view() -> View:
 
 def _support_prompt_view(error: str | None = None) -> View:
     text = (
-        "✉️ <b>НАПИСАТЬ МЕНЕДЖЕРУ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{vi('mail')} <b>НАПИСАТЬ МЕНЕДЖЕРУ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "Опишите вопрос одним сообщением — менеджер ответит прямо в этом чате.\n\n"
         "Обычно отвечаем в течение часа."
     )
     if error:
-        text = f"⚠️ {error}\n\n{text}"
+        text = f"{vi('warn_color')} {error}\n\n{text}"
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_HELP)
 
 
@@ -568,7 +568,7 @@ def _horizon_view(user: UserSettings) -> View:
         rows.append([_btn(f"{mark} {label}", f"horizon:{days}")])
     rows.append([_btn("◀️ Назад", NAV_SETTINGS)])
     text = (
-        "📅 <b>ПЕРИОД ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{vi('calendar')} <b>ПЕРИОД ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "Когда начинается матч. Можно отметить оба, чтобы видеть всё:"
     )
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
@@ -624,7 +624,7 @@ def _bookmakers_view(user: UserSettings) -> View:
         rows.extend(_bookmaker_rows(other, selected))
     rows.append([_btn("◀️ Назад", NAV_SETTINGS)])
     text = (
-        "🏦 <b>МОИ БУКМЕКЕРЫ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{vi('bank_building')} <b>МОИ БУКМЕКЕРЫ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "Вилки с отключёнными букмекерами не показываются и не присылаются. "
         "Отметьте только те конторы, где у вас есть аккаунт."
     )
@@ -637,7 +637,7 @@ NAV_SUB_METHOD_PREFIX = "sub_method:"
 def _subscription_status_line(user: UserSettings, admin_chat_ids: frozenset[int]) -> str:
     now = datetime.now(timezone.utc)
     if billing.is_admin(user, admin_chat_ids):
-        return "♾️ Безлимитный доступ (админ)"
+        return f"{vi('crown')} Безлимитный доступ (админ)"
     left = billing.days_left(user, now)
     return f"Осталось дней доступа: <b>{left}</b>" if left > 0 else "Доступ истёк"
 
@@ -713,7 +713,7 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
     text = f"{label}\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
     if method == "stars":
         text += (
-            "\n\n💡 Не хватает звёзд? Купить их можно прямо в Telegram через "
+            f"\n\n{vi('bulb')} Не хватает звёзд? Купить их можно прямо в Telegram через "
             f'<a href="{STARS_SHOP_BOT_URL}">@starslly_bot</a> (часто дешевле, чем в приложении), '
             "потом вернитесь сюда и оплатите."
         )
@@ -730,7 +730,7 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
             price = f"{plan.price_usdt:g} USDT"
         rows.append([_btn(f"{plan.label} — {price}", f"sub:{plan.id}:{method}")])
     if method == "stars":
-        rows.append([InlineKeyboardButton(text="⭐ Купить звёзды (@starslly_bot)", url=STARS_SHOP_BOT_URL)])
+        rows.append([icon_button("⭐ Купить звёзды (@starslly_bot)", url=STARS_SHOP_BOT_URL)])
     rows.append([_btn("◀️ Назад", NAV_SUBSCRIPTION)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -738,7 +738,7 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
 def _input_prompt_view(label: str, example: str, error: str | None = None) -> View:
     text = f"{label}\nНапример: {example}"
     if error:
-        text = f"⚠️ {error}\n\n{text}"
+        text = f"{vi('warn_color')} {error}\n\n{text}"
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
 
 
@@ -747,13 +747,13 @@ NAV_BANKROLL_PRESET_PREFIX = "bankroll_preset:"
 
 
 def _bankroll_prompt_view(error: str | None = None) -> View:
-    text, _keyboard = _input_prompt_view("💰 Введите новый банкролл числом:", "100", error=error)
+    text, _keyboard = _input_prompt_view(f"{vi('money_bag')} Введите новый банкролл числом:", "100", error=error)
     preset_row = [_btn(str(p), f"{NAV_BANKROLL_PRESET_PREFIX}{p}") for p in BANKROLL_PRESETS]
     keyboard = InlineKeyboardMarkup(inline_keyboard=[preset_row, [_btn("❌ Отмена", NAV_CANCEL)]])
     return text, keyboard
 
 
-_CALCULATOR_HEADER = "🧮 <b>КАЛЬКУЛЯТОР ВИЛКИ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+_CALCULATOR_HEADER = f"{vi('calc')} <b>КАЛЬКУЛЯТОР ВИЛКИ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
 
 
 def _calculator_step_view(label: str, example: str, step: str, total_steps: int = 3, error: str | None = None) -> View:
@@ -762,20 +762,20 @@ def _calculator_step_view(label: str, example: str, step: str, total_steps: int 
     mis-order and each answer validates (and can be corrected) on its own."""
     text = f"{_CALCULATOR_HEADER}Шаг {step}/{total_steps}\n{label}\nНапример: {example}"
     if error:
-        text = f"⚠️ {error}\n\n{text}"
+        text = f"{vi('warn_color')} {error}\n\n{text}"
     return text, _back_keyboard([_btn("❌ Отмена", NAV_CANCEL)], target=NAV_SEARCH)
 
 
 def _calculator_bankroll_prompt(error: str | None = None) -> View:
-    return _calculator_step_view("💰 Введите банкролл (сумму на вилку):", "1000", step="1", error=error)
+    return _calculator_step_view(f"{vi('money_bag')} Введите банкролл (сумму на вилку):", "1000", step="1", error=error)
 
 
 def _calculator_odds_a_prompt(error: str | None = None) -> View:
-    return _calculator_step_view("📈 Введите коэффициент на первый исход:", "2.10", step="2", error=error)
+    return _calculator_step_view(f"{vi('up')} Введите коэффициент на первый исход:", "2.10", step="2", error=error)
 
 
 def _calculator_odds_b_prompt(error: str | None = None) -> View:
-    return _calculator_step_view("📉 Введите коэффициент на второй исход:", "2.05", step="3", error=error)
+    return _calculator_step_view(f"{vi('down')} Введите коэффициент на второй исход:", "2.05", step="3", error=error)
 
 
 def _calculator_keyboard() -> InlineKeyboardMarkup:
@@ -796,20 +796,20 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
     arb = calc_arbitrage(odds_by_outcome)
     stakes = calc_stakes(bankroll, arb.best_odds)
 
-    odds_lines = [f"📈 <b>{outcome_a}</b>: {odds_a}", f"📉 <b>{outcome_b}</b>: {odds_b}"]
+    odds_lines = [f"{vi('up')} <b>{outcome_a}</b>: {odds_a}", f"{vi('down')} <b>{outcome_b}</b>: {odds_b}"]
 
     lines = [
         _CALCULATOR_HEADER.rstrip(),
         "",
-        f"💰 Банкролл: <b>{format_amount(bankroll)}</b>",
+        f"{vi('money_bag')} Банкролл: <b>{format_amount(bankroll)}</b>",
         "<blockquote>" + "\n".join(odds_lines) + "</blockquote>",
     ]
     if arb.is_arbitrage:
         profit_amount = bankroll * arb.profit_pct / 100
-        lines.append(f"🚀 Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
-        lines.append(f"💸 Гарантированный выигрыш: <b>{format_amount(profit_amount)}</b>")
+        lines.append(f"{vi('top')} Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
+        lines.append(f"{vi('coin')} Гарантированный выигрыш: <b>{format_amount(profit_amount)}</b>")
         lines.append("")
-        lines.append("💵 <b>Ставки:</b>")
+        lines.append(f"{vi('exchange')} <b>Ставки:</b>")
         stake_lines = [
             f"▫️ На {outcome_a}: <b>{format_amount(stakes[outcome_a])}</b>",
             f"▫️ На {outcome_b}: <b>{format_amount(stakes[outcome_b])}</b>",
@@ -817,7 +817,7 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
         lines.append("<blockquote>" + "\n".join(stake_lines) + "</blockquote>")
     else:
         lines.append("")
-        lines.append(f"⚠️ Это не вилка — при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
+        lines.append(f"{vi('warn_color')} Это не вилка — при таких коэффициентах убыток <b>{-arb.profit_pct:.2f}%</b>")
 
     return "\n".join(lines), _calculator_keyboard()
 
@@ -833,7 +833,7 @@ def _search_keyboard() -> InlineKeyboardMarkup:
 
 
 def _settings_view() -> View:
-    text = "⚙️ <b>НАСТРОЙКИ ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\nЧто и как показывать в «🔍 Поиск вилок»."
+    text = f"{vi('gear')} <b>НАСТРОЙКИ ПОИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\nЧто и как показывать в «🔍 Поиск вилок»."
     rows = [
         [_btn("💰 Банкролл", NAV_BANKROLL), _btn("📊 Порог прибыли", NAV_THRESHOLD)],
         [_btn("📅 Период", NAV_HORIZON), _btn("🏦 Мои букмекеры", NAV_BOOKMAKERS)],
@@ -875,7 +875,7 @@ def _search_view(
     admin_chat_ids: frozenset[int] = frozenset(),
 ) -> View:
     if latest_state.updated_at == 0:
-        text = f"{vi('search')} <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
+        text = f"{vi('search')} <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{vi('hourglass')} Ещё идёт первая проверка, попробуйте через полминуты."
         return text, _search_keyboard()
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
@@ -934,7 +934,7 @@ def _search_view(
         profit_amount = user.bankroll * m.arb.profit_pct / 100
         block.append(f"{vi('coin')} Расчётный результат: <b>{format_amount(profit_amount)}</b>")
         block.append("")
-        quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
+        quote_lines = format_odds_lines(m.arb.best_odds) + ["", f"{vi('exchange')} <b>Ставки:</b>"] + format_stakes_lines(stakes)
         block.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
         block.append(f"{vi('warning')} Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.")
         block.append("")
@@ -955,7 +955,7 @@ def _search_view(
 
     if hit_daily_limit:
         lines.append(
-            f"🔒 Бесплатный лимит на сегодня исчерпан ({billing.FREE_DAILY_VILKI_LIMIT}/"
+            f"{vi('lock')} Бесплатный лимит на сегодня исчерпан ({billing.FREE_DAILY_VILKI_LIMIT}/"
             f"{billing.FREE_DAILY_VILKI_LIMIT}). Остальные вилки скрыты — оформите подписку "
             f"(«{_profile_button_text(user.language)}» снизу → «💳 Подписка»)."
         )
@@ -1208,11 +1208,11 @@ def register_handlers(
             trial_note = " (по реферальной ссылке — дольше обычного)" if user.referred_by is not None else ""
             await bot.send_message(
                 chat_id,
-                "👋 <b>Добро пожаловать!</b>\n\n"
+                f"{vi('party')} <b>Добро пожаловать!</b>\n\n"
                 f"Первые {trial_days} дн.{trial_note} — бесплатный доступ ко всем "
                 "функциям. Дальше — платная подписка (кнопка «💳 Подписка» на главном "
                 "экране).\n\n"
-                "⚠️ <b>18+.</b> Это информационно-аналитический сервис сравнения "
+                f"{vi('warn_color')} <b>18+.</b> Это информационно-аналитический сервис сравнения "
                 "коэффициентов лицензированных букмекеров. Он не принимает ставки, не "
                 "гарантирует доход и не является призывом к участию в азартных играх. "
                 "Подробнее — кнопка «ℹ️ Помощь».",
@@ -1244,7 +1244,7 @@ def register_handlers(
         except Exception:
             pass
 
-    @router.message(F.text.in_(set(_SEARCH_BUTTON_TEXT.values())))
+    @router.message(F.text.in_(button_texts(_SEARCH_BUTTON_TEXT.values())))
     async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)
@@ -1306,7 +1306,7 @@ def register_handlers(
         # messages in the chat. On the very first pick this also runs the gate + welcome.
         await _send_start_ui(bot, chat_id, user, send_welcome=was_first)
 
-    @router.message(F.text.in_(set(_PROFILE_BUTTON_TEXT.values())))
+    @router.message(F.text.in_(button_texts(_PROFILE_BUTTON_TEXT.values())))
     async def on_profile_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)
@@ -1552,7 +1552,7 @@ def register_handlers(
     @router.callback_query(F.data == NAV_THRESHOLD)
     async def on_nav_threshold(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Settings.waiting_threshold)
-        text, keyboard = _input_prompt_view("📊 Введите минимальный процент прибыли для уведомления:", "1.5")
+        text, keyboard = _input_prompt_view(f"{vi('chart')} Введите минимальный процент прибыли для уведомления:", "1.5")
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_THRESHOLD_PATH,
@@ -1655,13 +1655,13 @@ def register_handlers(
             return
 
         text = (
-            f"💎 <b>ОПЛАТА КРИПТОЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{vi('usdt')} <b>ОПЛАТА КРИПТОЙ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Тариф: <b>{plan.label}</b>\nСумма: <b>{discounted:g} USDT</b>\n\n"
             "Оплатите по кнопке ниже, затем нажмите «✅ Проверить оплату»."
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="💎 Оплатить", url=invoice["bot_invoice_url"])],
+                [icon_button("💎 Оплатить", url=invoice["bot_invoice_url"])],
                 [_btn("✅ Проверить оплату", f"crypto_check:{invoice['invoice_id']}")],
                 [_btn("◀️ Назад", NAV_SUBSCRIPTION)],
             ]
@@ -1695,7 +1695,7 @@ def register_handlers(
             npd_income_type=prodamus_npd_income_type,
         )
         text = (
-            "💳 <b>ОПЛАТА ЧЕРЕЗ СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{vi('sbp')} <b>ОПЛАТА ЧЕРЕЗ СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Тариф: <b>{plan.label}</b>\nСумма: <b>{discounted:.0f} ₽</b>\n\n"
             "Нажмите «Оплатить», выберите СБП и оплатите в приложении банка. "
             "Доступ продлится автоматически после оплаты — обычно в течение минуты. "
@@ -1703,7 +1703,7 @@ def register_handlers(
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Оплатить", url=pay_url)],
+                [icon_button("💳 Оплатить", url=pay_url)],
                 [_btn("✅ Проверить оплату", f"sbp_check:{order_id}:{plan.id}")],
                 [_btn("◀️ Назад", NAV_SUBSCRIPTION)],
             ]
@@ -1767,7 +1767,7 @@ def register_handlers(
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="⚡ Оплатить по СБП", url=pay_url)],
+                [icon_button("⚡ Оплатить по СБП", url=pay_url)],
                 [_btn("✅ Проверить оплату", f"yksbp_check:{payment['id']}")],
                 [_btn("◀️ Назад", NAV_SUBSCRIPTION)],
             ]
@@ -1895,7 +1895,7 @@ def register_handlers(
             commission_rub = billing.referral_commission_rub(charged, payment.currency)
             repo.credit_referral_balance(buyer.referred_by, commission_rub)
 
-        await message.answer(f"✅ Подписка продлена на {plan.label}. Спасибо!")
+        await message.answer(f"{vi('check_color')} Подписка продлена на {plan.label}. Спасибо!", parse_mode="HTML")
         await _render_dashboard(bot, repo, message.chat.id, admin_chat_ids)
 
     @router.callback_query(F.data == NAV_SEARCH)
@@ -1947,7 +1947,7 @@ def register_handlers(
                 raise ValueError
         except ValueError:
             text, keyboard = _input_prompt_view(
-                "📊 Введите минимальный процент прибыли для уведомления:", "1.5", error="Нужно неотрицательное число"
+                f"{vi('chart')} Введите минимальный процент прибыли для уведомления:", "1.5", error="Нужно неотрицательное число"
             )
             await _render(
                 bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_THRESHOLD_PATH
@@ -2047,7 +2047,7 @@ def register_handlers(
             return
 
         who = f"@{message.from_user.username}" if message.from_user and message.from_user.username else "без username"
-        header = f"✉️ <b>Новое сообщение от пользователя</b>\nchat_id: <code>{message.chat.id}</code> ({html.escape(who)})\n\n"
+        header = f"{vi('mail')} <b>Новое сообщение от пользователя</b>\nchat_id: <code>{message.chat.id}</code> ({html.escape(who)})\n\n"
         forward_text = header + html.escape(raw) + "\n\n<i>Ответьте на это сообщение, чтобы отправить ответ пользователю.</i>"
 
         sent_to_any = False
@@ -2062,10 +2062,10 @@ def register_handlers(
         await state.clear()
         if sent_to_any:
             text, keyboard = _help_view()
-            text = "✅ Сообщение отправлено менеджеру. Ответ придёт в этот чат.\n\n" + text
+            text = f"{vi('check_color')} Сообщение отправлено менеджеру. Ответ придёт в этот чат.\n\n" + text
         else:
             text, keyboard = _help_view()
-            text = "⚠️ Не удалось отправить сообщение менеджеру, попробуйте позже.\n\n" + text
+            text = f"{vi('warn_color')} Не удалось отправить сообщение менеджеру, попробуйте позже.\n\n" + text
         await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_HELP_PATH)
 
     @router.message(F.reply_to_message, F.chat.id.in_(admin_chat_ids))
@@ -2083,7 +2083,7 @@ def register_handlers(
             return
 
         try:
-            await bot.send_message(user_chat_id, f"✉️ <b>Ответ от менеджера:</b>\n\n{html.escape(reply_text)}", parse_mode="HTML")
+            await bot.send_message(user_chat_id, f"{vi('mail')} <b>Ответ от менеджера:</b>\n\n{html.escape(reply_text)}", parse_mode="HTML")
             await message.reply("✅ Отправлено пользователю.")
         except Exception:
             logger.exception("Failed to relay support reply to user chat_id=%s", user_chat_id)

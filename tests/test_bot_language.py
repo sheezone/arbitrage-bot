@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from bot.core.emoji import button_icon
 from bot.db.repository import Repository
 from bot.handlers.commands import (
     LANG_BUTTON_TEXT,
@@ -53,14 +54,18 @@ def test_language_choices_are_ru_en_tg():
 def test_main_menu_keyboard_is_just_search_and_profile(tmp_path):
     kb = _main_menu_keyboard("ru")
     texts = [btn.text for row in kb.keyboard for btn in row]
-    assert texts == [SEARCH_BUTTON_TEXT_RU, PROFILE_BUTTON_TEXT_RU]
+    # Leading emoji moves to a premium icon (icon_custom_emoji_id); label keeps the words.
+    assert texts == [button_icon(SEARCH_BUTTON_TEXT_RU)[0], button_icon(PROFILE_BUTTON_TEXT_RU)[0]]
+    assert all(btn.icon_custom_emoji_id for row in kb.keyboard for btn in row)
     assert LANG_BUTTON_TEXT not in texts
 
 
 def test_main_menu_keyboard_tajik_labels(tmp_path):
     kb = _main_menu_keyboard("tg")
     texts = [btn.text for row in kb.keyboard for btn in row]
-    assert texts == [SEARCH_BUTTON_TEXT_TG, PROFILE_BUTTON_TEXT_TG]
+    # Leading emoji moves to a premium icon (icon_custom_emoji_id); label keeps the words.
+    assert texts == [button_icon(SEARCH_BUTTON_TEXT_TG)[0], button_icon(PROFILE_BUTTON_TEXT_TG)[0]]
+    assert all(btn.icon_custom_emoji_id for row in kb.keyboard for btn in row)
 
 
 def test_language_menu_is_plain_buttons(tmp_path):
@@ -75,7 +80,9 @@ def test_language_menu_is_plain_buttons(tmp_path):
 def test_main_menu_keyboard_english_labels(tmp_path):
     kb = _main_menu_keyboard("en")
     texts = [btn.text for row in kb.keyboard for btn in row]
-    assert texts == [SEARCH_BUTTON_TEXT_EN, PROFILE_BUTTON_TEXT_EN]
+    # Leading emoji moves to a premium icon (icon_custom_emoji_id); label keeps the words.
+    assert texts == [button_icon(SEARCH_BUTTON_TEXT_EN)[0], button_icon(PROFILE_BUTTON_TEXT_EN)[0]]
+    assert all(btn.icon_custom_emoji_id for row in kb.keyboard for btn in row)
 
 
 def test_dashboard_view_is_russian_by_default(tmp_path):

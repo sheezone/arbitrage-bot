@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from bot.core import billing
+from bot.core.emoji import vi
 from bot.core.arbitrage import calc_stakes
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
@@ -607,7 +608,7 @@ def register_api(
 
         if bot is not None:
             try:
-                await bot.send_message(chat_id, f"✅ Подписка продлена на {plan.label}. Спасибо!")
+                await bot.send_message(chat_id, f"{vi('check_color')} Подписка продлена на {plan.label}. Спасибо!", parse_mode="HTML")
             except Exception:
                 logger.exception("Prodamus webhook: failed to notify chat_id=%s", chat_id)
 

@@ -10,6 +10,7 @@ import time
 from aiogram import Bot
 
 from bot.core import billing
+from bot.core.emoji import vi
 from bot.db.repository import Repository
 from bot.providers.yookassa_api import YooKassaClient
 from bot.providers.yookassa_api import is_paid as yookassa_is_paid
@@ -67,7 +68,8 @@ async def poll_yookassa_sbp(
             if plan is not None and bot is not None:
                 try:
                     await bot.send_message(
-                        chat_id, f"✅ Оплата по СБП получена, подписка продлена на {plan.label}. Спасибо!"
+                        chat_id, f"{vi('check_color')} Оплата по СБП получена, подписка продлена на {plan.label}. Спасибо!",
+                        parse_mode="HTML",
                     )
                 except Exception:
                     logger.exception("Failed to notify chat_id=%s about СБП payment", chat_id)

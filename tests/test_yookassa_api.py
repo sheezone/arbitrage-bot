@@ -53,6 +53,6 @@ def test_subscription_view_shows_sbp_button_when_enabled():
     repo.upsert_user(1)
     text, kb = _subscription_view(repo.get_user(1), yookassa_enabled=True, yk_sbp_enabled=True)
     labels = [b.text for row in kb.inline_keyboard for b in row]
-    assert "⚡ СБП" in labels
+    assert "СБП" in labels
     _, kb2 = _subscription_view(repo.get_user(1), yookassa_enabled=True)
-    assert "⚡ СБП" not in [b.text for row in kb2.inline_keyboard for b in row]
+    assert "СБП" not in [b.text for row in kb2.inline_keyboard for b in row]

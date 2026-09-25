@@ -13,6 +13,7 @@ from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import LinkPreviewOptions
 
 from bot.core import billing
+from bot.core.emoji import VI, tg_emoji, vi  # noqa: F401 -- re-exported
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.bookmakers import filter_licensed
 from bot.core.reconcile import group_quotes, split_by_market, to_arbitrage_input
@@ -45,53 +46,9 @@ EMOJI_BELL = ("5246762912428603768", "🔔📊")
 EMOJI_COMET = ("5458603043203327669", "☄️")
 
 
-def tg_emoji(pair: tuple[str, str]) -> str:
-    emoji_id, fallback = pair
-    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
-
-
-# "Vector Icons" custom emoji pack (t.me/addemoji/vector_icons_by_fStikBot) -- IDs pulled
-# via getStickerSet. Monochrome and needs_repainting=True, so they take the text colour
-# and look the same in light and dark themes. Text/captions only (not button labels).
-VI = {
-    "diamond": ("5264892613630111886", "💎"),
-    "swords": ("5453991094435997597", "⚔️"),
-    "hourglass": ("5258113901106580375", "⌛"),
-    "top": ("5246794802560774143", "🔝"),
-    "coin": ("5237761614458933049", "🪙"),
-    "exchange": ("5258296359907249075", "💱"),
-    "warning": ("5220197908342648622", "❗"),
-    "search": ("5258274739041883702", "🔍"),
-    "cart": ("5258024802010026053", "🛒"),
-    "case": ("5246942081284320100", "💼"),
-    "lightning": ("5219943216781995020", "⚡"),
-    "check": ("5219899949281453881", "✅"),
-    "green": ("5339135753316222622", "🟢"),
-    "fire": ("5222148368955877900", "🔥"),
-    # Colour icons from the "Topics" pack (t.me/addemoji/Topics).
-    "money_bag": ("5350452584119279096", "💰"),
-    "check_color": ("5237699328843200968", "✅"),
-    "football": ("5375159220280762629", "⚽️"),
-    "basketball": ("5384327463629233871", "🏀"),
-    # Brand logos from the "Icons" pack (t.me/addemoji/IconsEmoji) -- identified by
-    # rendering the set's thumbnails (their emoji field is just 💸 for all of them).
-    "sbp": ("5294247005701292072", "💸"),
-    "mir": ("5293982860917620045", "💸"),
-    "visa": ("5294290857317386329", "💸"),
-    "mastercard": ("5292085988611342379", "💸"),
-    "yoomoney": ("5292167614464804192", "💸"),
-    "usdt": ("5294015055992471554", "💸"),
-    "telegram": ("5436302963117137450", "💬"),
-}
-
-
 def game_icon(game: str) -> str:
     """Animated/colour icon for the sports the packs cover, plain emoji otherwise."""
     return vi(game) if game in ("football", "basketball") else GAME_EMOJI.get(game, "🏆")
-
-
-def vi(name: str) -> str:
-    return tg_emoji(VI[name])
 
 
 GAME_EMOJI = {
@@ -180,7 +137,7 @@ async def _send_message_with_retries(bot: Bot, chat_id: int, text: str, **kwargs
 # Alternating markers so each leg of the arb reads as its own row rather than blurring
 # together -- confirmed live this matters most for two-line total markets ("Тотал больше
 # X" / "Тотал меньше X"), which used to get squashed onto one comma-joined line.
-_OUTCOME_MARKERS = ["📈", "📉", "🔹", "🔸"]
+_OUTCOME_MARKERS = [vi("up"), vi("down"), "🔹", "🔸"]
 
 # Homepage for every bookmaker key this codebase's providers ever set on a quote (see each
 # provider module's own SourceQuote(...) calls, plus surebet.py's BOOKMAKERS/display-name
@@ -594,7 +551,7 @@ async def _send_expiry_reminders(
 
         kind = "пробный период" if billing.on_trial(user, now) else "подписка"
         message = (
-            f"⏳ Ваш {kind} заканчивается менее чем через 24 часа.\n\n"
+            f"{vi('hourglass')} Ваш {kind} заканчивается менее чем через 24 часа.\n\n"
             "Оформите подписку в разделе «👤 Мой профиль» → «💳 Подписка», чтобы не "
             "пропустить уведомления о новых вилках."
         )

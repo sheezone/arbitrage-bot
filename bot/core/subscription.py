@@ -13,6 +13,8 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from bot.core.emoji import icon_button, vi
+
 logger = logging.getLogger(__name__)
 
 # Callback data for the "✅ Проверить подписку" button -- a shared constant so the
@@ -51,14 +53,14 @@ def gate_view(channel_username: str) -> tuple[str, InlineKeyboardMarkup]:
     the mandatory-gate screen in the bot UI, and the periodic reminder sent to anyone
     who's since left the channel (see core/monitor.py)."""
     text = (
-        "🔒 <b>Доступ ограничен</b>\n\n"
+        f"{vi('lock')} <b>Доступ ограничен</b>\n\n"
         f"Чтобы пользоваться ботом (и мини-приложением), подпишитесь на канал "
         f"@{channel_username}, затем нажмите «Проверить подписку»."
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📢 Подписаться", url=f"https://t.me/{channel_username}")],
-            [InlineKeyboardButton(text="✅ Проверить подписку", callback_data=CHECK_CHANNEL_SUB_CALLBACK)],
+            [icon_button("📢 Подписаться", url=f"https://t.me/{channel_username}")],
+            [icon_button("✅ Проверить подписку", callback_data=CHECK_CHANNEL_SUB_CALLBACK)],
         ]
     )
     return text, keyboard
