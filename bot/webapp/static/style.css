@@ -1054,3 +1054,11 @@ input:checked + .slider::before { transform: translateX(19px); background: #0c0f
 .hist-wrap { opacity: 0.62; }
 .card-hist { border-style: dashed; box-shadow: none; }
 .hist-age { margin-left: auto; font-size: var(--fs-xs); color: var(--hint); white-space: nowrap; }
+
+/* Подписка tab */
+.sub-status { font-size: 14px; line-height: 1.5; }
+.sub-plan-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; font-size: 15px; }
+.sub-plan-price { color: var(--accent); font-weight: 800; }
+.sub-plan-methods { display: flex; flex-wrap: wrap; gap: 8px; }
+.pay-btn { cursor: pointer; }
+.pay-btn:disabled { opacity: 0.5; }

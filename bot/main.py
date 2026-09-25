@@ -141,6 +141,9 @@ async def main() -> None:
             required_channel_username=config.required_channel_username,
             prodamus_secret_key=config.prodamus_secret_key,
             football_data_key=config.football_data_key,
+            yookassa_provider_token=config.yookassa_provider_token,
+            yookassa_client=yookassa_client,
+            bot_username=me.username or "",
         )
         uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")
         webapp_task = asyncio.create_task(uvicorn.Server(uv_config).serve())

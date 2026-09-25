@@ -44,6 +44,7 @@ from aiogram.types import (
 )
 
 from bot.core import billing
+from bot.core.payments import credit_yookassa_sbp, poll_yookassa_sbp
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.subscription import CHECK_CHANNEL_SUB_CALLBACK, gate_view, is_subscribed
 from bot.core.monitor import (
@@ -1698,56 +1699,7 @@ def register_handlers(
     # ---- СБП via ЮKassa REST API (see bot/providers/yookassa_api.py) ----
     # Payment status is polled, not pushed: a short background poll right after the
     # link is shown (auto-credits + messages the user), plus a manual "Проверить оплату"
-    # button. Both go through _credit_yookassa_sbp, idempotent on the payment id.
-
-    YK_SBP_POLL_INTERVAL_SECONDS = 10
-    YK_SBP_POLL_TOTAL_SECONDS = 15 * 60
-
-    def _credit_yookassa_sbp(chat_id: int, payment: dict) -> billing.Plan | None:
-        """Extend the subscription for a succeeded payment. Returns the plan if this
-        payment belongs to `chat_id` and is (now or already) credited, else None."""
-        meta = payment.get("metadata") or {}
-        plan = billing.PLANS_BY_ID.get(str(meta.get("plan_id", "")))
-        if plan is None or str(meta.get("chat_id", "")) != str(chat_id):
-            logger.warning("ЮKassa СБП payment %s metadata mismatch: %r", payment.get("id"), meta)
-            return None
-        charge_key = f"yookassa_sbp:{payment['id']}"
-        if repo.has_payment(charge_key):
-            return plan
-        amount = float((payment.get("amount") or {}).get("value") or plan.price_rub)
-        repo.extend_subscription(chat_id, plan.days)
-        repo.record_payment(chat_id, plan.id, "yookassa_sbp", amount, "RUB", charge_key)
-        discount_used = max(0.0, float(plan.price_rub) - amount)
-        if discount_used > 0:
-            repo.consume_referral_balance(chat_id, discount_used)
-        buyer = repo.get_user(chat_id)
-        if buyer is not None and buyer.referred_by is not None:
-            repo.credit_referral_balance(buyer.referred_by, billing.referral_commission_rub(amount, "RUB"))
-        return plan
-
-    async def _poll_yookassa_sbp(bot: Bot, chat_id: int, payment_id: str) -> None:
-        deadline = time.monotonic() + YK_SBP_POLL_TOTAL_SECONDS
-        while time.monotonic() < deadline:
-            await asyncio.sleep(YK_SBP_POLL_INTERVAL_SECONDS)
-            if repo.has_payment(f"yookassa_sbp:{payment_id}"):
-                return  # already credited via the manual button
-            try:
-                payment = await yookassa_client.get_payment(payment_id)
-            except Exception:
-                logger.exception("ЮKassa СБП poll failed for payment %s", payment_id)
-                continue
-            if payment.get("status") == "canceled":
-                return
-            if yookassa_is_paid(payment):
-                plan = _credit_yookassa_sbp(chat_id, payment)
-                if plan is not None:
-                    try:
-                        await bot.send_message(
-                            chat_id, f"✅ Оплата по СБП получена, подписка продлена на {plan.label}. Спасибо!"
-                        )
-                    except Exception:
-                        logger.exception("Failed to notify chat_id=%s about СБП payment", chat_id)
-                return
+    # button. Both go through bot/core/payments.py (idempotent on the payment id).
 
     async def on_sub_pay_yksbp(callback: CallbackQuery, plan: billing.Plan, bot: Bot) -> None:
         if yookassa_client is None:
@@ -1787,7 +1739,7 @@ def register_handlers(
         )
         await _render(bot, repo, chat_id, callback.message.message_id, text, keyboard)
         await callback.answer()
-        asyncio.create_task(_poll_yookassa_sbp(bot, chat_id, payment["id"]))
+        asyncio.create_task(poll_yookassa_sbp(bot, repo, yookassa_client, chat_id, payment["id"]))
 
     @router.callback_query(F.data.startswith("yksbp_check:"))
     async def on_yksbp_check(callback: CallbackQuery, bot: Bot) -> None:
@@ -1806,7 +1758,7 @@ def register_handlers(
             if not yookassa_is_paid(payment):
                 await callback.answer("Оплата ещё не поступила. Попробуйте через минуту.", show_alert=True)
                 return
-            if _credit_yookassa_sbp(chat_id, payment) is None:
+            if credit_yookassa_sbp(repo, chat_id, payment) is None:
                 await callback.answer("Не удалось сопоставить платёж", show_alert=True)
                 return
 

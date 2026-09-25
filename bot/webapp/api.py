@@ -6,6 +6,7 @@ endpoint requires a valid Telegram `initData` (see auth.py) in the `Authorizatio
 one is rejected outright rather than falling back to some anonymous/demo mode."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -15,6 +16,7 @@ from urllib.parse import parse_qsl
 
 import httpx
 from aiogram import Bot
+from aiogram.types import LabeledPrice
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
@@ -36,6 +38,9 @@ from bot.handlers.commands import (
     _DIRECT_BOOKMAKERS,
 )
 from bot.providers import prodamus
+from bot.providers.yookassa_api import YooKassaClient
+from bot.providers.yookassa_api import is_paid as yookassa_is_paid
+from bot.core.payments import credit_yookassa_sbp, poll_yookassa_sbp
 from bot.webapp.auth import validate_init_data
 from bot.webapp.football_stats import get_match_h2h, get_popular_upcoming_fixtures, search_team_logo
 from bot.webapp.news import fetch_team_news, pick_popular_matches
@@ -124,6 +129,11 @@ async def _user_out(
     }
 
 
+class PayIn(BaseModel):
+    plan_id: str
+    method: str  # "stars" | "card" | "sbp"
+
+
 class SettingsIn(BaseModel):
     bankroll: float | None = None
     min_profit_pct: float | None = None
@@ -142,6 +152,9 @@ def register_api(
     required_channel_username: str = "",
     prodamus_secret_key: str = "",
     football_data_key: str = "",
+    yookassa_provider_token: str = "",
+    yookassa_client: YooKassaClient | None = None,
+    bot_username: str = "",
 ) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
     NOT a module-level singleton mutated in place. Call this once from bot/main.py with
@@ -599,6 +612,102 @@ def register_api(
                 logger.exception("Prodamus webhook: failed to notify chat_id=%s", chat_id)
 
         return PlainTextResponse("OK")
+
+    # ---- Подписка / оплата (Mini App) ----
+    # Stars and cards reuse Telegram's native invoice (createInvoiceLink -> tg.openInvoice
+    # on the frontend); the bot's existing successful_payment handler credits it, since
+    # the payload is the plan id exactly like the button bot's own invoices. СБП goes
+    # through the ЮKassa REST API (bot/core/payments.py), polled -- no webhook.
+
+    def _plans_for(user: UserSettings) -> list[billing.Plan]:
+        plans = list(billing.PLANS)
+        if billing.is_admin(user, admin_chat_ids):
+            plans.append(billing.TEST_PLAN)
+        return plans
+
+    @app.get("/api/subscription")
+    async def get_subscription(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        now = datetime.now(timezone.utc)
+        return {
+            "is_admin": billing.is_admin(user, admin_chat_ids),
+            "has_access": billing.has_access(user, now, admin_chat_ids),
+            "on_trial": billing.on_trial(user, now),
+            "days_left": billing.days_left(user, now),
+            "referral_balance_rub": user.referral_balance_rub,
+            "methods": {
+                "stars": bot is not None,
+                "card": bot is not None and bool(yookassa_provider_token),
+                "sbp": yookassa_client is not None,
+            },
+            "plans": [
+                {"id": p.id, "label": p.label, "days": p.days, "price_rub": p.price_rub, "price_stars": p.price_stars}
+                for p in _plans_for(user)
+            ],
+        }
+
+    @app.post("/api/pay")
+    async def create_payment(body: PayIn, authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        plan = next((p for p in _plans_for(user) if p.id == body.plan_id), None)
+        if plan is None:
+            raise HTTPException(status_code=400, detail="Неизвестный тариф")
+
+        if body.method in ("stars", "card"):
+            if bot is None or (body.method == "card" and not yookassa_provider_token):
+                raise HTTPException(status_code=400, detail="Этот способ оплаты недоступен")
+            if body.method == "stars":
+                currency, token, original = "XTR", "", float(plan.price_stars)
+            else:
+                currency, token, original = "RUB", yookassa_provider_token, float(plan.price_rub)
+            discounted, _ = billing.referral_discount(original, currency, user.referral_balance_rub)
+            amount = round(discounted) if currency == "XTR" else round(discounted * 100)
+            link = await bot.create_invoice_link(
+                title=f"Подписка на {plan.label}",
+                description="Доступ к уведомлениям о вилках Арбитражного бота",
+                payload=plan.id,
+                provider_token=token,
+                currency=currency,
+                prices=[LabeledPrice(label=plan.label, amount=amount)],
+            )
+            return {"type": "invoice", "link": link}
+
+        if body.method == "sbp":
+            if yookassa_client is None:
+                raise HTTPException(status_code=400, detail="Оплата по СБП недоступна")
+            discounted, _ = billing.referral_discount(float(plan.price_rub), "RUB", user.referral_balance_rub)
+            try:
+                payment = await yookassa_client.create_sbp_payment(
+                    amount_rub=discounted,
+                    description=f"Подписка на {plan.label}",
+                    return_url=f"https://t.me/{bot_username}" if bot_username else "https://t.me",
+                    metadata={"chat_id": str(chat_id), "plan_id": plan.id},
+                )
+                url = payment["confirmation"]["confirmation_url"]
+            except Exception:
+                logger.exception("Mini App: failed to create ЮKassa СБП payment for chat_id=%s", chat_id)
+                raise HTTPException(status_code=502, detail="Не удалось создать платёж, попробуйте позже")
+            asyncio.create_task(poll_yookassa_sbp(bot, repo, yookassa_client, chat_id, payment["id"]))
+            return {"type": "sbp", "url": url, "payment_id": payment["id"]}
+
+        raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
+
+    @app.get("/api/pay/sbp/{payment_id}")
+    async def sbp_status(payment_id: str, authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        if repo.has_payment(f"yookassa_sbp:{payment_id}"):
+            return {"paid": True}
+        if yookassa_client is None:
+            return {"paid": False}
+        try:
+            payment = await yookassa_client.get_payment(payment_id)
+        except Exception:
+            return {"paid": False}
+        if yookassa_is_paid(payment) and credit_yookassa_sbp(repo, chat_id, payment) is not None:
+            return {"paid": True}
+        return {"paid": False, "status": payment.get("status")}
 
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

@@ -839,3 +839,61 @@ def test_prodamus_webhook_ignores_non_success_status(tmp_path, monkeypatch):
     resp = _run(_post_form(app, "/api/prodamus/webhook", fields, headers={"Sign": sign}))
     assert resp.status_code == 200
     assert not repo.has_payment("prodamus:sbp-5-7d-1")
+
+
+# ---- Подписка / оплата в Mini App ----
+
+class _FakeYK:
+    def __init__(self):
+        self.created = []
+        self.status = {"status": "pending", "paid": False}
+
+    async def create_sbp_payment(self, amount_rub, description, return_url, metadata):
+        self.created.append((amount_rub, metadata))
+        return {"id": "pay1", "confirmation": {"confirmation_url": "https://yk/pay1"}}
+
+    async def get_payment(self, payment_id):
+        return {"id": payment_id, "amount": {"value": "299.00"}, "metadata": self.created[-1][1], **self.status}
+
+
+def _pay_app(tmp_path, monkeypatch, yk=None):
+    monkeypatch.setenv("BOT_TOKEN", BOT_TOKEN)
+    from bot.core.state import LatestState
+    from bot.db.repository import Repository
+    from bot.webapp.api import register_api
+
+    repo = Repository(str(tmp_path / "t.sqlite3"))
+    app = register_api(repo, LatestState(), admin_chat_ids=frozenset({99}), yookassa_client=yk)
+    return app, repo
+
+
+def test_subscription_lists_plans_and_admin_test_plan(tmp_path, monkeypatch):
+    app, _ = _pay_app(tmp_path, monkeypatch, _FakeYK())
+    body = _run(_get(app, "/api/subscription", headers=_auth_header(1))).json()
+    assert [p["id"] for p in body["plans"]] == ["7d", "30d", "360d"]
+    assert body["methods"]["sbp"] is True
+    admin = _run(_get(app, "/api/subscription", headers=_auth_header(99))).json()
+    assert "test30" in [p["id"] for p in admin["plans"]]
+
+
+def test_sbp_pay_creates_payment_and_status_credits_once_paid(tmp_path, monkeypatch):
+    yk = _FakeYK()
+    app, repo = _pay_app(tmp_path, monkeypatch, yk)
+    _run(_get(app, "/api/me", headers=_auth_header(5)))
+
+    r = _run(_post(app, "/api/pay", headers=_auth_header(5), json_body={"plan_id": "7d", "method": "sbp"})).json()
+    assert r == {"type": "sbp", "url": "https://yk/pay1", "payment_id": "pay1"}
+    assert yk.created[0][1] == {"chat_id": "5", "plan_id": "7d"}
+
+    assert _run(_get(app, "/api/pay/sbp/pay1", headers=_auth_header(5))).json()["paid"] is False
+    yk.status = {"status": "succeeded", "paid": True}
+    assert _run(_get(app, "/api/pay/sbp/pay1", headers=_auth_header(5))).json()["paid"] is True
+    assert repo.has_payment("yookassa_sbp:pay1")
+    assert repo.get_user(5).subscription_expires_at is not None
+
+
+def test_pay_rejects_unknown_plan_and_test_plan_for_non_admin(tmp_path, monkeypatch):
+    app, _ = _pay_app(tmp_path, monkeypatch, _FakeYK())
+    for plan in ("nope", "test30"):
+        resp = _run(_post(app, "/api/pay", headers=_auth_header(1), json_body={"plan_id": plan, "method": "sbp"}))
+        assert resp.status_code == 400

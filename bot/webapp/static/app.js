@@ -120,6 +120,22 @@
       tab_news: "Новости",
       tab_settings: "Настройки",
       tab_stats: "Статистика",
+      tab_sub: "Подписка",
+      sub_title: "Подписка",
+      sub_admin: "♾️ Безлимитный доступ (админ)",
+      sub_trial: "⏳ Пробный период · осталось дней: ",
+      sub_active: "💳 Подписка активна · осталось дней: ",
+      sub_expired: "Доступ истёк — оформите подписку",
+      sub_days: " дн.",
+      sub_choose: "Выберите тариф и способ оплаты",
+      pay_stars: "⭐ Stars",
+      pay_card: "💳 Картой",
+      pay_sbp: "⚡ СБП",
+      pay_waiting: "Ожидаем оплату… подписка продлится автоматически",
+      pay_done: "✅ Оплата получена, подписка продлена!",
+      pay_failed: "Оплата не прошла",
+      pay_no_methods: "Способы оплаты пока не подключены.",
+      sub_ref_balance: "Бонус за рефералов (скидка): ",
       tab_admin: "Админ",
       topbar_title: "🔍 Арбитражный бот",
       refresh_btn: "Обновить",
@@ -236,6 +252,22 @@ an_news: "Новости (травмы, форма, дисквалификаци
       tab_news: "Хабарҳо",
       tab_settings: "Танзимот",
       tab_stats: "Омор",
+      tab_sub: "Обуна",
+      sub_title: "Обуна",
+      sub_admin: "♾️ Дастрасии беохир (админ)",
+      sub_trial: "⏳ Давраи озмоишӣ · рӯзҳои боқимонда: ",
+      sub_active: "💳 Обуна фаъол · рӯзҳои боқимонда: ",
+      sub_expired: "Дастрасӣ тамом шуд — обуна харед",
+      sub_days: " рӯз",
+      sub_choose: "Тариф ва усули пардохтро интихоб кунед",
+      pay_stars: "⭐ Stars",
+      pay_card: "💳 Корт",
+      pay_sbp: "⚡ СБП",
+      pay_waiting: "Интизори пардохт… обуна худкор дароз мешавад",
+      pay_done: "✅ Пардохт қабул шуд, обуна дароз шуд!",
+      pay_failed: "Пардохт анҷом наёфт",
+      pay_no_methods: "Усулҳои пардохт ҳоло пайваст нестанд.",
+      sub_ref_balance: "Бонуси рефералӣ (тахфиф): ",
       tab_admin: "Админ",
       topbar_title: "🔍 Боти арбитражӣ",
       refresh_btn: "Навсозӣ",
@@ -352,6 +384,22 @@ an_news: "Хабарҳо (ҷароҳатҳо, шакл, дисквалифика
       tab_news: "News",
       tab_settings: "Settings",
       tab_stats: "Stats",
+      tab_sub: "Subscription",
+      sub_title: "Subscription",
+      sub_admin: "♾️ Unlimited access (admin)",
+      sub_trial: "⏳ Trial · days left: ",
+      sub_active: "💳 Subscription active · days left: ",
+      sub_expired: "Access expired — subscribe to continue",
+      sub_days: " days",
+      sub_choose: "Choose a plan and payment method",
+      pay_stars: "⭐ Stars",
+      pay_card: "💳 Card",
+      pay_sbp: "⚡ SBP",
+      pay_waiting: "Waiting for payment… your subscription will extend automatically",
+      pay_done: "✅ Payment received, subscription extended!",
+      pay_failed: "Payment failed",
+      pay_no_methods: "No payment methods are connected yet.",
+      sub_ref_balance: "Referral bonus (discount): ",
       tab_admin: "Admin",
       topbar_title: "🔍 Arbitrage bot",
       refresh_btn: "Refresh",
@@ -485,6 +533,7 @@ an_news: "News (injuries, form, suspensions)",
     document.querySelector('[data-tab="news"]').textContent = t("tab_news");
     document.querySelector('[data-tab="settings"]').textContent = t("tab_settings");
     document.querySelector('[data-tab="stats"]').textContent = t("tab_stats");
+    document.querySelector('[data-tab="sub"]').textContent = t("tab_sub");
     calcBtn.title = t("tab_calc");
     document.getElementById("calc-modal-title").textContent = t("tab_calc");
     document.getElementById("analysis-modal-title").textContent = t("an_title");
@@ -542,6 +591,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="skeleton sk-block"></div>
     </div>`;
   const skeletons = {
+    sub: `<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>`,
     vilki: skVilka.repeat(3),
     news: skVilka.repeat(2),
     settings: `<div class="skeleton sk-block" style="height:120px;margin-bottom:12px"></div>`.repeat(3),
@@ -800,6 +850,7 @@ an_news: "News (injuries, form, suspensions)",
       else if (tab === "news") await renderNews();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
+      else if (tab === "sub") await renderSub();
       else if (tab === "admin") await renderAdmin();
     } catch (e) {
       // Subscription revoked mid-session (or the gate was just turned on) -- re-check
@@ -1888,6 +1939,112 @@ an_news: "News (injuries, form, suspensions)",
       if (t < 1) requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
+  }
+
+  // ---------- Подписка / оплата ----------
+  // Stars & card -> Telegram's native invoice (tg.openInvoice); the bot's own
+  // successful_payment handler credits it. СБП -> ЮKassa link (tg.openLink), then this
+  // page polls /api/pay/sbp/<id> (the server also polls in the background).
+
+  let sbpPollTimer = null;
+
+  async function renderSub() {
+    const d = await api("/api/subscription");
+    let status;
+    if (d.is_admin) status = t("sub_admin");
+    else if (d.has_access && d.on_trial) status = t("sub_trial") + d.days_left;
+    else if (d.has_access) status = t("sub_active") + d.days_left;
+    else status = t("sub_expired");
+
+    const methods = Object.entries(d.methods).filter(([, on]) => on).map(([m]) => m);
+    const priceFor = (p, m) => (m === "stars" ? `${p.price_stars} ⭐` : `${p.price_rub} ₽`);
+    const plans = d.plans
+      .map(
+        (p) => `
+        <div class="card sub-plan">
+          <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.price_rub} ₽</span></div>
+          <div class="sub-plan-methods">
+            ${methods
+              .map((m) => `<button type="button" class="chip pay-btn" data-plan="${esc(p.id)}" data-method="${m}">${t("pay_" + m)} · ${priceFor(p, m)}</button>`)
+              .join("")}
+          </div>
+        </div>`
+      )
+      .join("");
+
+    content.innerHTML = `
+      <div class="section-title">${t("sub_title")}</div>
+      <div class="card sub-status">${status}${
+        d.referral_balance_rub > 0 ? `<div class="field-hint">${t("sub_ref_balance")}${Math.round(d.referral_balance_rub)} ₽</div>` : ""
+      }</div>
+      <div class="meta-line">${methods.length ? t("sub_choose") : t("pay_no_methods")}</div>
+      <div id="pay-status"></div>
+      ${methods.length ? plans : ""}`;
+
+    content.querySelectorAll(".pay-btn").forEach((btn) =>
+      btn.addEventListener("click", () => startPayment(btn.dataset.plan, btn.dataset.method, btn))
+    );
+  }
+
+  function setPayStatus(text) {
+    const el = document.getElementById("pay-status");
+    if (el) el.innerHTML = text ? `<div class="card sub-status">${text}</div>` : "";
+  }
+
+  function onPaid() {
+    if (sbpPollTimer) clearInterval(sbpPollTimer);
+    sbpPollTimer = null;
+    hapticNotify("success");
+    toast(t("pay_done"));
+    if (currentTab === "sub") loadTab("sub");
+  }
+
+  async function startPayment(planId, method, btn) {
+    haptic("light");
+    btn.disabled = true;
+    try {
+      const r = await api("/api/pay", { method: "POST", body: JSON.stringify({ plan_id: planId, method }) });
+      if (r.type === "invoice") {
+        if (tg && tg.openInvoice) {
+          tg.openInvoice(r.link, (status) => {
+            if (status === "paid") onPaid();
+            else if (status === "failed") toast(t("pay_failed"));
+          });
+        } else {
+          window.open(r.link, "_blank");
+        }
+      } else if (r.type === "sbp") {
+        if (tg && tg.openLink) tg.openLink(r.url);
+        else window.open(r.url, "_blank");
+        setPayStatus(t("pay_waiting"));
+        if (sbpPollTimer) clearInterval(sbpPollTimer);
+        const startedAt = Date.now();
+        sbpPollTimer = setInterval(async () => {
+          if (Date.now() - startedAt > 15 * 60 * 1000) {
+            clearInterval(sbpPollTimer);
+            sbpPollTimer = null;
+            return;
+          }
+          try {
+            const st = await api(`/api/pay/sbp/${encodeURIComponent(r.payment_id)}`);
+            if (st.paid) onPaid();
+            else if (st.status === "canceled") {
+              clearInterval(sbpPollTimer);
+              sbpPollTimer = null;
+              setPayStatus("");
+              toast(t("pay_failed"));
+            }
+          } catch (e) {
+            // transient -- keep polling
+          }
+        }, 4000);
+      }
+    } catch (e) {
+      hapticNotify("error");
+      toast(t("error_prefix") + e.message);
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   async function renderStats() {
