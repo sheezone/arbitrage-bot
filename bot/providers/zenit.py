@@ -31,12 +31,30 @@ from bot.providers.base import OddsProvider
 from bot.providers.models import SourceQuote
 
 BASE_URL = "https://zenit.win"
-LINE_PATH = "/ajax/line/printer/ranked"
+# Full prematch line (confirmed live 2026-09-25: ~6700 events in one ~10 MB response,
+# ~11 s). The previous "/ajax/line/printer/ranked" endpoint is only the ~36 "top" events
+# the homepage shows, which left Zenit with next to nothing to compare against. Same JSON
+# shape (games / f_l / hd / dict.cmd) as ranked, so the parser below didn't change. The
+# params mirror what zenit.win's own frontend sends for the line page (main.*.chunk.js,
+# getLine); `sport` is a dash-joined list of Zenit sport ids.
+LINE_PATH = "/ajax/line/printer/"
+LINE_PARAMS = {
+    "all": 0, "onlyview": 0, "timeline": 0, "tournaments_mode": 1, "ross": 0,
+    "lang_id": 1, "timezone": 3, "offset": 0, "show_from_main": 0, "length": 10000,
+    "sort_mode": 2, "popular": 0,
+}
 
 SPORT_IDS = {
     "football": 1,
     "hockey": 2,
+    "basketball": 3,
+    "tennis": 6,
 }
+# Football/hockey: the match-winner market has a draw, so only the Total is used (same
+# rule as every other provider here). Basketball/tennis: match winner ("1"/"2"), taken
+# only when the draw column ("Х") has no price, i.e. the market really is two-way.
+TOTALS_GAMES = frozenset({"football", "hockey"})
+WINNER_GAMES = frozenset({"basketball", "tennis"})
 
 TOTAL_LABEL = "Тотал"
 UNDER_LABEL = "М"
@@ -48,7 +66,7 @@ class ZenitProvider(OddsProvider):
     def __init__(self, base_url: str = BASE_URL):
         self._client = httpx.AsyncClient(
             base_url=base_url,
-            timeout=20.0,
+            timeout=60.0,
             headers={"User-Agent": "Mozilla/5.0", "imprintHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
         )
 
@@ -57,7 +75,8 @@ class ZenitProvider(OddsProvider):
         if not wanted:
             return []
 
-        resp = await self._client.get(LINE_PATH, params={"onlyview": 0, "lang_id": 1, "timezone": 3})
+        sport = "-".join(str(SPORT_IDS[g]) for g in wanted)
+        resp = await self._client.get(LINE_PATH, params={**LINE_PARAMS, "sport": sport})
         resp.raise_for_status()
         raw = resp.json()
 
@@ -88,6 +107,10 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
             continue
 
         hd, f_l = event.get("hd") or [], event.get("f_l") or []
+        start_time_utc = _unix_to_iso(event.get("time"))
+        if game in WINNER_GAMES:
+            quotes.extend(_winner_quotes(game, team_a, team_b, start_time_utc, hd, f_l))
+            continue
         total_idx = next((i for i, h in enumerate(hd) if h.get("n") == TOTAL_LABEL), None)
         if total_idx is None or total_idx == 0 or total_idx + 1 >= len(f_l):
             continue
@@ -108,12 +131,33 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
         if not (PLAUSIBLE_TOTAL_LINE_RANGE[0] <= line <= PLAUSIBLE_TOTAL_LINE_RANGE[1]):
             continue
 
-        start_time_utc = _unix_to_iso(event.get("time"))
         market = f"total_{line}"
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "zenit", f"Тотал больше {line}", over_odds, market))
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "zenit", f"Тотал меньше {line}", under_odds, market))
 
     return quotes
+
+
+def _winner_quotes(game, team_a, team_b, start_time_utc, hd, f_l) -> list[SourceQuote]:
+    labels = [h.get("n") for h in hd]
+    try:
+        i1 = labels.index("1")
+    except ValueError:
+        return []
+    if i1 + 2 >= len(f_l) or labels[i1 + 1] != "Х" or labels[i1 + 2] != "2":
+        return []  # unexpected layout -- skip rather than guess
+    if f_l[i1 + 1].get("h") not in (None, "", 0):
+        return []  # draw is priced -> three-way market, not an arb candidate here
+    try:
+        odds_a, odds_b = float(f_l[i1].get("h")), float(f_l[i1 + 2].get("h"))
+    except (TypeError, ValueError):
+        return []
+    if odds_a <= 1.0 or odds_b <= 1.0:
+        return []
+    return [
+        SourceQuote(game, team_a, team_b, start_time_utc, "zenit", team_a, odds_a),
+        SourceQuote(game, team_a, team_b, start_time_utc, "zenit", team_b, odds_b),
+    ]
 
 
 def _unix_to_iso(ts) -> str:

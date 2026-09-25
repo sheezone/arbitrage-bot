@@ -85,3 +85,23 @@ def test_rejects_implausible_line():
         {"10": "A", "20": "B"},
     )
     assert parse_line_dump("football", raw) == []
+
+
+def test_basketball_winner_taken_only_when_draw_unpriced():
+    from bot.providers.zenit import parse_line_dump
+
+    hd = [{"n": n} for n in ["1", "Х", "2", "Фора", "1", "Фора", "2", "М", "Тотал", "Б"]]
+    two_way = [{"h": 1.27}, {"h": None}, {"h": 3.76}, {"h": "-8.5"}, {"h": 1.9}, {"h": "8.5"}, {"h": 1.9}, {"h": 1.9}, {"h": "162.5"}, {"h": 1.9}]
+    three_way = [{"h": 1.27}, {"h": 12.0}] + two_way[2:]
+    raw = {
+        "dict": {"cmd": {"1": "A", "2": "B", "3": "C", "4": "D"}},
+        "games": {
+            "10": {"sid": 3, "c1_id": 1, "c2_id": 2, "time": 1800000000, "hd": hd, "f_l": two_way},
+            "11": {"sid": 3, "c1_id": 3, "c2_id": 4, "time": 1800000000, "hd": hd, "f_l": three_way},
+        },
+    }
+    quotes = parse_line_dump("basketball", raw)
+    assert [(q.team_a, q.outcome_name, q.odds, q.market) for q in quotes] == [
+        ("A", "A", 1.27, "winner"),
+        ("A", "B", 3.76, "winner"),
+    ]
