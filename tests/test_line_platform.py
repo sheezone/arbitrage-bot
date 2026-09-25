@@ -195,3 +195,21 @@ def test_football_keeps_total_when_lines_agree_as_int_and_half_string():
         raw, {}, bookmaker="fonbet", game_to_parent_sport={"football": 1}, totals_games=frozenset({"football"})
     )
     assert {q.market for q in quotes} == {"total_3.0"}
+
+
+def test_total_ladder_and_half_line_handicaps():
+    from bot.providers._line_platform import parse_line_dump
+
+    raw = {
+        "sports": [{"id": 5, "kind": "segment", "sportCategoryId": 1}],
+        "events": [{"id": 1, "place": "line", "sportId": 5, "team1": "A", "team2": "B", "startTime": 1800000000}],
+        "customFactors": [{"e": 1, "factors": [
+            {"f": 930, "pt": "2.5", "v": 2.1}, {"f": 931, "pt": "2.5", "v": 1.7},
+            {"f": 1733, "pt": "2", "v": 1.6}, {"f": 1734, "pt": "2", "v": 2.2},
+            {"f": 927, "pt": "-1", "v": 1.8}, {"f": 928, "pt": "+1", "v": 2.0},   # whole line -> skipped
+            {"f": 910, "pt": "-1.5", "v": 2.4}, {"f": 912, "pt": "+1.5", "v": 1.55},
+        ]}],
+    }
+    quotes = parse_line_dump(raw, {"football": [1]}, "fonbet", totals_games=frozenset({"football"}))
+    assert sorted({q.market for q in quotes}) == ["hcp", "total_2.0", "total_2.5"]
+    assert sorted(q.outcome_name for q in quotes if q.market == "hcp") == ["H1:-1.5", "H2:1.5"]

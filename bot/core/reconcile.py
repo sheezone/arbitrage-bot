@@ -59,6 +59,21 @@ def normalize_team(name: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+# Age/gender/squad tags books append to team names ("U21", "(до 21)", "(мол)", "(ж)"),
+# after transliteration. They're identical across the two teams of a youth fixture, so
+# leaving them in inflated the score between two DIFFERENT youth matches at the same
+# kick-off -- confirmed live 2026-09-25: "Грузия U21 - Греция U21" and "Хорватия U21 -
+# Венгрия U21" scored 0.75 (> NAME_MATCH_THRESHOLD) and got merged, which can surface a
+# fake arb built from two unrelated matches. Scored without the tags that pair drops to
+# 0.58, while the same fixture spelled "U21" / "(до 21)" / "(мол)" by different books
+# still scores 1.0.
+_TAG_RE = re.compile(r"\b(u\s?\d{2}|do\s?\d{2}|mol|molodezhnaya|zh|zhen|zhenschiny|w)\b")
+
+
+def _core(name: str) -> str:
+    return re.sub(r"\s+", " ", _TAG_RE.sub(" ", name)).strip() or name
+
+
 def _similarity(a: str, b: str) -> float:
     if not a or not b:
         return 0.0
@@ -66,9 +81,10 @@ def _similarity(a: str, b: str) -> float:
 
 
 def _pair_similarity(pair1: tuple[str, str], pair2: tuple[str, str]) -> float:
-    """Best of "same order" vs "swapped order" match between two (team_a, team_b) pairs."""
-    a1, b1 = pair1
-    a2, b2 = pair2
+    """Best of "same order" vs "swapped order" match between two (team_a, team_b) pairs,
+    scored on the names with age/gender tags removed (see _TAG_RE)."""
+    a1, b1 = _core(pair1[0]), _core(pair1[1])
+    a2, b2 = _core(pair2[0]), _core(pair2[1])
     straight = (_similarity(a1, a2) + _similarity(b1, b2)) / 2
     crossed = (_similarity(a1, b2) + _similarity(b1, a2)) / 2
     return max(straight, crossed)
@@ -86,21 +102,35 @@ def _time_bucket(start_time_utc: str) -> int:
 
 
 def group_quotes(quotes: list[SourceQuote]) -> list[list[SourceQuote]]:
-    buckets: dict[tuple[str, int], list[tuple[tuple[str, str], list[SourceQuote]]]] = {}
+    """Each quote joins the MOST similar cluster above NAME_MATCH_THRESHOLD in its (game,
+    kick-off) bucket -- never merely the first one that clears it -- and never a cluster
+    where the same bookmaker already sits with a DIFFERENT fixture: a bookmaker lists each
+    match once, so two of its fixtures in one cluster can only mean two real matches got
+    merged by name similarity (the fake-arb risk described at _TAG_RE)."""
+    # bucket -> list of [pair, quotes, {bookmaker: (team_a, team_b)}]
+    buckets: dict[tuple[str, int], list[list]] = {}
 
     for q in quotes:
         bucket_key = (q.game, _time_bucket(q.start_time_utc))
         pair = (normalize_team(q.team_a), normalize_team(q.team_b))
+        fixture = (q.team_a, q.team_b)
         clusters = buckets.setdefault(bucket_key, [])
 
-        for cluster_pair, cluster_quotes in clusters:
-            if _pair_similarity(pair, cluster_pair) >= NAME_MATCH_THRESHOLD:
-                cluster_quotes.append(q)
-                break
+        best, best_score = None, NAME_MATCH_THRESHOLD
+        for cluster in clusters:
+            owner = cluster[2].get(q.bookmaker)
+            if owner is not None and owner != fixture:
+                continue
+            score = _pair_similarity(pair, cluster[0])
+            if score >= best_score:
+                best, best_score = cluster, score
+        if best is None:
+            clusters.append([pair, [q], {q.bookmaker: fixture}])
         else:
-            clusters.append((pair, [q]))
+            best[1].append(q)
+            best[2].setdefault(q.bookmaker, fixture)
 
-    return [cluster_quotes for clusters in buckets.values() for _, cluster_quotes in clusters]
+    return [cluster[1] for clusters in buckets.values() for cluster in clusters]
 
 
 # Handicap quotes arrive from providers as market=HANDICAP_MARKET with outcome_name

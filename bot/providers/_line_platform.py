@@ -69,7 +69,27 @@ TEAM2_WIN_FACTOR = 923
 TOTAL_OVER_FACTOR = 930
 TOTAL_UNDER_FACTOR = 931
 PLAUSIBLE_TOTAL_LINE_RANGE = (0.5, 8.5)  # real match goal totals; guards against mismatched specials/outrights
-RELEVANT_FACTOR_IDS = (TEAM1_WIN_FACTOR, DRAW_FACTOR, TEAM2_WIN_FACTOR, TOTAL_OVER_FACTOR, TOTAL_UNDER_FACTOR)
+# Full-match total ladder beyond the main 930/931 line: (over, under) factor pairs, each
+# carrying its own `pt` line. Identified live 2026-09-25 by lining them up on real
+# football matches -- prices move monotonically with the line (0.5 ... 4.5), so they're
+# the whole-match goal total, not halves or team totals.
+TOTAL_LADDER_PAIRS = (
+    (TOTAL_OVER_FACTOR, TOTAL_UNDER_FACTOR),
+    (1696, 1697), (1727, 1728), (1730, 1731), (1733, 1734),
+    (1736, 1737), (1739, 1791), (1793, 1794), (1796, 1797),
+)
+# Whole-match handicap: (team 1, team 2) factor pairs, `pt` = that team's line. 927/928
+# is the main line, the rest are the alternate ladder (same live identification).
+HANDICAP_PAIRS = (
+    (927, 928), (910, 912), (989, 991), (1569, 1572), (1672, 1675), (1677, 1678), (1680, 1681),
+)
+RELEVANT_FACTOR_IDS = frozenset(
+    (TEAM1_WIN_FACTOR, DRAW_FACTOR, TEAM2_WIN_FACTOR)
+    + tuple(f for pair in TOTAL_LADDER_PAIRS for f in pair)
+    + tuple(f for pair in HANDICAP_PAIRS for f in pair)
+)
+# Handicaps only where every book means the same thing by them (see zenit.py).
+DEFAULT_HANDICAP_GAMES = frozenset({"football", "basketball"})
 
 
 def parse_line_dump(
@@ -79,6 +99,7 @@ def parse_line_dump(
     game_to_parent_sport: dict[str, int] | None = None,
     exclude_category_ids: frozenset[int] = frozenset(),
     totals_games: frozenset[str] = frozenset(),
+    handicap_games: frozenset[str] = DEFAULT_HANDICAP_GAMES,
 ) -> list[SourceQuote]:
     category_to_game = {cat: game for game, cats in game_to_categories.items() for cat in cats}
     parent_id_to_game = {parent_id: game for game, parent_id in (game_to_parent_sport or {}).items()}
@@ -125,31 +146,11 @@ def parse_line_dump(
         factors = factors_by_event.get(event["id"], {})
         start_time_utc = _unix_to_iso(event.get("startTime"))
 
-        if game in totals_games:
-            over, under = factors.get(TOTAL_OVER_FACTOR), factors.get(TOTAL_UNDER_FACTOR)
-            if not over or not under:
-                continue
-            odds_over, odds_under = over.get("v"), under.get("v")
-            over_pt, under_pt = over.get("pt"), under.get("pt")
-            if not odds_over or not odds_under or over_pt is None or under_pt is None:
-                continue
-            # The over (930) and under (931) factor slots are meant to be the same main
-            # line, but the feed has been seen handing back two different `pt` values for
-            # one event -- taking the line off `over` alone then mislabels the under price
-            # as belonging to a line it isn't, producing a phantom arb against another
-            # book's real line. Require them to agree; skip rather than guess.
-            try:
-                line, line_under = float(over_pt), float(under_pt)
-            except ValueError:
-                continue
-            if line != line_under:
-                continue
-            if not (PLAUSIBLE_TOTAL_LINE_RANGE[0] <= line <= PLAUSIBLE_TOTAL_LINE_RANGE[1]):
-                continue  # not a real match goal total (e.g. a special/outright reusing this factor slot)
+        if game in handicap_games:
+            quotes.extend(_handicap_quotes(game, team_a, team_b, start_time_utc, bookmaker, factors))
 
-            market = f"total_{line}"
-            quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"Тотал больше {line}", odds_over, market))
-            quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"Тотал меньше {line}", odds_under, market))
+        if game in totals_games:
+            quotes.extend(_total_ladder_quotes(game, team_a, team_b, start_time_utc, bookmaker, factors))
             continue
 
         if DRAW_FACTOR in factors:
@@ -163,6 +164,56 @@ def parse_line_dump(
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, team_a, odds_a))
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, team_b, odds_b))
 
+    return quotes
+
+
+def _total_ladder_quotes(game, team_a, team_b, start_time_utc, bookmaker, factors) -> list[SourceQuote]:
+    quotes: list[SourceQuote] = []
+    seen: set[float] = set()
+    for over_id, under_id in TOTAL_LADDER_PAIRS:
+        over, under = factors.get(over_id), factors.get(under_id)
+        if not over or not under:
+            continue
+        odds_over, odds_under = over.get("v"), under.get("v")
+        if not odds_over or not odds_under or over.get("pt") is None or under.get("pt") is None:
+            continue
+        # Over and under must name the same line -- the feed has been seen handing back
+        # two different `pt` values for one pair; taking one side's line would mislabel
+        # the other's price and show a phantom arb. Skip rather than guess.
+        try:
+            line, line_under = float(over["pt"]), float(under["pt"])
+        except ValueError:
+            continue
+        if line != line_under or line in seen:
+            continue
+        if not (PLAUSIBLE_TOTAL_LINE_RANGE[0] <= line <= PLAUSIBLE_TOTAL_LINE_RANGE[1]):
+            continue  # not a real match goal total (e.g. a special/outright reusing this slot)
+        seen.add(line)
+        market = f"total_{line}"
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"Тотал больше {line}", odds_over, market))
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"Тотал меньше {line}", odds_under, market))
+    return quotes
+
+
+def _handicap_quotes(game, team_a, team_b, start_time_utc, bookmaker, factors) -> list[SourceQuote]:
+    """Emitted as market="hcp" with "H1:<line>"/"H2:<line>" in this book's own team order;
+    bot/core/reconcile.py lines them up across books. Half lines only (no push)."""
+    quotes: list[SourceQuote] = []
+    seen: set[float] = set()
+    for t1_id, t2_id in HANDICAP_PAIRS:
+        f1, f2 = factors.get(t1_id), factors.get(t2_id)
+        if not f1 or not f2:
+            continue
+        try:
+            h1, h2 = float(f1.get("pt")), float(f2.get("pt"))
+            o1, o2 = float(f1.get("v")), float(f2.get("v"))
+        except (TypeError, ValueError):
+            continue
+        if h1 != -h2 or (abs(h1) * 2) % 2 != 1 or h1 in seen or o1 <= 1.0 or o2 <= 1.0:
+            continue
+        seen.add(h1)
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"H1:{h1}", o1, "hcp"))
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, f"H2:{h2}", o2, "hcp"))
     return quotes
 
 

@@ -129,3 +129,33 @@ def test_handicap_legs_line_up_even_when_books_list_teams_in_opposite_order():
     assert {o.bookmaker for o in odds["Италия (-1.5)"]} == {"zenit", "olimpbet"}
     assert sorted(o.odds for o in odds["Италия (-1.5)"]) == [3.8, 3.9]
     assert sorted(o.odds for o in odds["Бельгия (+1.5)"]) == [1.25, 1.3]
+
+
+def test_two_different_youth_matches_at_the_same_time_are_not_merged():
+    # Regression (live 2026-09-25): the shared "U21" tag pushed these over the threshold.
+    from bot.core.reconcile import group_quotes
+    from bot.providers.models import SourceQuote
+
+    t = "2026-09-26T15:00:00+00:00"
+    quotes = [
+        SourceQuote("football", "Грузия U21", "Греция U21", t, "fonbet", "Тотал больше 2.5", 2.0, "total_2.5"),
+        SourceQuote("football", "Хорватия U21", "Венгрия U21", t, "fonbet", "Тотал больше 2.5", 2.0, "total_2.5"),
+        SourceQuote("football", "Грузия (до 21)", "Греция (до 21)", t, "olimpbet", "Тотал меньше 2.5", 2.0, "total_2.5"),
+        SourceQuote("football", "Грузия (мол)", "Греция (мол)", t, "zenit", "Тотал меньше 2.5", 2.0, "total_2.5"),
+    ]
+    groups = sorted(group_quotes(quotes), key=len)
+    assert [len(g) for g in groups] == [1, 3]
+    assert {q.team_a for q in groups[0]} == {"Хорватия U21"}
+    assert {q.bookmaker for q in groups[1]} == {"fonbet", "olimpbet", "zenit"}
+
+
+def test_one_bookmaker_never_contributes_two_fixtures_to_one_cluster():
+    from bot.core.reconcile import group_quotes
+    from bot.providers.models import SourceQuote
+
+    t = "2026-09-26T15:00:00+00:00"
+    quotes = [
+        SourceQuote("football", "Динамо Москва", "Спартак", t, "fonbet", "x", 2.0, "total_2.5"),
+        SourceQuote("football", "Динамо Минск", "Спартак", t, "fonbet", "x", 2.0, "total_2.5"),
+    ]
+    assert len(group_quotes(quotes)) == 2
