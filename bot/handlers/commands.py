@@ -381,7 +381,6 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
     rows = [
         [_btn(pause_label, NAV_TOGGLE_ACTIVE), _btn(mute_label, NAV_TOGGLE_MUTED)],
         [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
-        [_btn("📊 Статистика", NAV_STATS)],
         [_btn("🤝 Партнёрская программа", NAV_REFERRAL)],
         [_btn("🌐 Язык / Language", NAV_LANGUAGE)],
         [_btn("ℹ️ Помощь", NAV_HELP)],
