@@ -519,7 +519,7 @@ def _help_view() -> View:
         "Больше/Меньше), а не победитель: в этих видах возможна ничья, а "
         "тотал — это всегда ровно два исхода\n\n"
         "<b>Источники:</b> котировки российских лицензированных БК — Fonbet, PARI, "
-        "Лига Ставок, Marathon, Baltbet, Zenit, Leon, Olimpbet, BetBoom, Winline "
+        "Лига Ставок, Marathon, Baltbet, Zenit, Бетсити, Leon, Olimpbet, BetBoom, Winline "
         "(через открытые данные и агрегатор). Чем больше источников, тем больше шанс "
         "увидеть расхождение. Отслеживаются все виды спорта сразу.\n\n"
         "<b>Настройки внутри «🔍 Поиск вилок»:</b>\n"
@@ -584,8 +584,8 @@ _ALL_BOOKMAKER_KEYS = sorted(BOOKMAKER_URLS.keys())
 # show up via the SureBet aggregator (see bot/providers/surebet.py). Purely cosmetic
 # section headers; any key not listed here (there shouldn't be any) falls back into
 # "Другие" so a newly added bookmaker never silently disappears from the screen.
-_DIRECT_BOOKMAKERS = {"fonbet", "pari", "marathon", "baltbet", "zenit", "melbet", "leon", "olimpbet"}
-_AGGREGATOR_BOOKMAKERS = {"winline", "betcity", "betboom", "ligastavok", "bet365", "1xbet", "pinnacle"}
+_DIRECT_BOOKMAKERS = {"fonbet", "pari", "marathon", "baltbet", "zenit", "melbet", "leon", "olimpbet", "betcity"}
+_AGGREGATOR_BOOKMAKERS = {"winline", "betboom", "ligastavok", "bet365", "1xbet", "pinnacle"}
 
 
 def _selected_bookmakers(user: UserSettings) -> set[str]:
