@@ -13,6 +13,7 @@ from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import LinkPreviewOptions
 
 from bot.core import billing
+from bot.core.flags import with_flag
 from bot.core.emoji import VI, tg_emoji, vi  # noqa: F401 -- re-exported
 from bot.core.arbitrage import ArbitrageResult, OutcomeOdds, calc_arbitrage, calc_stakes
 from bot.core.bookmakers import filter_licensed
@@ -207,7 +208,7 @@ def _format_message(
     emoji = game_icon(game)
     lines = [
         f"{vi('money_bag')} {emoji} <b>Найдена вилка</b> ({game.upper()})",
-        f"{vi('swords')} <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
+        f"{vi('swords')} <b>{html.escape(with_flag(team_a))}</b> vs <b>{html.escape(with_flag(team_b))}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
@@ -234,7 +235,7 @@ def _format_showcase_message(
     emoji = game_icon(game)
     lines = [
         f"{vi('money_bag')} {emoji} <b>Вилка</b> ({game.upper()})",
-        f"{vi('swords')} <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
+        f"{vi('swords')} <b>{html.escape(with_flag(team_a))}</b> vs <b>{html.escape(with_flag(team_b))}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:

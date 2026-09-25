@@ -45,6 +45,7 @@ from aiogram.types import (
 )
 
 from bot.core import billing
+from bot.core.flags import with_flag
 from bot.core.emoji import button_texts, icon_button, icon_reply_button, vi
 from bot.core.payments import credit_yookassa_sbp, poll_yookassa_sbp
 from bot.core.arbitrage import OutcomeOdds, calc_arbitrage, calc_stakes
@@ -925,7 +926,7 @@ def _search_view(
         emoji = game_icon(m.game)
         block = [
             f"{emoji} <b>{GAME_LABELS.get(m.game, m.game.upper())}</b>",
-            f"{vi('swords')} <b>{html.escape(m.team_a)}</b> vs <b>{html.escape(m.team_b)}</b>",
+            f"{vi('swords')} <b>{html.escape(with_flag(m.team_a))}</b> vs <b>{html.escape(with_flag(m.team_b))}</b>",
         ]
         match_time = format_match_start(m.start_time_utc)
         if match_time:

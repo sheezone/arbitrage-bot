@@ -5,6 +5,8 @@ covers most esports team names, e.g. "Natus Vincere", "G2 Esports" -- just shows
 rather than guessing at a nationality)."""
 from __future__ import annotations
 
+from bot.core.flags import national_flag
+
 # Lowercase Cyrillic substring -> flag emoji, same substring-matching convention as
 # news._is_popular. England has no single ISO country flag (a club plays for one of the
 # UK's four nations) -- uses the England flag tag sequence, same as e.g. Telegram/iOS
@@ -56,6 +58,10 @@ TEAM_FLAGS: dict[str, str] = {
 def get_team_flag(team_name: str) -> str | None:
     """None (no flag shown) for anything not in the curated list above -- "skip rather
     than guess" convention used throughout this webapp package."""
+    # National teams first (exact match after age/gender suffixes) -- see bot/core/flags.py.
+    national = national_flag(team_name)
+    if national:
+        return national
     lowered = team_name.lower()
     for key, flag in TEAM_FLAGS.items():
         if key in lowered:
