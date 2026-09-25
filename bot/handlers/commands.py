@@ -654,7 +654,18 @@ def _subscription_view(
     see _subscription_method_view) rather than one screen listing every plan x every
     method at once, which got cramped once crypto joined Stars/card."""
     status = _subscription_status_line(user, admin_chat_ids)
-    text = f"{vi('cart')} <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите способ оплаты:"
+    methods = [f"{vi('telegram')} Telegram Stars"]
+    if yk_sbp_enabled or sbp_enabled:
+        methods.append(f"{vi('sbp')} СБП — в приложении вашего банка")
+    if yookassa_enabled:
+        methods.append(f"{vi('mir')}{vi('visa')}{vi('mastercard')} Банковская карта")
+    if crypto_enabled:
+        methods.append(f"{vi('usdt')} Криптовалюта (USDT)")
+    text = (
+        f"{vi('cart')} <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\n"
+        + "\n".join(methods)
+        + "\n\nВыберите способ оплаты:"
+    )
     rows = [[_btn("⭐ Telegram Stars", f"{NAV_SUB_METHOD_PREFIX}stars")]]
     if yk_sbp_enabled:
         rows.append([_btn("⚡ СБП", f"{NAV_SUB_METHOD_PREFIX}yksbp")])
@@ -667,6 +678,16 @@ def _subscription_view(
     rows.append([_btn("◀️ Назад", NAV_PROFILE)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
+
+# Brand logo (custom emoji) shown before the method name in the plan-picker header;
+# replaces the plain emoji at the start of the matching _METHOD_LABELS entry.
+_METHOD_ICONS = {
+    "stars": vi("telegram"),
+    "rub": vi("mir") + vi("visa") + vi("mastercard"),
+    "crypto": vi("usdt"),
+    "sbp": vi("sbp"),
+    "yksbp": vi("sbp"),
+}
 
 _METHOD_LABELS = {
     "stars": "⭐ TELEGRAM STARS",
@@ -686,6 +707,9 @@ STARS_SHOP_BOT_URL = "https://t.me/starslly_bot"
 def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: frozenset[int]) -> View:
     status = _subscription_status_line(user, admin_chat_ids)
     label = _METHOD_LABELS.get(method, method.upper())
+    icon = _METHOD_ICONS.get(method)
+    if icon:
+        label = icon + " " + label.split(" ", 1)[-1]
     text = f"{label}\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите тариф:"
     if method == "stars":
         text += (
@@ -1735,7 +1759,7 @@ def register_handlers(
             return
 
         text = (
-            f"{vi('lightning')} <b>ОПЛАТА ПО СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{vi('sbp')} <b>ОПЛАТА ПО СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Тариф: <b>{plan.label}</b>\nСумма: <b>{discounted:.0f} ₽</b>\n\n"
             "Нажмите «Оплатить», выберите свой банк и подтвердите платёж в приложении. "
             "Подписка продлится автоматически в течение минуты. "

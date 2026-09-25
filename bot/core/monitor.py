@@ -73,6 +73,15 @@ VI = {
     "check_color": ("5237699328843200968", "✅"),
     "football": ("5375159220280762629", "⚽️"),
     "basketball": ("5384327463629233871", "🏀"),
+    # Brand logos from the "Icons" pack (t.me/addemoji/IconsEmoji) -- identified by
+    # rendering the set's thumbnails (their emoji field is just 💸 for all of them).
+    "sbp": ("5294247005701292072", "💸"),
+    "mir": ("5293982860917620045", "💸"),
+    "visa": ("5294290857317386329", "💸"),
+    "mastercard": ("5292085988611342379", "💸"),
+    "yoomoney": ("5292167614464804192", "💸"),
+    "usdt": ("5294015055992471554", "💸"),
+    "telegram": ("5436302963117137450", "💬"),
 }
 
 
