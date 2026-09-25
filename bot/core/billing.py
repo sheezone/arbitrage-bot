@@ -36,7 +36,7 @@ PLANS: list[Plan] = [
 ]
 
 # Admin-only, 30₽ for 1 day -- exists purely to let an admin run a real payment through a
-# gateway (FreeKassa, Prodamus, Stars, crypto) end-to-end without spending a real plan's
+# gateway (ЮKassa, Prodamus, Stars, crypto) end-to-end without spending a real plan's
 # worth of money. Deliberately NOT in PLANS (never rendered on the public subscription
 # screen -- _subscription_method_view appends it itself only when the viewer is an
 # admin), but IS in PLANS_BY_ID below so every existing plan_id -> Plan lookup (webhooks,
