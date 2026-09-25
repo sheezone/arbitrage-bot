@@ -48,11 +48,33 @@ SPORT_IDS = {
     "boxing": "12",
     "mma": "96",
     "volleyball": "10",
+    "tennis": "3",
+    "basketball": "5",
+    # All esports share sport 112; the game is told apart by competition name prefix.
+    "cs2": "112",
+    "dota2": "112",
+    "lol": "112",
+    "valorant": "112",
 }
+ESPORTS_PREFIXES = {
+    "cs2": ("Counter-Strike", "CS2", "CS 2", "CS:GO"),
+    "dota2": ("Dota",),
+    "lol": ("League of Legends", "LoL"),
+    "valorant": ("Valorant",),
+}
+# Outright/prop/stat competitions reuse the event shape but aren't real matches.
+SKIP_COMPETITION_WORDS = ("Статистика", "Итоги", "Противостояние")
 
 GOALS_TOTAL_GAMES = frozenset({"football", "hockey"})
 ROUNDS_TOTAL_GAMES = frozenset({"boxing", "mma"})
 RESULT_MARKET_GAMES = frozenset({"volleyball"})
+# Plain two-way match winner, labelled П1/П2 at groupPosition 1 (tableType RESULT, or
+# OTHER for basketball -- confirmed live 2026-09-25). Rejected if an "Х" is priced.
+WINNER_GAMES = frozenset({"tennis", "basketball", "cs2", "dota2", "lol", "valorant"})
+# "Доп. Тотал" is the single main line, "Доп. тотал" the full ladder of alternates. Both
+# are used: other books each show only their own main line, and those often differ
+# (2.5 vs 3), so the ladder is what lets Olimp line up with whatever line they chose.
+GOALS_TOTAL_GROUP_NAMES = frozenset({"Доп. Тотал", "Доп. тотал"})
 
 MAIN_TOTAL_GROUP_POSITION = 7
 STAT_PROP_TEAM_PREFIX = "УГЛ"  # corner-count (and similar) prop "matches", not real ones
@@ -94,6 +116,12 @@ def parse_sports_payload(game: str, raw: list[dict]) -> list[SourceQuote]:
 
     quotes: list[SourceQuote] = []
     for competition in (sport_entry["payload"].get("competitionsWithEvents") or []):
+        comp_name = (competition.get("competition") or {}).get("name") or ""
+        if any(w in comp_name for w in SKIP_COMPETITION_WORDS):
+            continue
+        prefixes = ESPORTS_PREFIXES.get(game)
+        if prefixes and not comp_name.startswith(prefixes):
+            continue
         for event in competition.get("events") or []:
             quotes.extend(_parse_event(game, event))
     return quotes
@@ -110,12 +138,11 @@ def _parse_event(game: str, event: dict) -> list[SourceQuote]:
     if game in RESULT_MARKET_GAMES:
         return _parse_result_market(game, team_a, team_b, start_time_utc, outcomes)
 
+    if game in WINNER_GAMES:
+        return _parse_winner(game, team_a, team_b, start_time_utc, outcomes)
+
     if game in GOALS_TOTAL_GAMES:
-        total_outcomes = [
-            o for o in outcomes
-            if o.get("tableType") == "TOTAL" and o.get("groupPosition") == MAIN_TOTAL_GROUP_POSITION
-        ]
-        pair = _total_pair_from_group(total_outcomes, PLAUSIBLE_TOTAL_LINE_RANGE)
+        return _parse_total_ladder(game, team_a, team_b, start_time_utc, outcomes)
     else:
         # boxing/MMA: no fixed groupPosition for the (usually singular) total-rounds line
         # -- see module docstring -- so scan every TOTAL outcome and group by line instead.
@@ -129,6 +156,43 @@ def _parse_event(game: str, event: dict) -> list[SourceQuote]:
         SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал больше {line}", over_odds, market),
         SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал меньше {line}", under_odds, market),
     ]
+
+
+def _parse_winner(game: str, team_a: str, team_b: str, start_time_utc: str, outcomes: list[dict]) -> list[SourceQuote]:
+    main = [o for o in outcomes if o.get("groupPosition") == 1 and o.get("tableType") in ("RESULT", "OTHER")]
+    by_short = {o.get("shortName"): o for o in main}
+    if "Х" in by_short or "П1" not in by_short or "П2" not in by_short:
+        return []  # draw priced (three-way) or no clean П1/П2 -- skip rather than guess
+    try:
+        odds_a = float(by_short["П1"].get("probability"))
+        odds_b = float(by_short["П2"].get("probability"))
+    except (TypeError, ValueError):
+        return []
+    if odds_a <= 1.0 or odds_b <= 1.0:
+        return []
+    return [
+        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", team_a, odds_a),
+        SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", team_b, odds_b),
+    ]
+
+
+def _parse_total_ladder(game: str, team_a: str, team_b: str, start_time_utc: str, outcomes: list[dict]) -> list[SourceQuote]:
+    by_line: dict[str, dict[str, dict]] = {}
+    for o in outcomes:
+        if o.get("tableType") != "TOTAL" or o.get("groupName") not in GOALS_TOTAL_GROUP_NAMES:
+            continue
+        # the main line also appears in the ladder -- dedupe by (line, side)
+        by_line.setdefault(o.get("param"), {}).setdefault(o.get("unprocessedName") or "", o)
+    quotes: list[SourceQuote] = []
+    for group in by_line.values():
+        pair = _total_pair_from_group(list(group.values()), PLAUSIBLE_TOTAL_LINE_RANGE)
+        if pair is None:
+            continue
+        line, over_odds, under_odds = pair
+        market = f"total_{line}"
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал больше {line}", over_odds, market))
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал меньше {line}", under_odds, market))
+    return quotes
 
 
 def _parse_result_market(game: str, team_a: str, team_b: str, start_time_utc: str, outcomes: list[dict]) -> list[SourceQuote]:
