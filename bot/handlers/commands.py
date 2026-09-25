@@ -721,8 +721,6 @@ def _subscription_method_view(user: UserSettings, method: str, admin_chat_ids: f
             "потом вернитесь сюда и оплатите."
         )
     plans = list(billing.PLANS)
-    if billing.is_admin(user, admin_chat_ids):
-        plans.append(billing.TEST_PLAN)
     rows = []
     for plan in plans:
         if method == "stars":

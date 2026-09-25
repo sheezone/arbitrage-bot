@@ -48,7 +48,7 @@ def test_method_view_lists_all_plans_for_that_method():
     data = [b.callback_data for row in keyboard.inline_keyboard for b in row]
     assert "sub:7d:crypto" in data
     assert "sub:30d:crypto" in data
-    assert "sub:360d:crypto" in data
+    assert "sub:360d:crypto" not in data
 
 
 def test_stars_method_view_offers_buy_stars_link():

@@ -34,6 +34,10 @@ class Plan:
 PLANS: list[Plan] = [
     Plan(id="7d", days=7, label="7 дней", price_rub=299, price_stars=200, price_usdt=3.5),
     Plan(id="30d", days=30, label="30 дней", price_rub=999, price_stars=700, price_usdt=11.0),
+]
+# No longer sold (removed from the subscription screen 2026-09-25); kept resolvable in
+# PLANS_BY_ID so an invoice issued before removal still credits correctly.
+RETIRED_PLANS: list[Plan] = [
     Plan(id="360d", days=360, label="360 дней", price_rub=6990, price_stars=5000, price_usdt=78.0),
 ]
 
@@ -61,7 +65,7 @@ def opportunity_key(game: str, team_a: str, team_b: str, start_time_utc: str) ->
     match again today" so re-showing it never costs the user a free slot)."""
     return f"{game}:{team_a}:{team_b}:{start_time_utc}"
 
-PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in [*PLANS, TEST_PLAN]}
+PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in [*PLANS, *RETIRED_PLANS, TEST_PLAN]}
 
 # Referral program: 1 tier only (no sub-referrals), credited as a discount balance the
 # referrer can spend on their own future subscription purchases -- not a cash payout,

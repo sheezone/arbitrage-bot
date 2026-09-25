@@ -621,10 +621,7 @@ def register_api(
     # through the ЮKassa REST API (bot/core/payments.py), polled -- no webhook.
 
     def _plans_for(user: UserSettings) -> list[billing.Plan]:
-        plans = list(billing.PLANS)
-        if billing.is_admin(user, admin_chat_ids):
-            plans.append(billing.TEST_PLAN)
-        return plans
+        return list(billing.PLANS)
 
     @app.get("/api/subscription")
     async def get_subscription(authorization: str | None = Header(default=None)):

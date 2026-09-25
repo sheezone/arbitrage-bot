@@ -867,13 +867,13 @@ def _pay_app(tmp_path, monkeypatch, yk=None):
     return app, repo
 
 
-def test_subscription_lists_plans_and_admin_test_plan(tmp_path, monkeypatch):
+def test_subscription_lists_plans_without_year_or_test_plan(tmp_path, monkeypatch):
     app, _ = _pay_app(tmp_path, monkeypatch, _FakeYK())
     body = _run(_get(app, "/api/subscription", headers=_auth_header(1))).json()
-    assert [p["id"] for p in body["plans"]] == ["7d", "30d", "360d"]
+    assert [p["id"] for p in body["plans"]] == ["7d", "30d"]
     assert body["methods"]["sbp"] is True
     admin = _run(_get(app, "/api/subscription", headers=_auth_header(99))).json()
-    assert "test30" in [p["id"] for p in admin["plans"]]
+    assert "test30" not in [p["id"] for p in admin["plans"]]
 
 
 def test_sbp_pay_creates_payment_and_status_credits_once_paid(tmp_path, monkeypatch):
