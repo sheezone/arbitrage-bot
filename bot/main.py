@@ -17,6 +17,7 @@ from bot.db.repository import Repository
 from bot.handlers.commands import _main_menu_keyboard, register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.cryptobot import CryptoPayClient
+from bot.providers.yookassa_api import YooKassaClient
 from bot.providers.fonbet import FonbetProvider
 from bot.providers.leon import LeonProvider
 from bot.providers.marathon import MarathonProvider
@@ -97,6 +98,11 @@ async def main() -> None:
         if config.cryptobot_api_token and config.enable_crypto_payment
         else None
     )
+    yookassa_client = (
+        YooKassaClient(config.yookassa_shop_id, config.yookassa_secret_key)
+        if config.yookassa_shop_id and config.yookassa_secret_key
+        else None
+    )
 
     me = await _get_me_with_retries(bot)
 
@@ -109,6 +115,7 @@ async def main() -> None:
             bot_username=me.username or "",
             poll_interval_seconds=config.poll_interval_seconds,
             crypto_pay_client=crypto_pay_client,
+            yookassa_client=yookassa_client,
             webapp_url=config.webapp_url,
             required_channel_id=config.required_channel_id,
             required_channel_username=config.required_channel_username,
@@ -192,6 +199,8 @@ async def main() -> None:
         await surebet_finder.close()
         if crypto_pay_client is not None:
             await crypto_pay_client.close()
+        if yookassa_client is not None:
+            await yookassa_client.close()
         repo.close()
         await bot.session.close()
 

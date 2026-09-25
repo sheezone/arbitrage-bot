@@ -19,6 +19,8 @@ class Config:
     api_football_key: str
     surebet_api_token: str
     yookassa_provider_token: str
+    yookassa_shop_id: str
+    yookassa_secret_key: str
     cryptobot_api_token: str
     prodamus_form_url: str
     prodamus_secret_key: str
@@ -62,6 +64,10 @@ def load_config() -> Config:
         api_football_key=os.environ.get("API_FOOTBALL_KEY", ""),
         surebet_api_token=os.environ.get("SUREBET_API_TOKEN", SUREBET_DEFAULT_TEST_TOKEN),
         yookassa_provider_token=os.environ.get("YOOKASSA_PROVIDER_TOKEN", ""),
+        # ЮKassa REST API (shopId + secret key from Интеграция -> Ключи API) -- only
+        # needed for СБП; Telegram's native invoice (provider token above) is cards-only.
+        yookassa_shop_id=os.environ.get("YOOKASSA_SHOP_ID", ""),
+        yookassa_secret_key=os.environ.get("YOOKASSA_SECRET_KEY", ""),
         cryptobot_api_token=os.environ.get("CRYPTOBOT_API_TOKEN", ""),
         # Prodamus (payform.ru) СБП/card payment link. Both URL and secret must be set
         # for the "СБП" method to appear. npd_income_type turns on auto-fiscalization
