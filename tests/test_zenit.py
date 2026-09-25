@@ -36,7 +36,7 @@ def test_parses_total_market_for_football():
         },
         {"10": "Arsenal", "20": "Chelsea"},
     )
-    quotes = parse_line_dump("football", raw)
+    quotes = [q for q in parse_line_dump("football", raw) if q.market != "hcp"]  # totals only here
     assert len(quotes) == 2
     assert {q.market for q in quotes} == {"total_2.5"}
     assert {q.outcome_name for q in quotes} == {"Тотал больше 2.5", "Тотал меньше 2.5"}
@@ -66,7 +66,7 @@ def test_skips_event_missing_competitor_names():
         {"1001": {"sid": 1, "c1_id": 10, "c2_id": 999, "time": 0, "hd": _hd(), "f_l": _f_l(1.9, "2.5", 1.9)}},
         {"10": "A"},
     )
-    assert parse_line_dump("football", raw) == []
+    assert [q for q in parse_line_dump("football", raw) if q.market != "hcp"] == []
 
 
 def test_skips_event_without_total_market():
@@ -76,7 +76,7 @@ def test_skips_event_without_total_market():
         {"1001": {"sid": 1, "c1_id": 10, "c2_id": 20, "time": 0, "hd": hd_no_total, "f_l": f_l_no_total}},
         {"10": "A", "20": "B"},
     )
-    assert parse_line_dump("football", raw) == []
+    assert [q for q in parse_line_dump("football", raw) if q.market != "hcp"] == []
 
 
 def test_rejects_implausible_line():
@@ -84,7 +84,7 @@ def test_rejects_implausible_line():
         {"1001": {"sid": 1, "c1_id": 10, "c2_id": 20, "time": 0, "hd": _hd(), "f_l": _f_l(1.9, "23.5", 1.9)}},
         {"10": "A", "20": "B"},
     )
-    assert parse_line_dump("football", raw) == []
+    assert [q for q in parse_line_dump("football", raw) if q.market != "hcp"] == []
 
 
 def test_basketball_winner_taken_only_when_draw_unpriced():
@@ -100,8 +100,22 @@ def test_basketball_winner_taken_only_when_draw_unpriced():
             "11": {"sid": 3, "c1_id": 3, "c2_id": 4, "time": 1800000000, "hd": hd, "f_l": three_way},
         },
     }
-    quotes = parse_line_dump("basketball", raw)
+    quotes = [q for q in parse_line_dump("basketball", raw) if q.market == "winner"]
     assert [(q.team_a, q.outcome_name, q.odds, q.market) for q in quotes] == [
         ("A", "A", 1.27, "winner"),
         ("A", "B", 3.76, "winner"),
     ]
+
+
+def test_football_main_handicap_only_on_half_lines():
+    from bot.providers.zenit import parse_line_dump
+
+    hd = [{"n": n} for n in ["1", "Х", "2", "1Х", "12", "Х2", "Фора", "1", "Фора", "2", "М", "Тотал", "Б"]]
+    half = [{"h": 2.2}, {"h": 3.6}, {"h": 3.2}, {"h": 1.3}, {"h": 1.3}, {"h": 1.7}, {"h": "-1.5"}, {"h": 3.9}, {"h": "1.5"}, {"h": 1.25}, {"h": 1.8}, {"h": "2.5"}, {"h": 2.0}]
+    whole = half[:6] + [{"h": "0"}, {"h": 1.6}, {"h": "0"}, {"h": 2.3}] + half[10:]
+    raw = {"dict": {"cmd": {"1": "A", "2": "B", "3": "C", "4": "D"}}, "games": {
+        "1": {"sid": 1, "c1_id": 1, "c2_id": 2, "time": 1800000000, "hd": hd, "f_l": half},
+        "2": {"sid": 1, "c1_id": 3, "c2_id": 4, "time": 1800000000, "hd": hd, "f_l": whole},
+    }}
+    hcp = [(q.team_a, q.outcome_name, q.odds) for q in parse_line_dump("football", raw) if q.market == "hcp"]
+    assert hcp == [("A", "H1:-1.5", 3.9), ("A", "H2:1.5", 1.25)]

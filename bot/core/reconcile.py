@@ -29,6 +29,7 @@ for the same outcome (e.g. every source says "Тотал больше 2.5", not 
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -102,11 +103,49 @@ def group_quotes(quotes: list[SourceQuote]) -> list[list[SourceQuote]]:
     return [cluster_quotes for clusters in buckets.values() for _, cluster_quotes in clusters]
 
 
+# Handicap quotes arrive from providers as market=HANDICAP_MARKET with outcome_name
+# "H1:<h>" / "H2:<h>" -- the handicap <h> applied to that bookmaker's OWN team 1 or 2.
+# Two books can list the same match in opposite team order, so "Фора 1" at one book can be
+# "Фора 2" at another: comparing them raw would pair two bets on the SAME side and show a
+# fake arb. _normalise_handicap re-expresses every such quote relative to the cluster's
+# canonical team A (via the same straight-vs-crossed name similarity the clustering used),
+# giving market "handicap_<A's line>" and outcome labels "<team> (<line>)", so the two legs
+# of one real bet always land in the same sub-group and nothing else does.
+HANDICAP_MARKET = "hcp"
+
+
+def _fmt_line(x: float) -> str:
+    return f"{x:+g}"
+
+
+def _normalise_handicap(q: SourceQuote, canonical: tuple[str, str], names: tuple[str, str]) -> SourceQuote | None:
+    side, _, raw_line = q.outcome_name.partition(":")
+    try:
+        line = float(raw_line)
+    except ValueError:
+        return None
+    if side not in ("H1", "H2"):
+        return None
+    pair = (normalize_team(q.team_a), normalize_team(q.team_b))
+    straight = (_similarity(pair[0], canonical[0]) + _similarity(pair[1], canonical[1])) / 2
+    crossed = (_similarity(pair[0], canonical[1]) + _similarity(pair[1], canonical[0])) / 2
+    on_a = (side == "H1") == (straight >= crossed)
+    line_a = line if on_a else -line
+    label = f"{names[0]} ({_fmt_line(line_a)})" if on_a else f"{names[1]} ({_fmt_line(-line_a)})"
+    return dataclasses.replace(q, outcome_name=label, market=f"handicap_{_fmt_line(line_a)}")
+
+
 def split_by_market(group: list[SourceQuote]) -> dict[str, list[SourceQuote]]:
     """Split one match cluster into per-market sub-groups so arbitrage math never mixes
     quotes from two different bets on the same match (e.g. Total 2.5 vs Total 3.5)."""
+    names = (group[0].team_a, group[0].team_b)
+    canonical = (normalize_team(names[0]), normalize_team(names[1]))
     by_market: dict[str, list[SourceQuote]] = {}
     for q in group:
+        if q.market == HANDICAP_MARKET:
+            q = _normalise_handicap(q, canonical, names)
+            if q is None:
+                continue
         by_market.setdefault(q.market, []).append(q)
     return by_market
 

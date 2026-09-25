@@ -55,6 +55,9 @@ SPORT_IDS = {
 # only when the draw column ("Х") has no price, i.e. the market really is two-way.
 TOTALS_GAMES = frozenset({"football", "hockey"})
 WINNER_GAMES = frozenset({"basketball", "tennis"})
+# Handicap only where both books mean the same thing by it: football (goals, 90 min)
+# and basketball (points). Not hockey (OT in/out varies) or tennis (sets vs games).
+HANDICAP_GAMES = frozenset({"football", "basketball"})
 
 TOTAL_LABEL = "Тотал"
 UNDER_LABEL = "М"
@@ -108,6 +111,8 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
 
         hd, f_l = event.get("hd") or [], event.get("f_l") or []
         start_time_utc = _unix_to_iso(event.get("time"))
+        if game in HANDICAP_GAMES:
+            quotes.extend(_handicap_quotes(game, team_a, team_b, start_time_utc, hd, f_l))
         if game in WINNER_GAMES:
             quotes.extend(_winner_quotes(game, team_a, team_b, start_time_utc, hd, f_l))
             continue
@@ -158,6 +163,27 @@ def _winner_quotes(game, team_a, team_b, start_time_utc, hd, f_l) -> list[Source
         SourceQuote(game, team_a, team_b, start_time_utc, "zenit", team_a, odds_a),
         SourceQuote(game, team_a, team_b, start_time_utc, "zenit", team_b, odds_b),
     ]
+
+
+def _handicap_quotes(game, team_a, team_b, start_time_utc, hd, f_l) -> list[SourceQuote]:
+    """Columns "Фора","1","Фора","2": team 1's line, its odds, team 2's line, its odds.
+    Only half lines (x.5) -- no push, so the two sides cover every result."""
+    labels = [h.get("n") for h in hd]
+    for i in range(len(labels) - 3):
+        if labels[i:i + 4] != ["Фора", "1", "Фора", "2"] or i + 3 >= len(f_l):
+            continue
+        try:
+            h1, o1 = float(f_l[i].get("h")), float(f_l[i + 1].get("h"))
+            h2, o2 = float(f_l[i + 2].get("h")), float(f_l[i + 3].get("h"))
+        except (TypeError, ValueError):
+            return []
+        if h1 != -h2 or (abs(h1) * 2) % 2 != 1 or o1 <= 1.0 or o2 <= 1.0:
+            return []
+        return [
+            SourceQuote(game, team_a, team_b, start_time_utc, "zenit", f"H1:{h1}", o1, "hcp"),
+            SourceQuote(game, team_a, team_b, start_time_utc, "zenit", f"H2:{h2}", o2, "hcp"),
+        ]
+    return []
 
 
 def _unix_to_iso(ts) -> str:

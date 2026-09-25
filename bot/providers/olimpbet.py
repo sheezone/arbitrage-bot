@@ -75,6 +75,10 @@ WINNER_GAMES = frozenset({"tennis", "basketball", "cs2", "dota2", "lol", "valora
 # are used: other books each show only their own main line, and those often differ
 # (2.5 vs 3), so the ladder is what lets Olimp line up with whatever line they chose.
 GOALS_TOTAL_GROUP_NAMES = frozenset({"Доп. Тотал", "Доп. тотал"})
+# Whole-match handicap (marketId 4): main line + ladder. Football and basketball only --
+# see zenit.py's HANDICAP_GAMES for why not hockey/tennis.
+HANDICAP_GAMES = frozenset({"football", "basketball"})
+WHOLE_MATCH_HANDICAP_MARKET_ID = 4
 
 MAIN_TOTAL_GROUP_POSITION = 7
 STAT_PROP_TEAM_PREFIX = "УГЛ"  # corner-count (and similar) prop "matches", not real ones
@@ -138,11 +142,13 @@ def _parse_event(game: str, event: dict) -> list[SourceQuote]:
     if game in RESULT_MARKET_GAMES:
         return _parse_result_market(game, team_a, team_b, start_time_utc, outcomes)
 
+    extra = _parse_handicaps(game, team_a, team_b, start_time_utc, outcomes) if game in HANDICAP_GAMES else []
+
     if game in WINNER_GAMES:
-        return _parse_winner(game, team_a, team_b, start_time_utc, outcomes)
+        return _parse_winner(game, team_a, team_b, start_time_utc, outcomes) + extra
 
     if game in GOALS_TOTAL_GAMES:
-        return _parse_total_ladder(game, team_a, team_b, start_time_utc, outcomes)
+        return _parse_total_ladder(game, team_a, team_b, start_time_utc, outcomes) + extra
     else:
         # boxing/MMA: no fixed groupPosition for the (usually singular) total-rounds line
         # -- see module docstring -- so scan every TOTAL outcome and group by line instead.
@@ -156,6 +162,31 @@ def _parse_event(game: str, event: dict) -> list[SourceQuote]:
         SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал больше {line}", over_odds, market),
         SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"Тотал меньше {line}", under_odds, market),
     ]
+
+
+def _parse_handicaps(game: str, team_a: str, team_b: str, start_time_utc: str, outcomes: list[dict]) -> list[SourceQuote]:
+    side1: dict[float, float] = {}
+    side2: dict[float, float] = {}
+    for o in outcomes:
+        if o.get("tableType") != "HANDICAP" or o.get("marketId") != WHOLE_MATCH_HANDICAP_MARKET_ID:
+            continue
+        short = o.get("shortName") or ""
+        try:
+            line, price = float(o.get("param")), float(o.get("probability"))
+        except (TypeError, ValueError):
+            continue
+        if "Ф1" in short or short == "Фора 1":
+            side1.setdefault(line, price)
+        elif "Ф2" in short or short == "Фора 2":
+            side2.setdefault(line, price)
+    quotes: list[SourceQuote] = []
+    for h1, o1 in side1.items():
+        o2 = side2.get(-h1)
+        if o2 is None or (abs(h1) * 2) % 2 != 1 or o1 <= 1.0 or o2 <= 1.0:
+            continue  # only half lines (no push) with both sides priced
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"H1:{h1}", o1, "hcp"))
+        quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "olimpbet", f"H2:{-h1}", o2, "hcp"))
+    return quotes
 
 
 def _parse_winner(game: str, team_a: str, team_b: str, start_time_utc: str, outcomes: list[dict]) -> list[SourceQuote]:
