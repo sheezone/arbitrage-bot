@@ -50,6 +50,41 @@ def tg_emoji(pair: tuple[str, str]) -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 
+# "Vector Icons" custom emoji pack (t.me/addemoji/vector_icons_by_fStikBot) -- IDs pulled
+# via getStickerSet. Monochrome and needs_repainting=True, so they take the text colour
+# and look the same in light and dark themes. Text/captions only (not button labels).
+VI = {
+    "diamond": ("5264892613630111886", "💎"),
+    "swords": ("5453991094435997597", "⚔️"),
+    "hourglass": ("5258113901106580375", "⌛"),
+    "top": ("5246794802560774143", "🔝"),
+    "coin": ("5237761614458933049", "🪙"),
+    "exchange": ("5258296359907249075", "💱"),
+    "warning": ("5220197908342648622", "❗"),
+    "search": ("5258274739041883702", "🔍"),
+    "cart": ("5258024802010026053", "🛒"),
+    "case": ("5246942081284320100", "💼"),
+    "lightning": ("5219943216781995020", "⚡"),
+    "check": ("5219899949281453881", "✅"),
+    "green": ("5339135753316222622", "🟢"),
+    "fire": ("5222148368955877900", "🔥"),
+    # Colour icons from the "Topics" pack (t.me/addemoji/Topics).
+    "money_bag": ("5350452584119279096", "💰"),
+    "check_color": ("5237699328843200968", "✅"),
+    "football": ("5375159220280762629", "⚽️"),
+    "basketball": ("5384327463629233871", "🏀"),
+}
+
+
+def game_icon(game: str) -> str:
+    """Animated/colour icon for the sports the packs cover, plain emoji otherwise."""
+    return vi(game) if game in ("football", "basketball") else GAME_EMOJI.get(game, "🏆")
+
+
+def vi(name: str) -> str:
+    return tg_emoji(VI[name])
+
+
 GAME_EMOJI = {
     "cs2": "🔫",
     "dota2": "🎮",
@@ -203,25 +238,25 @@ def format_stakes_lines(stakes: dict) -> list[str]:
 def _format_message(
     game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "", bankroll: float | None = None
 ) -> str:
-    emoji = GAME_EMOJI.get(game, "🏆")
+    emoji = game_icon(game)
     lines = [
-        f"💰 {emoji} <b>Найдена вилка</b> ({game.upper()})",
-        f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
+        f"{vi('money_bag')} {emoji} <b>Найдена вилка</b> ({game.upper()})",
+        f"{vi('swords')} <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
-        lines.append(f"🕒 {match_time}")
-    lines.append(f"🚀 Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
+        lines.append(f"{vi('hourglass')} {match_time}")
+    lines.append(f"{vi('top')} Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
     if bankroll is not None:
         # Model figure for the given bankroll if the shown odds hold and both bets are
         # accepted -- not a promised payout (the disclaimer line below spells that out).
         profit_amount = bankroll * arb.profit_pct / 100
-        lines.append(f"💸 Расчётный результат: <b>{format_amount(profit_amount)}</b>")
+        lines.append(f"{vi('coin')} Расчётный результат: <b>{format_amount(profit_amount)}</b>")
     lines.append("")
     lines.append("<blockquote>" + "\n".join(format_odds_lines(arb.best_odds)) + "</blockquote>")
     lines.append("")
     lines.append(
-        "⚠️ Расчёт по текущим коэффициентам, не гарантия. Котировки могут измениться, "
+        f"{vi('warning')} Расчёт по текущим коэффициентам, не гарантия. Котировки могут измениться, "
         "БК может не принять ставку. 18+. Ставки — самостоятельно у лицензированных БК."
     )
     return "\n".join(lines)
@@ -230,15 +265,15 @@ def _format_message(
 def _format_showcase_message(
     game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str, start_time_utc: str = ""
 ) -> str:
-    emoji = GAME_EMOJI.get(game, "🏆")
+    emoji = game_icon(game)
     lines = [
-        f"💰 {emoji} <b>Вилка</b> ({game.upper()})",
-        f"⚔️ <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
+        f"{vi('money_bag')} {emoji} <b>Вилка</b> ({game.upper()})",
+        f"{vi('swords')} <b>{html.escape(team_a)}</b> vs <b>{html.escape(team_b)}</b>",
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
-        lines.append(f"🕒 {match_time}")
-    lines.append(f"🚀 Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
+        lines.append(f"{vi('hourglass')} {match_time}")
+    lines.append(f"{vi('top')} Расчётная разница: <b>{arb.profit_pct:.2f}%</b>")
     lines.append("")
     lines.append("Букмекеры и коэффициенты — в боте по подписке.")
     if bot_username:
@@ -376,7 +411,7 @@ async def _notify_group(
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
         message = _format_message(game, team_a, team_b, arb, start_time_utc, user.bankroll)
-        message += f"\n\n💵 Ставки при банкролле <b>{user.bankroll:.2f}</b>:\n"
+        message += f"\n\n{vi('exchange')} Ставки при банкролле <b>{user.bankroll:.2f}</b>:\n"
         message += "<blockquote>" + "\n".join(format_stakes_lines(stakes)) + "</blockquote>"
 
         try:

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import re
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -50,6 +51,8 @@ from bot.core.subscription import CHECK_CHANNEL_SUB_CALLBACK, gate_view, is_subs
 from bot.core.monitor import (
     BOOKMAKER_URLS,
     GAME_EMOJI,
+    vi,
+    game_icon,
     format_amount,
     format_match_start,
     format_odds_lines,
@@ -267,7 +270,7 @@ def _dashboard_view(
         remaining = daily_vilki_remaining if daily_vilki_remaining is not None else billing.FREE_DAILY_VILKI_LIMIT
         if lang == "tg":
             text = (
-                "🎰 <b>БОТИ АРБИТРАЖӢ</b>\n"
+                f"{vi('fire')} <b>БОТИ АРБИТРАЖӢ</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ Давраи озмоишӣ ба охир расид.\n"
                 f"Ба таври ройгон боқӣ мондааст: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b> "
@@ -277,7 +280,7 @@ def _dashboard_view(
             )
         elif lang == "en":
             text = (
-                "🎰 <b>ARBITRAGE BOT</b>\n"
+                f"{vi('fire')} <b>ARBITRAGE BOT</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ Your trial period is over.\n"
                 f"Free vilki left today: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b>.\n"
@@ -286,7 +289,7 @@ def _dashboard_view(
             )
         else:
             text = (
-                "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n"
+                f"{vi('fire')} <b>АРБИТРАЖНЫЙ БОТ</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ Пробный период закончился.\n"
                 f"Бесплатно осталось сегодня: <b>{remaining}/{billing.FREE_DAILY_VILKI_LIMIT}</b> вилок.\n"
@@ -307,7 +310,7 @@ def _dashboard_view(
                 else f"💳 Subscription active · {left} day(s) left"
             )
         text = (
-            "🎰 <b>ARBITRAGE BOT</b>\n\n"
+            f"{vi('fire')} <b>ARBITRAGE BOT</b>\n\n"
             f"{status}  ·  {access_line}\n\n"
             f"Settings — «{profile_btn}» below\n"
             "⬇️ Controls — the buttons below"
@@ -326,14 +329,14 @@ def _dashboard_view(
                 else f"💳 Обуна фаъол · {left} рӯз монд"
             )
         text = (
-            "🎰 <b>БОТИ АРБИТРАЖӢ</b>\n\n"
+            f"{vi('fire')} <b>БОТИ АРБИТРАЖӢ</b>\n\n"
             f"{status}  ·  {access_line}\n\n"
             f"Танзимот — «{profile_btn}» дар поён\n"
             "⬇️ Идоракунӣ — тугмаҳои поён"
         )
         return text, None
 
-    status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
+    status = f"{vi('green')} Активен" if user.is_active else "⏸️ На паузе"
     if billing.is_admin(user, admin_chat_ids):
         access_line = "♾️ Безлимитный доступ"
     else:
@@ -345,7 +348,7 @@ def _dashboard_view(
         )
 
     text = (
-        "🎰 <b>АРБИТРАЖНЫЙ БОТ</b>\n\n"
+        f"{vi('fire')} <b>АРБИТРАЖНЫЙ БОТ</b>\n\n"
         f"{status}  ·  {access_line}\n\n"
         f"Настройки — «{profile_btn}» снизу\n"
         "⬇️ Управление — кнопками снизу"
@@ -361,7 +364,7 @@ def _back_keyboard(extra: list[InlineKeyboardButton] | None = None, target: str 
 
 def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset()) -> View:
     now = datetime.now(timezone.utc)
-    status = "🟢 Активен" if user.is_active else "⏸️ На паузе"
+    status = f"{vi('green')} Активен" if user.is_active else "⏸️ На паузе"
     if user.is_active and user.muted:
         status += " (🔕 без звука)"
     pause_label = "⏸️ Поставить на паузу" if user.is_active else "▶️ Возобновить"
@@ -378,7 +381,7 @@ def _profile_view(user: UserSettings, admin_chat_ids: frozenset[int] = frozenset
             else "Доступ истёк"
         )
 
-    text = f"👤 <b>МОЙ ПРОФИЛЬ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nСтатус: {status}\n{access_line}"
+    text = f"{vi('case')} <b>МОЙ ПРОФИЛЬ</b>\n━━━━━━━━━━━━━━━━━━━━\n\nСтатус: {status}\n{access_line}"
     rows = [
         [_btn(pause_label, NAV_TOGGLE_ACTIVE), _btn(mute_label, NAV_TOGGLE_MUTED)],
         [_btn("💳 Подписка", NAV_SUBSCRIPTION)],
@@ -651,7 +654,7 @@ def _subscription_view(
     see _subscription_method_view) rather than one screen listing every plan x every
     method at once, which got cramped once crypto joined Stars/card."""
     status = _subscription_status_line(user, admin_chat_ids)
-    text = f"💳 <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите способ оплаты:"
+    text = f"{vi('cart')} <b>ПОДПИСКА</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{status}\n\nВыберите способ оплаты:"
     rows = [[_btn("⭐ Telegram Stars", f"{NAV_SUB_METHOD_PREFIX}stars")]]
     if yk_sbp_enabled:
         rows.append([_btn("⚡ СБП", f"{NAV_SUB_METHOD_PREFIX}yksbp")])
@@ -823,6 +826,14 @@ def _settings_view() -> View:
 _SEARCH_TEXT_BUDGET = 3500
 
 
+def _visible_len(text: str) -> int:
+    """Length Telegram counts against its message/caption limits -- after entity
+    parsing, so HTML tags (<b>, <blockquote>, <tg-emoji ...>) don't count. Measuring
+    the raw markup instead made custom-emoji-heavy screens drop vilki / fall back from
+    photo to text for no reason."""
+    return len(html.unescape(re.sub(r"<[^>]+>", "", text)))
+
+
 def _next_update_note(latest_state: LatestState, poll_interval_seconds: int) -> str:
     """A rough estimate, not a promise -- a cycle that triggers the high-profit recheck
     (see monitor.py) or hits a slow source can run well past poll_interval_seconds, so this
@@ -840,7 +851,7 @@ def _search_view(
     admin_chat_ids: frozenset[int] = frozenset(),
 ) -> View:
     if latest_state.updated_at == 0:
-        text = "🔍 <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
+        text = f"{vi('search')} <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n⏳ Ещё идёт первая проверка, попробуйте через полминуты."
         return text, _search_keyboard()
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
@@ -870,7 +881,7 @@ def _search_view(
                 hit_daily_limit = True
         matches = allowed
 
-    header = ["🔍 <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    header = [f"{vi('search')} <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not matches:
         if hit_daily_limit:
             header.append(
@@ -887,32 +898,32 @@ def _search_view(
     blocks = []
     for m in matches:
         stakes = calc_stakes(user.bankroll, m.arb.best_odds)
-        emoji = GAME_EMOJI.get(m.game, "🏆")
+        emoji = game_icon(m.game)
         block = [
             f"{emoji} <b>{GAME_LABELS.get(m.game, m.game.upper())}</b>",
-            f"⚔️ <b>{html.escape(m.team_a)}</b> vs <b>{html.escape(m.team_b)}</b>",
+            f"{vi('swords')} <b>{html.escape(m.team_a)}</b> vs <b>{html.escape(m.team_b)}</b>",
         ]
         match_time = format_match_start(m.start_time_utc)
         if match_time:
-            block.append(f"🕒 {match_time}")
-        block.append(f"🚀 Расчётная разница: <b>{m.arb.profit_pct:.2f}%</b>")
+            block.append(f"{vi('hourglass')} {match_time}")
+        block.append(f"{vi('top')} Расчётная разница: <b>{m.arb.profit_pct:.2f}%</b>")
         profit_amount = user.bankroll * m.arb.profit_pct / 100
-        block.append(f"💸 Расчётный результат: <b>{format_amount(profit_amount)}</b>")
+        block.append(f"{vi('coin')} Расчётный результат: <b>{format_amount(profit_amount)}</b>")
         block.append("")
         quote_lines = format_odds_lines(m.arb.best_odds) + ["", "💵 <b>Ставки:</b>"] + format_stakes_lines(stakes)
         block.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
-        block.append("⚠️ Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.")
+        block.append(f"{vi('warning')} Коэффициенты и % прибыли могут измениться у букмекера — проверяйте перед ставкой.")
         block.append("")
         blocks.append("\n".join(block))
 
     lines = list(header)
     shown = 0
-    budget = _SEARCH_TEXT_BUDGET - sum(len(b) for b in header)
+    budget = _SEARCH_TEXT_BUDGET - sum(_visible_len(b) for b in header)
     for block in blocks:
-        if shown > 0 and len(block) > budget:
+        if shown > 0 and _visible_len(block) > budget:
             break
         lines.append(block)
-        budget -= len(block)
+        budget -= _visible_len(block)
         shown += 1
 
     if shown < len(matches):
@@ -986,7 +997,7 @@ async def _render(
     screen's listing can blow well past that once several matches are found, so a
     caption too long for the banner silently falls back to a plain text render rather
     than raising and leaving the screen stuck."""
-    if photo_path is not None and len(text) > 1024:
+    if photo_path is not None and _visible_len(text) > 1024:
         photo_path = None
     _LAST_VIEW[chat_id] = (text, keyboard, photo_path)
     if message_id:
@@ -1689,7 +1700,7 @@ def register_handlers(
             user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids, sbp_enabled,
             yk_sbp_enabled=yookassa_client is not None,
         )
-        text = "✅ <b>Оплата получена, подписка продлена!</b>\n\n" + text
+        text = f"{vi('check_color')} <b>Оплата получена, подписка продлена!</b>\n\n" + text
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SUBSCRIPTION_PATH,
@@ -1724,7 +1735,7 @@ def register_handlers(
             return
 
         text = (
-            "⚡ <b>ОПЛАТА ПО СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{vi('lightning')} <b>ОПЛАТА ПО СБП</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Тариф: <b>{plan.label}</b>\nСумма: <b>{discounted:.0f} ₽</b>\n\n"
             "Нажмите «Оплатить», выберите свой банк и подтвердите платёж в приложении. "
             "Подписка продлится автоматически в течение минуты. "
@@ -1767,7 +1778,7 @@ def register_handlers(
             user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids, sbp_enabled,
             yk_sbp_enabled=True,
         )
-        text = "✅ <b>Оплата получена, подписка продлена!</b>\n\n" + text
+        text = f"{vi('check_color')} <b>Оплата получена, подписка продлена!</b>\n\n" + text
         await _render(
             bot, repo, chat_id, callback.message.message_id, text, keyboard, photo_path=BANNER_SUBSCRIPTION_PATH
         )
@@ -1823,7 +1834,7 @@ def register_handlers(
             user, bool(yookassa_provider_token), crypto_pay_client is not None, admin_chat_ids, sbp_enabled,
             yk_sbp_enabled=yookassa_client is not None,
         )
-        text = "✅ <b>Оплата получена, подписка продлена!</b>\n\n" + text
+        text = f"{vi('check_color')} <b>Оплата получена, подписка продлена!</b>\n\n" + text
         await _render(
             bot, repo, callback.message.chat.id, callback.message.message_id, text, keyboard,
             photo_path=BANNER_SUBSCRIPTION_PATH,

@@ -111,14 +111,18 @@ def test_tg_emoji_renders_the_expected_html_tag():
     assert tg_emoji(EMOJI_ALERT) == '<tg-emoji emoji-id="5440660757194744323">🚨</tg-emoji>'
 
 
-def test_format_message_still_uses_plain_emoji_not_yet_reintroduced_animated_ones():
-    """Animated emoji were reverted live 2026-08-28 (ENTITY_TEXT_INVALID broke the search
-    screen) -- this guards against silently reintroducing a broken tg-emoji tag into
-    _format_message without it being a deliberate, tested change."""
+def test_format_message_uses_single_glyph_vector_icons():
+    """Custom emoji came back deliberately (Vector Icons pack). The 2026-08-28
+    ENTITY_TEXT_INVALID outage was a multi-glyph fallback -- guard that every VI entry
+    falls back to exactly one emoji (one grapheme, optional FE0F)."""
+    from bot.core.monitor import VI
+
     arb = ArbitrageResult(best_odds=_BEST_ODDS, arb_ratio=0.95, profit_pct=5.0)
     text = _format_message("football", "Team A", "Team B", arb)
-    assert "<tg-emoji" not in text
-    assert "🚀 Расчётная разница" in text
+    assert "<tg-emoji" in text and "Расчётная разница" in text
+    for emoji_id, fallback in VI.values():
+        assert emoji_id.isdigit()
+        assert len(fallback.replace("️", "")) == 1, fallback
 
 
 def _snapshot(odds_a: float, odds_b: float) -> MatchSnapshot:
