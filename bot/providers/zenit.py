@@ -49,12 +49,23 @@ SPORT_IDS = {
     "hockey": 2,
     "basketball": 3,
     "tennis": 6,
+    # All esports share sport 7 ("Киберспорт"); the game is the league-name prefix.
+    "cs2": 7,
+    "dota2": 7,
+    "lol": 7,
+    "valorant": 7,
+}
+ESPORTS_LEAGUE_PREFIXES = {
+    "cs2": ("CS2.", "CS 2.", "CS:GO."),
+    "dota2": ("Dota 2.",),
+    "lol": ("League of Legends.",),
+    "valorant": ("Valorant.",),
 }
 # Football/hockey: the match-winner market has a draw, so only the Total is used (same
 # rule as every other provider here). Basketball/tennis: match winner ("1"/"2"), taken
 # only when the draw column ("Х") has no price, i.e. the market really is two-way.
 TOTALS_GAMES = frozenset({"football", "hockey"})
-WINNER_GAMES = frozenset({"basketball", "tennis"})
+WINNER_GAMES = frozenset({"basketball", "tennis", "cs2", "dota2", "lol", "valorant"})
 # Handicap only where both books mean the same thing by it: football (goals, 90 min)
 # and basketball (points). Not hockey (OT in/out varies) or tennis (sets vs games).
 HANDICAP_GAMES = frozenset({"football", "basketball"})
@@ -78,7 +89,7 @@ class ZenitProvider(OddsProvider):
         if not wanted:
             return []
 
-        sport = "-".join(str(SPORT_IDS[g]) for g in wanted)
+        sport = "-".join(sorted({str(SPORT_IDS[g]) for g in wanted}))
         resp = await self._client.get(LINE_PATH, params={**LINE_PARAMS, "sport": sport})
         resp.raise_for_status()
         raw = resp.json()
@@ -98,11 +109,17 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
         return []
 
     competitor_names = raw.get("dict", {}).get("cmd", {})
+    league_names = raw.get("dict", {}).get("league", {})
+    prefixes = ESPORTS_LEAGUE_PREFIXES.get(game)
     quotes: list[SourceQuote] = []
 
     for event in raw.get("games", {}).values():
         if event.get("sid") != sport_id:
             continue
+        if prefixes is not None:
+            league = league_names.get(str(event.get("lid"))) or ""
+            if not league.startswith(prefixes):
+                continue
 
         team_a = competitor_names.get(str(event.get("c1_id")))
         team_b = competitor_names.get(str(event.get("c2_id")))

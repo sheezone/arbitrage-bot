@@ -119,3 +119,24 @@ def test_football_main_handicap_only_on_half_lines():
     }}
     hcp = [(q.team_a, q.outcome_name, q.odds) for q in parse_line_dump("football", raw) if q.market == "hcp"]
     assert hcp == [("A", "H1:-1.5", 3.9), ("A", "H2:1.5", 1.25)]
+
+
+def test_esports_split_by_league_prefix_and_outrights_skipped():
+    hd = [{"n": n} for n in ["1", "Х", "2"]]
+    f_l = [{"h": 1.5}, {}, {"h": 2.5}]
+    raw = {
+        "dict": {
+            "cmd": {"1": "Spirit", "2": "Navi", "3": "T1", "4": "G2", "5": "X", "6": "Y"},
+            "league": {"100": "CS2. ESL Pro League", "200": "League of Legends. LCK", "300": "Итоги. CS2. Major. Победитель"},
+        },
+        "games": {
+            "1": {"sid": 7, "lid": 100, "c1_id": 1, "c2_id": 2, "time": 1800000000, "hd": hd, "f_l": f_l},
+            "2": {"sid": 7, "lid": 200, "c1_id": 3, "c2_id": 4, "time": 1800000000, "hd": hd, "f_l": f_l},
+            "3": {"sid": 7, "lid": 300, "c1_id": 5, "c2_id": 6, "time": 1800000000, "hd": hd, "f_l": f_l},
+        },
+    }
+    assert [(q.team_a, q.outcome_name, q.odds) for q in parse_line_dump("cs2", raw)] == [
+        ("Spirit", "Spirit", 1.5), ("Spirit", "Navi", 2.5),
+    ]
+    assert {q.team_a for q in parse_line_dump("lol", raw)} == {"T1"}
+    assert parse_line_dump("dota2", raw) == []
