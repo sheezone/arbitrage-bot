@@ -579,7 +579,11 @@ def _horizon_view(user: UserSettings) -> View:
 
 NAV_BOOKMAKERS = "nav:bookmakers"
 NAV_NOOP = "nav:noop"
-_ALL_BOOKMAKER_KEYS = sorted(BOOKMAKER_URLS.keys())
+# Hidden from the "Мои букмекеры" picker: no working source right now (both sit behind
+# anti-bot walls -- Leon's JS challenge, Лига Ставок's QRATOR 401 -- checked 2026-09-26),
+# so offering them as a filter would only promise vilki that can never arrive.
+_UNAVAILABLE_BOOKMAKERS = frozenset({"leon", "ligastavok"})
+_ALL_BOOKMAKER_KEYS = sorted(k for k in BOOKMAKER_URLS if k not in _UNAVAILABLE_BOOKMAKERS)
 
 # Grouped for the toggle screen only (BOOKMAKER_URLS/user_allows_arb stay flat) -- direct
 # sources are scraped/reached by this codebase's own provider modules, the rest only ever
