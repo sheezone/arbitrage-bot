@@ -138,7 +138,8 @@ def test_bookmakers_endpoint_lists_categories(setup):
     assert resp.status_code == 200
     body = resp.json()
     assert any(b["key"] == "fonbet" and b["category"] == "direct" for b in body["bookmakers"])
-    assert any(b["key"] == "winline" and b["category"] == "aggregator" for b in body["bookmakers"])
+    assert any(b["key"] == "winline" and b["category"] == "direct" for b in body["bookmakers"])
+    assert any(b["key"] == "betboom" and b["category"] == "aggregator" for b in body["bookmakers"])
 
 
 def test_stats_endpoint_returns_zeroed_stats_when_empty(setup):
