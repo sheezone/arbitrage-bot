@@ -28,6 +28,7 @@ from bot.providers.pari import PariProvider
 from bot.providers.surebet import SurebetFinder
 from bot.providers.the_odds_api import TheOddsApiProvider
 from bot.providers.betcity import BetcityProvider
+from bot.providers.winline import WinlineProvider
 from bot.providers.zenit import ZenitProvider
 from bot.webapp.api import register_api
 
@@ -79,6 +80,7 @@ async def main() -> None:
         BaltbetProvider(),
         ZenitProvider(),
         BetcityProvider(),
+        WinlineProvider(),
         LeonProvider(),
         OlimpBetProvider(),
     ]
