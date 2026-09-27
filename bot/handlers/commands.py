@@ -1014,6 +1014,7 @@ async def _render(
     keyboard,
     *,
     photo_path: Path | None = None,
+    fresh: bool = False,
 ) -> None:
     """Edit the tracked menu message in place; only send a new one if editing is
     impossible (first run, message type mismatch between photo/text, or the old
@@ -1026,6 +1027,14 @@ async def _render(
     screen's listing can blow well past that once several matches are found, so a
     caption too long for the banner silently falls back to a plain text render rather
     than raising and leaving the screen stuck."""
+    if fresh and message_id:
+        # Bottom-keyboard taps: the panel must show up at the bottom of the chat, and
+        # exactly once -- delete the old panel (wherever it scrolled to) and send anew.
+        try:
+            await bot.delete_message(chat_id, message_id)
+        except Exception:
+            pass
+        message_id = None
     if photo_path is not None and _visible_len(text) > 1024:
         photo_path = None
     _LAST_VIEW[chat_id] = (text, keyboard, photo_path)
@@ -1272,7 +1281,7 @@ def register_handlers(
         user = repo.get_user(message.chat.id)
         await _maybe_reattach_keyboard(bot, repo, user)
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH, fresh=True)
 
     @router.message(F.text == LANG_BUTTON_TEXT)
     async def on_open_language_menu(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -1335,7 +1344,7 @@ def register_handlers(
         await _maybe_reattach_keyboard(bot, repo, user)
         text, keyboard = _profile_view(user, admin_chat_ids)
         try:
-            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=_status_banner(user))
+            await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=_status_banner(user), fresh=True)
         except Exception:
             # _render already falls back to delete+resend on a Telegram-side edit
             # failure -- this is the next layer down, for anything else (a network
@@ -1951,7 +1960,7 @@ def register_handlers(
         await state.clear()
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH, fresh=True)
 
     @router.message(Settings.waiting_threshold)
     async def on_threshold_value(message: Message, state: FSMContext, bot: Bot) -> None:
@@ -1979,7 +1988,7 @@ def register_handlers(
         await state.clear()
         user = repo.get_user(message.chat.id)
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH, fresh=True)
 
     @router.message(Settings.waiting_calc_bankroll)
     async def on_calc_bankroll_value(message: Message, state: FSMContext, bot: Bot) -> None:
