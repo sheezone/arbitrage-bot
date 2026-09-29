@@ -3,11 +3,13 @@
 Every ~70 minutes between NEWS_DAY_START and NEWS_DAY_END (Moscow time), up to
 posts_per_day times a day, it:
   1. gathers fresh football items from RSS feeds (championat, sports.ru, sport-express,
-     soccer.ru) and the public web preview of a Telegram news channel (t.me/s/...);
+     soccer.ru) and the public web previews of Telegram news channels (t.me/s/...);
   2. asks Claude to pick the single most interesting/hype item that isn't a repeat of
      anything posted recently;
-  3. opens that article (og:image + article text) and asks Claude to write an original
-     post in the channel's own words, strictly from the facts in the source;
+  3. asks Claude to write an original post in the channel's own words, strictly from
+     the item's text plus other outlets' takes on the same story. The article pages
+     themselves are not fetched: championat, sport-express and soccer.ru sit behind
+     "are you a robot" checks (checked 2026-09-29, not bypassed);
   4. publishes it as a photo post (the source article's photo, chosen by the owner
      2026-09-29) with a footer linking the channel and the bot.
 
@@ -50,7 +52,8 @@ RSS_FEEDS = {
     "Спорт-Экспресс": "https://www.sport-express.ru/services/materials/news/football/se/",
     "Soccer.ru": "https://www.soccer.ru/rss.xml",
 }
-TELEGRAM_CHANNELS = ("goalmasterlive",)
+# Public channels readable via the t.me/s/ web preview: full post text + photo.
+TELEGRAM_CHANNELS = ("goalmasterlive", "sportsru", "championat", "sportexpress")
 
 PICK_SCHEMA = {
     "type": "object",
@@ -76,7 +79,8 @@ PICK_SYSTEM = """Ты — главный редактор популярного
 трансферы и слухи о топ-клубах и звёздах, скандалы, заявления тренеров и игроков,
 яркие результаты и рекорды, сборная России и РПЛ, необычные истории. Не бери скучные
 технические новости, анонсы трансляций, ставки и прогнозы, а также всё, что по сути
-повторяет недавно опубликованное (список дан). Если достойных нет — верни index = -1."""
+повторяет недавно опубликованное (список дан). Только футбол — другие виды спорта
+не бери. Если достойных нет — верни index = -1."""
 
 WRITE_SYSTEM = """Ты пишешь посты для русскоязычного Telegram-канала о футболе. Стиль —
 живой, короткий, цепляющий, как у топовых футбольных каналов.
@@ -130,7 +134,7 @@ def parse_rss(source: str, xml_text: str) -> list[NewsItem]:
         enclosure = it.find("enclosure")
         if enclosure is not None and (enclosure.get("type") or "").startswith("image"):
             image = enclosure.get("url")
-        items.append(NewsItem(source, link, title, _clean(it.findtext("description") or "")[:300], published, image))
+        items.append(NewsItem(source, link, title, _clean(it.findtext("description") or "")[:1500], published, image))
     return items
 
 
@@ -150,7 +154,9 @@ def parse_telegram_preview(channel: str, page: str) -> list[NewsItem]:
             published = datetime.fromisoformat(time_el["datetime"])
         except ValueError:
             continue
-        items.append(NewsItem(f"t.me/{channel}", f"https://t.me/{post}", text.split("\n")[0][:200],
+        # first line with real words -- channels often open with a lone emoji/flag line
+        lines = [ln.strip() for ln in text.split("\n") if len(ln.strip().split()) >= 3]
+        items.append(NewsItem(f"t.me/{channel}", f"https://t.me/{post}", (lines[0] if lines else text)[:200],
                               text[:1500], published, m.group(1) if m else None))
     return items
 
@@ -177,18 +183,15 @@ async def gather_items(client: httpx.AsyncClient) -> list[NewsItem]:
     return [i for batch in results for i in batch if now - i.published <= MAX_ITEM_AGE]
 
 
-async def fetch_article(client: httpx.AsyncClient, item: NewsItem) -> tuple[str, str | None]:
-    """-> (article text, image url). Telegram items already carry both."""
-    if item.url.startswith("https://t.me/"):
-        return item.summary, item.image
-    r = await client.get(item.url)
-    soup = BeautifulSoup(r.text, "html.parser")
-    og = soup.find("meta", property="og:image")
-    image = (og.get("content") if og else None) or item.image
-    root = soup.find("article") or soup
-    paragraphs = [p.get_text(" ", strip=True) for p in root.find_all("p")]
-    text = "\n".join(p for p in paragraphs if len(p) > 40)[:4000]
-    return text or item.summary, image
+def related_texts(item: NewsItem, items: list[NewsItem]) -> list[str]:
+    """Other outlets' takes on the same story (>= 2 shared capitalised words in the
+    title): more facts for the writer, less temptation to pad."""
+    def keys(text: str) -> set[str]:
+        return {w.lower() for w in re.findall(r"[А-ЯЁA-Z][а-яёa-z]{3,}", text)}
+
+    mine = keys(item.title)
+    return [f"[{o.source}] {o.title}. {o.summary[:600]}" for o in items
+            if o is not item and len(mine & keys(o.title)) >= 2][:4]
 
 
 def build_caption(post: dict, channel_username: str, bot_username: str) -> str:
@@ -244,7 +247,8 @@ class NewsPoster:
         return timedelta(minutes=base * random.uniform(0.8, 1.15))
 
     async def post_one(self) -> bool:
-        items = [i for i in await gather_items(self.http) if not self.repo.news_already_posted(i.url)]
+        # photo posts only, so items without a picture never reach the picker
+        items = [i for i in await gather_items(self.http) if i.image and not self.repo.news_already_posted(i.url)]
         if not items:
             return False
         items.sort(key=lambda i: i.published, reverse=True)
@@ -259,23 +263,22 @@ class NewsPoster:
         if not pick or not (0 <= pick["index"] < len(items)):
             return False
         item = items[pick["index"]]
-        try:
-            article, image_url = await fetch_article(self.http, item)
-        except httpx.HTTPError:
-            logger.warning("News: article %s unavailable", item.url)
-            self.repo.record_news_post(item.url, item.title)
-            return False
-        if not image_url:
-            self.repo.record_news_post(item.url, item.title)  # the channel posts only with photos
-            return False
-        post = await self._ask(WRITE_SYSTEM, f"Источник: {item.source}\nЗаголовок: {item.title}\n\n{article}", POST_SCHEMA)
+        material = f"Источник: {item.source}\nЗаголовок: {item.title}\n\n{item.summary}"
+        related = related_texts(item, items)
+        if related:
+            material += "\n\nТа же история в других СМИ:\n" + "\n".join(related)
+        post = await self._ask(WRITE_SYSTEM, material, POST_SCHEMA)
         self.repo.record_news_post(item.url, item.title)
         if not post or post["skip"]:
             return False
         try:
-            photo = (await self.http.get(image_url)).content
+            resp = await self.http.get(item.image)
         except httpx.HTTPError:
             return False
+        if resp.status_code != 200 or not resp.headers.get("content-type", "").startswith("image/"):
+            logger.warning("News: image for %s not downloadable (%s)", item.url, resp.status_code)
+            return False
+        photo = resp.content
         caption = build_caption(post, self.channel_username, self.bot_username)
         await self.bot.send_photo(self.chat_id, BufferedInputFile(photo, "news.jpg"), caption=caption, parse_mode="HTML")
         self.repo.record_news_post(item.url, post["headline"], published=True)
