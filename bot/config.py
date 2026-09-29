@@ -31,6 +31,11 @@ class Config:
     admin_chat_ids: frozenset[int]
     showcase_chat_id: int | None
     showcase_interval_seconds: int
+    # Football news autoposter (bot/core/news_channel.py): on only when both are set.
+    news_chat_id: int | None
+    anthropic_api_key: str
+    news_posts_per_day: int
+    news_model: str
     required_channel_id: int | None
     required_channel_username: str
     poll_interval_seconds: int
@@ -88,6 +93,10 @@ def load_config() -> Config:
             int(os.environ["SHOWCASE_CHAT_ID"]) if os.environ.get("SHOWCASE_CHAT_ID", "").strip() else None
         ),
         showcase_interval_seconds=int(os.environ.get("SHOWCASE_INTERVAL_SECONDS", "600")),
+        news_chat_id=int(os.environ["NEWS_CHAT_ID"]) if os.environ.get("NEWS_CHAT_ID", "").strip() else None,
+        anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip(),
+        news_posts_per_day=int(os.environ.get("NEWS_POSTS_PER_DAY", "12")),
+        news_model=os.environ.get("NEWS_MODEL", "claude-opus-5").strip(),
         # Mandatory-subscription gate (bot/core/subscription.py) -- off by default (None)
         # same opt-in pattern as SHOWCASE_CHAT_ID/WEBAPP_URL; set both to turn it on.
         # required_channel_username has no leading @ (used to build the t.me/<...> link).

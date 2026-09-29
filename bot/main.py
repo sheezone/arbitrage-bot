@@ -175,6 +175,20 @@ async def main() -> None:
         )
     )
 
+    news_task: asyncio.Task | None = None
+    if config.news_chat_id and config.anthropic_api_key:
+        from bot.core.news_channel import NewsPoster
+
+        news_task = asyncio.create_task(
+            NewsPoster(
+                bot, repo, config.news_chat_id, config.anthropic_api_key,
+                model=config.news_model,
+                posts_per_day=config.news_posts_per_day,
+                channel_username=config.required_channel_username,
+                bot_username=me.username or "",
+            ).run()
+        )
+
     try:
         await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
     except TelegramNetworkError:
@@ -201,6 +215,8 @@ async def main() -> None:
         monitor_task.cancel()
         if webapp_task is not None:
             webapp_task.cancel()
+        if news_task is not None:
+            news_task.cancel()
         for source in sources:
             await source.close()
         await surebet_finder.close()

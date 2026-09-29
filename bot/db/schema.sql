@@ -73,3 +73,10 @@ CREATE TABLE IF NOT EXISTS match_analysis_uses (
     used_on TEXT NOT NULL,
     PRIMARY KEY (chat_id, team_a, team_b, used_on)
 );
+
+CREATE TABLE IF NOT EXISTS news_posts (
+    source_url TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    posted_at TEXT NOT NULL,
+    published INTEGER NOT NULL DEFAULT 0
+);

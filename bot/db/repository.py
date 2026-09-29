@@ -165,6 +165,29 @@ class Repository:
         )
         self._conn.commit()
 
+    def news_already_posted(self, source_url: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM news_posts WHERE source_url = ?", (source_url,)).fetchone() is not None
+
+    def record_news_post(self, source_url: str, title: str, published: bool = False) -> None:
+        """Every considered source URL lands here (so it's never re-picked); published
+        marks the ones that actually went out."""
+        self._conn.execute(
+            "INSERT OR REPLACE INTO news_posts (source_url, title, posted_at, published) VALUES (?, ?, ?, ?)",
+            (source_url, title, datetime.now(timezone.utc).isoformat(), int(published)),
+        )
+        self._conn.commit()
+
+    def recent_news_titles(self, limit: int = 40) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT title FROM news_posts WHERE published = 1 ORDER BY posted_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def news_posts_since(self, since_iso: str) -> int:
+        return self._conn.execute(
+            "SELECT COUNT(*) FROM news_posts WHERE published = 1 AND posted_at >= ?", (since_iso,)
+        ).fetchone()[0]
+
     def record_payment(
         self, chat_id: int, plan_id: str, provider: str, amount: float, currency: str, telegram_charge_id: str
     ) -> None:
