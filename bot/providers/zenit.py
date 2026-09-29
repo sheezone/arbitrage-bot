@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 import httpx
 
 from bot.providers.base import OddsProvider
-from bot.providers.models import SourceQuote
+from bot.providers.models import SourceQuote, tag_leagues
 
 BASE_URL = "https://zenit.win"
 # Full prematch line (confirmed live 2026-09-25: ~6700 events in one ~10 MB response,
@@ -112,6 +112,7 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
     league_names = raw.get("dict", {}).get("league", {})
     prefixes = ESPORTS_LEAGUE_PREFIXES.get(game)
     quotes: list[SourceQuote] = []
+    leagues: dict[tuple[str, str, str], str] = {}
 
     for event in raw.get("games", {}).values():
         if event.get("sid") != sport_id:
@@ -128,6 +129,7 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
 
         hd, f_l = event.get("hd") or [], event.get("f_l") or []
         start_time_utc = _unix_to_iso(event.get("time"))
+        leagues[(team_a, team_b, start_time_utc)] = league_names.get(str(event.get("lid"))) or ""
         if game in HANDICAP_GAMES:
             quotes.extend(_handicap_quotes(game, team_a, team_b, start_time_utc, hd, f_l))
         if game in WINNER_GAMES:
@@ -157,7 +159,7 @@ def parse_line_dump(game: str, raw: dict) -> list[SourceQuote]:
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "zenit", f"Тотал больше {line}", over_odds, market))
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, "zenit", f"Тотал меньше {line}", under_odds, market))
 
-    return quotes
+    return tag_leagues(quotes, leagues)
 
 
 def _winner_quotes(game, team_a, team_b, start_time_utc, hd, f_l) -> list[SourceQuote]:

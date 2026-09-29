@@ -1,7 +1,7 @@
 """Provider-agnostic data shapes returned by any OddsProvider implementation."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -39,3 +39,14 @@ class SourceQuote:
     outcome_name: str  # matches team_a/team_b for market="winner", else a literal outcome label
     odds: float
     market: str = "winner"  # "winner" (team-name outcomes) or e.g. "total_2.5" (Over/Under, no draw possible)
+    league: str = ""  # tournament/league name as the bookmaker lists it ("" when the source doesn't give one)
+
+
+def with_league(quotes: list[SourceQuote], league: str) -> list[SourceQuote]:
+    return [replace(q, league=league) for q in quotes] if league else quotes
+
+
+def tag_leagues(quotes: list[SourceQuote], leagues: dict[tuple[str, str, str], str]) -> list[SourceQuote]:
+    """For parsers whose per-event loop appends quotes from several places: record
+    (team_a, team_b, start) -> league while looping, tag everything once at the end."""
+    return [replace(q, league=leagues.get((q.team_a, q.team_b, q.start_time_utc), q.league)) for q in quotes]

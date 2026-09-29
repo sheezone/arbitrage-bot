@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 import httpx
 
 from bot.providers.base import OddsProvider
-from bot.providers.models import SourceQuote
+from bot.providers.models import SourceQuote, with_league
 
 BASE_URL = "https://ad.betcity.ru"
 LINE_PATH = "/d/off/events"
@@ -90,12 +90,13 @@ def parse_line(game: str, raw: dict) -> list[SourceQuote]:
                 continue
             start = _unix_to_iso(event.get("date_ev"))
             main = event.get("main") or {}
+            league = champ.get("name_ch") or ""
             if game in HANDICAP_GAMES:
-                quotes.extend(_handicap_quotes(game, team_a, team_b, start, main))
+                quotes.extend(with_league(_handicap_quotes(game, team_a, team_b, start, main), league))
             if game in WINNER_GAMES:
-                quotes.extend(_winner_quotes(game, team_a, team_b, start, main))
+                quotes.extend(with_league(_winner_quotes(game, team_a, team_b, start, main), league))
             if game in TOTALS_GAMES:
-                quotes.extend(_total_quotes(game, team_a, team_b, start, main))
+                quotes.extend(with_league(_total_quotes(game, team_a, team_b, start, main), league))
     return quotes
 
 

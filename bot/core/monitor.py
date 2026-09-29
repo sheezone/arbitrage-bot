@@ -202,13 +202,32 @@ def format_stakes_lines(stakes: dict) -> list[str]:
     return [f"    ▫️ {html.escape(outcome_name)}: <b>{format_amount(stake)}</b>" for outcome_name, stake in stakes.items()]
 
 
+def league_of(group: list[SourceQuote]) -> str:
+    """Tournament/league for a matched cluster: the first bookmaker in LEAGUE_SOURCE_ORDER
+    that names one (their names are the most readable), else any quote's."""
+    by_book = {q.bookmaker: q.league for q in group if q.league}
+    for book in LEAGUE_SOURCE_ORDER:
+        if by_book.get(book):
+            return by_book[book]
+    return next(iter(by_book.values()), "")
+
+
+LEAGUE_SOURCE_ORDER = ("fonbet", "pari", "winline", "betcity", "zenit", "olimpbet")
+
+
+def _league_line(league: str) -> list[str]:
+    return [f"🏆 {html.escape(league)}"] if league else []
+
+
 def _format_message(
-    game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "", bankroll: float | None = None
+    game: str, team_a: str, team_b: str, arb: ArbitrageResult, start_time_utc: str = "", bankroll: float | None = None,
+    league: str = "",
 ) -> str:
     emoji = game_icon(game)
     lines = [
         f"{vi('money_bag')} {emoji} <b>Найдена вилка</b> ({game.upper()})",
         f"{vi('swords')} <b>{html.escape(with_flag(team_a))}</b> vs <b>{html.escape(with_flag(team_b))}</b>",
+        *_league_line(league),
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
@@ -230,12 +249,14 @@ def _format_message(
 
 
 def _format_showcase_message(
-    game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str, start_time_utc: str = ""
+    game: str, team_a: str, team_b: str, arb: ArbitrageResult, bot_username: str, start_time_utc: str = "",
+    league: str = "",
 ) -> str:
     emoji = game_icon(game)
     lines = [
         f"{vi('money_bag')} {emoji} <b>Вилка</b> ({game.upper()})",
         f"{vi('swords')} <b>{html.escape(with_flag(team_a))}</b> vs <b>{html.escape(with_flag(team_b))}</b>",
+        *_league_line(league),
     ]
     match_time = format_match_start(start_time_utc)
     if match_time:
@@ -352,6 +373,7 @@ async def _notify_group(
     market: str = "winner",
     keyboard_factory: Callable[[str], object] | None = None,
     on_notified: Callable[[int], Awaitable[None]] | None = None,
+    league: str = "",
 ) -> None:
     match_id = f"{game}:{team_a}:{team_b}:{start_time_utc}:{market}"
     bh = _bookmakers_hash(arb.best_odds)
@@ -377,7 +399,7 @@ async def _notify_group(
             continue
 
         stakes = calc_stakes(user.bankroll, arb.best_odds)
-        message = _format_message(game, team_a, team_b, arb, start_time_utc, user.bankroll)
+        message = _format_message(game, team_a, team_b, arb, start_time_utc, user.bankroll, league)
         message += f"\n\n{vi('exchange')} Ставки при банкролле <b>{user.bankroll:.2f}</b>:\n"
         message += "<blockquote>" + "\n".join(format_stakes_lines(stakes)) + "</blockquote>"
 
@@ -437,7 +459,7 @@ MAX_DISPLAYABLE_PROFIT_PCT = 15.0
 
 
 async def _recheck_and_notify_high_profit(
-    suspicious: list[tuple[str, str, str, str, ArbitrageResult, str]],
+    suspicious: list[tuple[str, str, str, str, ArbitrageResult, str, str]],
     surebet_suspicious: list[tuple[str, str, str, str, ArbitrageResult]],
     sources: list[OddsProvider],
     games: list[str],
@@ -471,7 +493,7 @@ async def _recheck_and_notify_high_profit(
         except Exception:
             logger.exception("Failed to re-fetch quotes for high-profit recheck")
 
-        for game, team_a, team_b, market, stale_arb, start_time_utc in suspicious:
+        for game, team_a, team_b, market, stale_arb, start_time_utc, league in suspicious:
             fresh_arb = fresh_by_key.get((game, team_a, team_b, market))
             if fresh_arb is None:
                 logger.warning(
@@ -479,11 +501,11 @@ async def _recheck_and_notify_high_profit(
                     team_a, team_b, market,
                 )
                 fresh_arb = stale_arb
-            found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc))
+            found.append(MatchSnapshot(game, team_a, team_b, fresh_arb, start_time_utc, league))
             try:
                 await _notify_group(
                     game, team_a, team_b, fresh_arb, start_time_utc, repo, bot, admin_chat_ids, market,
-                    keyboard_factory=keyboard_factory, on_notified=on_notified,
+                    keyboard_factory=keyboard_factory, on_notified=on_notified, league=league,
                 )
             except Exception:
                 logger.exception("Failed to notify rechecked match group")
@@ -613,7 +635,9 @@ async def _notify_showcase(
 ) -> int | None:
     """Returns the sent message_id (for repo.record_showcase_post), or None if it failed
     to send at all."""
-    message = _format_showcase_message(best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc)
+    message = _format_showcase_message(
+        best.game, best.team_a, best.team_b, best.arb, bot_username, best.start_time_utc, best.league
+    )
     try:
         sent = await _send_message_with_retries(
             bot, showcase_chat_id, message, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True)
@@ -709,7 +733,7 @@ async def run_monitor_loop(
         groups = group_quotes(all_quotes)
 
         found: list[MatchSnapshot] = []
-        suspicious: list[tuple[str, str, str, str, ArbitrageResult, str]] = []
+        suspicious: list[tuple[str, str, str, str, ArbitrageResult, str, str]] = []
         for group in groups:
             try:
                 results = _evaluate_group(group)
@@ -719,14 +743,15 @@ async def run_monitor_loop(
 
             for game, team_a, team_b, market, arb in results:
                 start_time_utc = group[0].start_time_utc
+                league = league_of(group)
                 if arb.profit_pct > HIGH_PROFIT_RECHECK_THRESHOLD:
-                    suspicious.append((game, team_a, team_b, market, arb, start_time_utc))
+                    suspicious.append((game, team_a, team_b, market, arb, start_time_utc, league))
                     continue
-                found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc))
+                found.append(MatchSnapshot(game, team_a, team_b, arb, start_time_utc, league))
                 try:
                     await _notify_group(
                         game, team_a, team_b, arb, start_time_utc, repo, bot, admin_chat_ids, market,
-                        keyboard_factory=keyboard_factory, on_notified=on_notified,
+                        keyboard_factory=keyboard_factory, on_notified=on_notified, league=league,
                     )
                 except Exception:
                     logger.exception("Failed to notify match group")

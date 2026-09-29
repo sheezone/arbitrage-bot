@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 import websockets
 
 from bot.providers.base import OddsProvider
-from bot.providers.models import SourceQuote
+from bot.providers.models import SourceQuote, tag_leagues
 
 WS_URL = "wss://wss.winline.ru/data_ng?client=newsite&nb=true"
 INIT_COMMANDS = ("lang", "AA==", "data", "WINLINE", "getdate")
@@ -227,6 +227,7 @@ def parse_snapshot(menu: bytes, prematch: bytes, wanted: set[str]) -> list[Sourc
         by_event.setdefault(line["event"], []).append(line)
 
     quotes: list[SourceQuote] = []
+    leagues: dict[tuple[str, str, str], str] = {}
     for event in events.values():
         champ = champs.get(event["champ"])
         if not champ:
@@ -239,6 +240,8 @@ def parse_snapshot(menu: bytes, prematch: bytes, wanted: set[str]) -> list[Sourc
             continue
         a, b = event["a"], event["b"]
         start = datetime.fromtimestamp(event["date"] - MSK_OFFSET_S, tz=timezone.utc).isoformat()
+        country = countries.get(champ["country"], "")
+        leagues[(a, b, start)] = f"{country}. {champ['name']}" if country and country not in champ["name"] else champ["name"]
         seen_totals: set[float] = set()
         seen_hcp: set[float] = set()
         for line in by_event.get(event["id"], []):
@@ -271,4 +274,4 @@ def parse_snapshot(menu: bytes, prematch: bytes, wanted: set[str]) -> list[Sourc
             ):
                 quotes.append(SourceQuote(game, a, b, start, BOOKMAKER, a, odds[0]))
                 quotes.append(SourceQuote(game, a, b, start, BOOKMAKER, b, odds[1]))
-    return quotes
+    return tag_leagues(quotes, leagues)

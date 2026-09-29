@@ -1028,6 +1028,7 @@ an_news: "News (injuries, form, suspensions)",
               : `<button type="button" class="share-btn" ${shareAttr} title="${t("share_btn")}">📤</button>`}
           </div>
           <div class="match-teams"><span class="emoji-clash">⚔️</span> ${teamBadge(m.team_a_logo, m.team_a_flag)}${copyable(m.team_a)} vs ${teamBadge(m.team_b_logo, m.team_b_flag)}${copyable(m.team_b)}</div>
+          ${m.league ? `<div class="match-time"><span class="emoji-tick">🏆</span> ${esc(m.league)}</div>` : ""}
           ${m.start_time_label ? `<div class="match-time"><span class="emoji-tick">🕒</span> ${esc(m.start_time_label)}</div>` : ""}
           <div><span class="${pillCls}">${isHigh ? "‼️" : "🚀"} ${m.profit_pct.toFixed(2)}%</span></div>
           <div class="card-payout">${t("possible_win")}<b>${fmtMoney(m.profit_amount)}</b></div>

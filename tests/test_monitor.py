@@ -320,3 +320,22 @@ def test_notify_group_calls_on_notified_after_each_successful_send(tmp_path):
     _run(_notify_group("football", "Team A", "Team B", arb, "", repo, bot, on_notified=on_notified))
 
     assert moved == [1]
+
+
+def test_league_of_prefers_readable_bookmaker_and_shows_in_message():
+    from bot.core.arbitrage import calc_arbitrage
+    from bot.core.monitor import _format_message, league_of
+    from bot.providers.models import SourceQuote
+
+    group = [
+        SourceQuote("football", "A", "B", "", "olimpbet", "A", 2.1, league="Англия. Премьер-лига (ол)"),
+        SourceQuote("football", "A", "B", "", "fonbet", "B", 2.1, league="Англия. Премьер-лига"),
+        SourceQuote("football", "A", "B", "", "zenit", "B", 2.0),
+    ]
+    assert league_of(group) == "Англия. Премьер-лига"
+    assert league_of([SourceQuote("cs2", "A", "B", "", "marathon", "A", 2.0)]) == ""
+    from bot.core.arbitrage import OutcomeOdds
+
+    arb = calc_arbitrage({"A": [OutcomeOdds("A", "olimpbet", 2.1)], "B": [OutcomeOdds("B", "fonbet", 2.1)]})
+    assert "🏆 Англия. Премьер-лига" in _format_message("football", "A", "B", arb, league="Англия. Премьер-лига")
+    assert "🏆" not in _format_message("football", "A", "B", arb)

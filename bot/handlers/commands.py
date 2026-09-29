@@ -932,6 +932,8 @@ def _search_view(
             f"{emoji} <b>{GAME_LABELS.get(m.game, m.game.upper())}</b>",
             f"{vi('swords')} <b>{html.escape(with_flag(m.team_a))}</b> vs <b>{html.escape(with_flag(m.team_b))}</b>",
         ]
+        if m.league:
+            block.append(f"🏆 {html.escape(m.league)}")
         match_time = format_match_start(m.start_time_utc)
         if match_time:
             block.append(f"{vi('hourglass')} {match_time}")

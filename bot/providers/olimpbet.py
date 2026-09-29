@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 import httpx
 
 from bot.providers.base import OddsProvider
-from bot.providers.models import SourceQuote
+from bot.providers.models import SourceQuote, with_league
 
 BASE_URL = "https://www.olimp.bet"
 TOP_EVENTS_PATH = "/api/v4/0/line/top/sports-with-competitions-with-events"
@@ -127,7 +127,7 @@ def parse_sports_payload(game: str, raw: list[dict]) -> list[SourceQuote]:
         if prefixes and not comp_name.startswith(prefixes):
             continue
         for event in competition.get("events") or []:
-            quotes.extend(_parse_event(game, event))
+            quotes.extend(with_league(_parse_event(game, event), comp_name))
     return quotes
 
 

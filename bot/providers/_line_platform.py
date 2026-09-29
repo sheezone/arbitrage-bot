@@ -61,7 +61,7 @@ Response shape (GET .../events/listBase?lang=ru&scopeMarket=<n>):
 """
 from __future__ import annotations
 
-from bot.providers.models import SourceQuote
+from bot.providers.models import SourceQuote, tag_leagues
 
 TEAM1_WIN_FACTOR = 921
 DRAW_FACTOR = 922
@@ -105,9 +105,11 @@ def parse_line_dump(
     parent_id_to_game = {parent_id: game for game, parent_id in (game_to_parent_sport or {}).items()}
 
     segment_to_game: dict[int, str] = {}
+    segment_names: dict[int, str] = {}
     for s in raw.get("sports", []):
         if s.get("kind") != "segment":
             continue
+        segment_names[s["id"]] = s.get("name") or ""
         cat_id = s.get("sportCategoryId")
         if cat_id in category_to_game:
             segment_to_game[s["id"]] = category_to_game[cat_id]
@@ -122,6 +124,7 @@ def parse_line_dump(
         factors_by_event[event_id] = {f["f"]: f for f in cf.get("factors", []) if f.get("f") in RELEVANT_FACTOR_IDS}
 
     quotes: list[SourceQuote] = []
+    leagues: dict[tuple[str, str, str], str] = {}
     for event in raw.get("events", []):
         if event.get("place") != "line":
             continue  # pre-match only; live in-play odds move too fast for this loop
@@ -145,6 +148,7 @@ def parse_line_dump(
 
         factors = factors_by_event.get(event["id"], {})
         start_time_utc = _unix_to_iso(event.get("startTime"))
+        leagues[(team_a, team_b, start_time_utc)] = segment_names.get(event.get("sportId"), "")
 
         if game in handicap_games:
             quotes.extend(_handicap_quotes(game, team_a, team_b, start_time_utc, bookmaker, factors))
@@ -164,7 +168,7 @@ def parse_line_dump(
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, team_a, odds_a))
         quotes.append(SourceQuote(game, team_a, team_b, start_time_utc, bookmaker, team_b, odds_b))
 
-    return quotes
+    return tag_leagues(quotes, leagues)
 
 
 def _total_ladder_quotes(game, team_a, team_b, start_time_utc, bookmaker, factors) -> list[SourceQuote]:

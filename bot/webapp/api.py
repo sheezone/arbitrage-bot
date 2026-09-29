@@ -475,6 +475,7 @@ def register_api(
                 "team_b_flag": get_team_flag(m.team_b),
                 "team_a_logo": team_a_logo,
                 "team_b_logo": team_b_logo,
+                "league": m.league,
                 "start_time_label": format_match_start(m.start_time_utc),
                 "start_time_utc": m.start_time_utc or "",
                 "profit_pct": m.arb.profit_pct,

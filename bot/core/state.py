@@ -16,6 +16,7 @@ class MatchSnapshot:
     team_b: str
     arb: ArbitrageResult
     start_time_utc: str = ""
+    league: str = ""
 
 
 @dataclass
