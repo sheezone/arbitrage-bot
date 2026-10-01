@@ -39,3 +39,30 @@ def test_caption_escapes_and_fits_limit():
     assert "y" * 400 not in cap and "t.me/vilki365" in cap
     import re, html
     assert len(html.unescape(re.sub(r"<[^>]+>", "", cap))) <= 1024
+
+
+def test_window_crosses_midnight_and_news_day_starts_at_8():
+    from datetime import datetime
+
+    from bot.core.news_channel import MSK, in_news_window, news_day_start
+
+    def at(h, m=0):
+        return datetime(2026, 10, 1, h, m, tzinfo=MSK)
+
+    assert [in_news_window(at(h)) for h in (7, 8, 13, 23, 0)] == [False, True, True, True, True]
+    assert not in_news_window(at(1)) and not in_news_window(at(1, 30))
+    assert news_day_start(at(0, 30)) == datetime(2026, 9, 30, 8, tzinfo=MSK)
+    assert news_day_start(at(9)) == datetime(2026, 10, 1, 8, tzinfo=MSK)
+
+
+def test_branded_telegram_items_borrow_clean_rss_photo_or_are_dropped():
+    from datetime import datetime, timezone
+
+    from bot.core.news_channel import NewsItem, with_clean_photos
+
+    now = datetime.now(timezone.utc)
+    rss = NewsItem("Чемпионат", "u1", "Роналду завершил карьеру в сборной Португалии", "", now, "clean.jpg")
+    tg_same = NewsItem("t.me/sportsru", "u2", "Роналду ушёл из сборной Португалии", "", now, "branded.jpg")
+    tg_other = NewsItem("t.me/sportsru", "u3", "Холанд заинтересовал ПСЖ", "", now, "branded2.jpg")
+    out = with_clean_photos([rss, tg_same, tg_other])
+    assert [(i.url, i.image) for i in out] == [("u1", "clean.jpg"), ("u2", "clean.jpg")]

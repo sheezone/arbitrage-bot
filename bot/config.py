@@ -95,7 +95,7 @@ def load_config() -> Config:
         showcase_interval_seconds=int(os.environ.get("SHOWCASE_INTERVAL_SECONDS", "600")),
         news_chat_id=int(os.environ["NEWS_CHAT_ID"]) if os.environ.get("NEWS_CHAT_ID", "").strip() else None,
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip(),
-        news_posts_per_day=int(os.environ.get("NEWS_POSTS_PER_DAY", "12")),
+        news_posts_per_day=int(os.environ.get("NEWS_POSTS_PER_DAY", "20")),
         news_model=os.environ.get("NEWS_MODEL", "claude-opus-5").strip(),
         # Mandatory-subscription gate (bot/core/subscription.py) -- off by default (None)
         # same opt-in pattern as SHOWCASE_CHAT_ID/WEBAPP_URL; set both to turn it on.

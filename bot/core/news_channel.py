@@ -1,6 +1,6 @@
 """Football news channel autoposter.
 
-Every ~70 minutes between NEWS_DAY_START and NEWS_DAY_END (Moscow time), up to
+Every ~50 minutes between NEWS_DAY_START and NEWS_DAY_END (Moscow time), up to
 posts_per_day times a day, it:
   1. gathers fresh football items from RSS feeds (championat, sports.ru, sport-express,
      soccer.ru) and the public web previews of Telegram news channels (t.me/s/...);
@@ -40,7 +40,18 @@ from bot.db.repository import Repository
 logger = logging.getLogger(__name__)
 
 MSK = timezone(timedelta(hours=3))
-NEWS_DAY_START, NEWS_DAY_END = 9, 23  # post between 09:00 and 23:59 MSK
+# Posting window 08:00 -> 01:00 MSK (crosses midnight); the "news day" starts at 08:00.
+NEWS_DAY_START, NEWS_DAY_END = 8, 1
+WINDOW_HOURS = (NEWS_DAY_END - NEWS_DAY_START) % 24
+
+
+def in_news_window(local: datetime) -> bool:
+    return (local.hour - NEWS_DAY_START) % 24 < WINDOW_HOURS
+
+
+def news_day_start(local: datetime) -> datetime:
+    start = local.replace(hour=NEWS_DAY_START, minute=0, second=0, microsecond=0)
+    return start if local >= start else start - timedelta(days=1)
 MAX_ITEM_AGE = timedelta(hours=6)
 CHECK_EVERY_S = 300
 CAPTION_LIMIT = 1024
@@ -196,6 +207,31 @@ def related_texts(item: NewsItem, items: list[NewsItem]) -> list[str]:
             if o is not item and len(mine & keys(o.title)) >= 2][:4]
 
 
+def _is_branded(item: NewsItem) -> bool:
+    # Telegram channels post designed cards with their logo/text baked into the
+    # picture (checked 2026-10-01: championat, sportsru, sportexpress all do); the
+    # sites' RSS photos are clean. Watermarks are never edited out -- a branded item
+    # instead borrows a clean RSS photo of the same story, or isn't used at all.
+    return item.source.startswith("t.me/")
+
+
+def with_clean_photos(items: list[NewsItem]) -> list[NewsItem]:
+    clean = [i for i in items if i.image and not _is_branded(i)]
+    out: list[NewsItem] = list(clean)
+    for item in items:
+        if not _is_branded(item):
+            continue
+        twin = next((c for c in clean if len(_title_keys(item.title) & _title_keys(c.title)) >= 2), None)
+        if twin is not None:
+            item.image = twin.image
+            out.append(item)
+    return out
+
+
+def _title_keys(text: str) -> set[str]:
+    return {w.lower() for w in re.findall(r"[А-ЯЁA-Z][а-яёa-z]{3,}", text)}
+
+
 def build_caption(post: dict, channel_username: str, bot_username: str) -> str:
     parts = [f"{html.escape(post['emoji'].strip())} <b>{html.escape(post['headline'].strip())}</b>"]
     parts += [html.escape(p.strip()) for p in post["paragraphs"] if p.strip()]
@@ -244,13 +280,13 @@ class NewsPoster:
         return json.loads(text)
 
     def _interval(self) -> timedelta:
-        window_minutes = (NEWS_DAY_END + 1 - NEWS_DAY_START) * 60
+        window_minutes = WINDOW_HOURS * 60
         base = window_minutes / max(1, self.posts_per_day)
         return timedelta(minutes=base * random.uniform(0.8, 1.15))
 
     async def post_one(self) -> bool:
-        # photo posts only, so items without a picture never reach the picker
-        items = [i for i in await gather_items(self.http) if i.image and not self.repo.news_already_posted(i.url)]
+        # photo posts only, and only clean (unbranded) photos -- see with_clean_photos
+        items = [i for i in with_clean_photos(await gather_items(self.http)) if not self.repo.news_already_posted(i.url)]
         if not items:
             return False
         items.sort(key=lambda i: i.published, reverse=True)
@@ -292,8 +328,8 @@ class NewsPoster:
             try:
                 now = datetime.now(timezone.utc)
                 local = now.astimezone(MSK)
-                day_start = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-                in_window = NEWS_DAY_START <= local.hour <= NEWS_DAY_END
+                day_start = news_day_start(local).astimezone(timezone.utc)
+                in_window = in_news_window(local)
                 if in_window and now >= self.next_post_at and self.repo.news_posts_since(day_start.isoformat()) < self.posts_per_day:
                     if await self.post_one():
                         self.next_post_at = now + self._interval()
