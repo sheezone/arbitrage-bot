@@ -108,3 +108,9 @@ CREATE TABLE IF NOT EXISTS ai_usage (
     match_id TEXT NOT NULL,
     PRIMARY KEY (chat_id, day, match_id)
 );
+
+-- Expresses already pushed to users ("ваш экспресс готов"), so each goes out once.
+CREATE TABLE IF NOT EXISTS sent_expresses (
+    express_key TEXT PRIMARY KEY,
+    sent_at TEXT NOT NULL
+);

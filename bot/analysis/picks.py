@@ -75,7 +75,65 @@ def build_expresses(picks: list[dict]) -> list[dict]:
     return out
 
 
-async def run_daily_picks(analyzer: Analyzer, repo: Repository) -> None:
+def express_key(express: dict) -> str:
+    return "|".join(sorted(p["match_id"] for p in express["legs"]))
+
+
+def express_message(express: dict, full: bool) -> str:
+    """Bot chat text for a freshly built express (full for MAX, teaser otherwise)."""
+    import html
+
+    if not full:
+        return (f"🔥 <b>Экспресс дня готов!</b>\n\n{len(express['legs'])} матча, общий кэф "
+                f"<b>{express['total_odds']:.2f}</b>. Ставки и обоснование — в MAX-доступе.")
+    lines = [f"🔥 <b>Ваш экспресс готов!</b> Общий кэф <b>{express['total_odds']:.2f}</b>", ""]
+    for i, p in enumerate(express["legs"], 1):
+        start = datetime.fromisoformat(p["start_utc"]).astimezone(MSK).strftime("%d.%m %H:%M")
+        lines.append(f"{i}. ⚽ <b>{html.escape(p['team_a'])} — {html.escape(p['team_b'])}</b> · {start} МСК")
+        lines.append(f"   🎯 {html.escape(p['label'])} @ <b>{p['odds']:.2f}</b> · уверенность: {html.escape(p['confidence'])}")
+    lines += ["", "Экспресс проигрывает, если не зашла хоть одна ставка. Аналитика, а не гарантия. 18+"]
+    return "\n".join(lines)
+
+
+async def push_new_expresses(repo: Repository, bot, webapp_url: str, admin_chat_ids: frozenset[int]) -> int:
+    """Send every not-yet-sent express: full to users with access, a once-a-day teaser to
+    the rest. Each express goes out once (sent_expresses)."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+    from bot.core import billing
+
+    now = datetime.now(timezone.utc)
+    if now.astimezone(MSK).hour not in ACTIVE_HOURS:
+        return 0  # nobody wants a push at 3 a.m.
+    fresh = [e for e in build_expresses(upcoming_picks(repo, now)) if not repo.express_sent(express_key(e))]
+    if not fresh:
+        return 0
+    day_start = now.astimezone(MSK).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    teaser_today = repo.expresses_sent_since(day_start.isoformat()) == 0
+    button = [[InlineKeyboardButton(text="📡 Открыть в Матч-Радаре", web_app=WebAppInfo(url=webapp_url))]] if webapp_url else []
+    sent = 0
+    for express in fresh:
+        repo.mark_express_sent(express_key(express))
+        for user in repo.get_all_users():
+            full = billing.has_access(user, now, admin_chat_ids)
+            if not full and not teaser_today:
+                continue
+            try:
+                await bot.send_message(
+                    user.chat_id, express_message(express, full), parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=button) if button else None,
+                    disable_notification=user.muted,
+                )
+                sent += 1
+            except Exception:
+                pass  # blocked the bot / deleted account
+            await asyncio.sleep(0.05)
+        teaser_today = False  # at most one teaser a day for non-subscribers
+    return sent
+
+
+async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp_url: str = "",
+                          admin_chat_ids: frozenset[int] = frozenset()) -> None:
     while True:
         try:
             now = datetime.now(timezone.utc)
@@ -85,6 +143,10 @@ async def run_daily_picks(analyzer: Analyzer, repo: Repository) -> None:
                     soon = [m for m in await get_catalog() if m.start_utc <= now + timedelta(hours=24) and m.id not in have]
                     for match in soon[:min(PER_RUN, DAILY_TARGET - len(have))]:
                         await analyzer.analyze(match)
+            if bot is not None:
+                n = await push_new_expresses(repo, bot, webapp_url, admin_chat_ids)
+                if n:
+                    logger.info("Express pushed to %s chats", n)
         except Exception:
             logger.exception("Daily AI picks run failed")
         await asyncio.sleep(RUN_EVERY_S)

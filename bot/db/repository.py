@@ -226,6 +226,19 @@ class Repository:
         return {"analyses_total": total, "uses_today": today_uses[0], "users_today": today_uses[1],
                 "uses_total": all_uses[0], "users_total": all_uses[1]}
 
+    def express_sent(self, key: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM sent_expresses WHERE express_key = ?", (key,)).fetchone() is not None
+
+    def mark_express_sent(self, key: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO sent_expresses (express_key, sent_at) VALUES (?, ?)",
+            (key, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def expresses_sent_since(self, since_iso: str) -> int:
+        return self._conn.execute("SELECT COUNT(*) FROM sent_expresses WHERE sent_at >= ?", (since_iso,)).fetchone()[0]
+
     def ai_usage_today(self, chat_id: int, day: str) -> set[str]:
         rows = self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ? AND day = ?", (chat_id, day)).fetchall()
         return {r[0] for r in rows}

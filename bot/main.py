@@ -127,7 +127,9 @@ async def main() -> None:
         settle_task = asyncio.create_task(run_settler(repo))
         from bot.analysis.picks import run_daily_picks
 
-        picks_task = asyncio.create_task(run_daily_picks(analyzer, repo))
+        picks_task = asyncio.create_task(run_daily_picks(
+            analyzer, repo, bot, config.webapp_url, config.admin_chat_ids,
+        ))
     register_analysis_handlers(ai_router, repo, analyzer, config.admin_chat_ids)
     # before the main router: its catch-all text handlers must not swallow the AI button
     dp.include_router(ai_router)

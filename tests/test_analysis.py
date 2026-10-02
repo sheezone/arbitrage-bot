@@ -94,3 +94,18 @@ def test_market_probabilities_remove_margin():
     p = market_probabilities(m)
     assert sum(p.values()) == 100 and p["p1"] > p["p2"] > 0
     assert _normalise({"p1": 50, "x": 30, "p2": 30}) == {"p1": 45, "x": 27, "p2": 28}
+
+
+def test_express_message_full_and_teaser():
+    from bot.analysis.picks import express_key, express_message
+
+    legs = [{"match_id": "b", "team_a": "Зенит", "team_b": "Спартак", "start_utc": "2026-10-04T16:00:00+00:00",
+             "label": "П1 (Зенит)", "odds": 1.8, "confidence": "средняя"},
+            {"match_id": "a", "team_a": "Реал", "team_b": "Барселона", "start_utc": "2026-10-04T19:00:00+00:00",
+             "label": "Тотал больше 2.5", "odds": 1.7, "confidence": "высокая"}]
+    e = {"legs": legs, "total_odds": 3.06}
+    assert express_key(e) == "a|b"
+    full = express_message(e, True)
+    assert "Ваш экспресс готов" in full and "Зенит — Спартак" in full and "@ <b>1.80</b>" in full and "3.06" in full
+    teaser = express_message(e, False)
+    assert "Экспресс дня готов" in teaser and "Зенит" not in teaser
