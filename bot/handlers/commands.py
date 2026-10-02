@@ -184,6 +184,7 @@ NAV_CALCULATOR = "nav:calculator"
 NAV_SETTINGS = "nav:settings"
 NAV_SUPPORT = "nav:support"
 NAV_TOGGLE_ACTIVE = "nav:toggle_active"
+NAV_ENABLE_VILKI = "nav:enable_vilki"
 NAV_TOGGLE_MUTED = "nav:toggle_muted"
 NAV_SUBSCRIPTION = "nav:subscription"
 NAV_HELP = "nav:help"
@@ -827,9 +828,11 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
     return "\n".join(lines), _calculator_keyboard()
 
 
-def _search_keyboard() -> InlineKeyboardMarkup:
+def _search_keyboard(notifications_on: bool = True) -> InlineKeyboardMarkup:
+    enable_row = [] if notifications_on else [[_btn("🔔 Включить уведомления о вилках", NAV_ENABLE_VILKI)]]
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            *enable_row,
             [_btn("🔄 Обновить", NAV_SEARCH)],
             [_btn("⚙️ Настройки поиска", NAV_SETTINGS), _btn("🧮 Калькулятор", NAV_CALCULATOR)],
             [_btn("◀️ Назад", NAV_DASHBOARD)],
@@ -881,7 +884,7 @@ def _search_view(
 ) -> View:
     if latest_state.updated_at == 0:
         text = f"{vi('search')} <b>ПОИСК ВИЛОК</b>\n━━━━━━━━━━━━━━━━━━━━\n\n{vi('hourglass')} Ещё идёт первая проверка, попробуйте через полминуты."
-        return text, _search_keyboard()
+        return text, _search_keyboard(user.is_active)
 
     checked_at = datetime.fromtimestamp(latest_state.updated_at, tz=MOSCOW_TZ).strftime("%H:%M:%S МСК")
     next_update = _next_update_note(latest_state, poll_interval_seconds)
@@ -911,6 +914,8 @@ def _search_view(
         matches = allowed
 
     header = [f"{vi('search')} <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    if not user.is_active:
+        header += ["🔕 Уведомления о новых вилках выключены — включите кнопкой ниже.", ""]
     if not matches:
         if hit_daily_limit:
             header.append(
@@ -920,7 +925,7 @@ def _search_view(
             )
         else:
             header.append(f"Сейчас подходящих вилок нет.\nДанные на {checked_at} · след. проверка {next_update}.")
-        return "\n".join(header), _search_keyboard()
+        return "\n".join(header), _search_keyboard(user.is_active)
 
     header.append(f"Найдено вилок: <b>{len(matches)}</b> (данные на {checked_at} · след. проверка {next_update})\n")
 
@@ -967,7 +972,7 @@ def _search_view(
             f"(«{_profile_button_text(user.language)}» снизу → «💳 Подписка»)."
         )
 
-    return "\n".join(lines), _search_keyboard()
+    return "\n".join(lines), _search_keyboard(user.is_active)
 
 
 # Last screen rendered into each chat's menu message (text, inline keyboard, banner) --
@@ -1483,6 +1488,19 @@ def register_handlers(
             photo_path=_status_banner(user),
         )
         await callback.answer("Пауза" if not user.is_active else "Возобновлено")
+
+    @router.callback_query(F.data == NAV_ENABLE_VILKI)
+    async def on_enable_vilki(callback: CallbackQuery, bot: Bot) -> None:
+        chat_id = callback.message.chat.id
+        user = repo.get_user(chat_id)
+        if not billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids):
+            await callback.answer("Уведомления о вилках — для подписчиков. Оформите подписку в «💳 Подписка».", show_alert=True)
+            return
+        repo.set_active(chat_id, True)
+        user = repo.get_user(chat_id)
+        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
+        await _render(bot, repo, chat_id, callback.message.message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+        await callback.answer("Уведомления о вилках включены")
 
     @router.callback_query(F.data == NAV_TOGGLE_MUTED)
     async def on_nav_toggle_muted(callback: CallbackQuery, bot: Bot) -> None:

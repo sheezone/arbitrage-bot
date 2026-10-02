@@ -120,7 +120,7 @@ def test_get_all_users_includes_paused_ones(tmp_path):
     repo = _repo(tmp_path)
     repo.upsert_user(1)
     repo.upsert_user(2)
-    repo.set_active(2, False)
+    repo.set_active(1, True)  # new users start with vilka notifications off
     assert {u.chat_id for u in repo.get_active_users()} == {1}
     assert {u.chat_id for u in repo.get_all_users()} == {1, 2}
 
@@ -337,3 +337,9 @@ def test_grant_bonus_days_counts_from_trial_end(tmp_path):
     repo.grant_bonus_days(1, 3)
     new_end = billing.access_end(repo.get_user(1), datetime.now(timezone.utc))
     assert abs((new_end - trial_end) - timedelta(days=3)) < timedelta(seconds=5)
+
+
+def test_new_users_start_with_vilka_notifications_off(tmp_path):
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    assert repo.get_user(1).is_active is False or repo.get_user(1).is_active == 0

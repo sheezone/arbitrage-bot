@@ -223,7 +223,8 @@ def _run(coro):
 
 def test_notify_group_attaches_the_keyboard_factorys_markup(tmp_path):
     repo = Repository(str(tmp_path / "t.sqlite3"))
-    repo.upsert_user(1)  # defaults: active, no bookmaker restriction, min_profit_pct 1.0
+    repo.upsert_user(1)  # defaults: no bookmaker restriction, min_profit_pct 1.0
+    repo.set_active(1, True)  # new users start with vilka notifications off
 
     best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
     arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
@@ -242,6 +243,7 @@ def test_notify_group_attaches_the_keyboard_factorys_markup(tmp_path):
 def test_notify_group_sends_no_markup_without_a_factory(tmp_path):
     repo = Repository(str(tmp_path / "t.sqlite3"))
     repo.upsert_user(1)
+    repo.set_active(1, True)
 
     best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
     arb = ArbitrageResult(best_odds=best_odds, arb_ratio=0.9, profit_pct=5.0)
@@ -255,6 +257,7 @@ def test_notify_group_sends_no_markup_without_a_factory(tmp_path):
 def test_send_expiry_reminders_attaches_the_keyboard_factorys_markup(tmp_path):
     repo = Repository(str(tmp_path / "t.sqlite3"))
     repo.upsert_user(1)
+    repo.set_active(1, True)
     # Push the trial to expire in under 24h so the reminder actually fires.
     soon = (datetime.now(timezone.utc) - timedelta(days=4, hours=23)).isoformat()
     repo._conn.execute("UPDATE users SET trial_started_at = ? WHERE chat_id = ?", (soon, 1))
@@ -280,6 +283,7 @@ def test_notify_group_still_notifies_a_lapsed_user_up_to_the_free_daily_limit(tm
 
     repo = Repository(str(tmp_path / "t.sqlite3"))
     repo.upsert_user(1)
+    repo.set_active(1, True)
     _expire(repo, 1)
     bot = _FakeBot()
 
@@ -296,6 +300,7 @@ def test_notify_group_never_stops_notifying_a_user_with_active_access(tmp_path):
 
     repo = Repository(str(tmp_path / "t.sqlite3"))
     repo.upsert_user(1)  # fresh -- still on trial, unlimited
+    repo.set_active(1, True)
     bot = _FakeBot()
 
     best_odds = [OutcomeOdds("Team A", "fonbet", 2.1), OutcomeOdds("Team B", "olimpbet", 2.05)]
@@ -309,6 +314,7 @@ def test_notify_group_never_stops_notifying_a_user_with_active_access(tmp_path):
 def test_notify_group_calls_on_notified_after_each_successful_send(tmp_path):
     repo = Repository(str(tmp_path / "t.sqlite3"))
     repo.upsert_user(1)
+    repo.set_active(1, True)
     bot = _FakeBot()
     moved = []
 

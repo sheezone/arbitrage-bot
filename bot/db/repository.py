@@ -130,8 +130,10 @@ class Repository:
         row -- ON CONFLICT DO NOTHING means an existing user's referrer/source can never
         be silently overwritten by a later /start with a different link."""
         self._conn.execute(
-            "INSERT INTO users (chat_id, trial_started_at, referred_by, acquisition_source) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(chat_id) DO NOTHING",
+            # is_active=0: since 2026-10-02 the bot leads with AI analysis, vilka
+            # notifications are opt-in (the "🔔 Включить уведомления" button in Поиск вилок).
+            "INSERT INTO users (chat_id, trial_started_at, referred_by, acquisition_source, is_active) "
+            "VALUES (?, ?, ?, ?, 0) ON CONFLICT(chat_id) DO NOTHING",
             (chat_id, datetime.now(timezone.utc).isoformat(), referred_by, acquisition_source),
         )
         self._conn.commit()

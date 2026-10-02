@@ -655,7 +655,7 @@ def test_admin_stats_returns_aggregate_counts(setup):
     # +1 for the admin's own row, created by _get_user during _auth
     assert body["total_users"] == 4
     assert body["on_trial"] == 4
-    assert body["active_notifications"] == 3
+    assert body["active_notifications"] == 0  # vilka notifications are opt-in for new users
     assert body["referred_count"] == 1
     assert {"source": "telega_ads1", "count": 1} in body["acquisition_sources"]
     assert body["payments"] == []
