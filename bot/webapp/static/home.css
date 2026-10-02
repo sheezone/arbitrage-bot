@@ -342,7 +342,7 @@ html, body { background: radial-gradient(ellipse at 50% -10%, #241042 0%, #0b061
 
 /* ===== Матч-Радар animated logo (2026-10-03): sweeping beam + blips that light up as
    the beam passes (blip delays match the beam angle; one turn = 3 s) ===== */
-.radar-logo { width: 38px; height: 38px; filter: drop-shadow(0 0 8px rgba(178, 107, 255, 0.7)); flex: none; }
+.radar-logo { width: 42px; height: 42px; filter: drop-shadow(0 0 8px rgba(178, 107, 255, 0.7)); flex: none; }
 .radar-splash { width: 120px; height: 120px; }
 .rd-sweep { transform-origin: 50px 50px; animation: rdSpin 3s linear infinite; }
 @keyframes rdSpin { to { transform: rotate(360deg); } }
