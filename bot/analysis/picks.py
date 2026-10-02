@@ -20,8 +20,8 @@ from bot.db.repository import Repository
 logger = logging.getLogger(__name__)
 
 MSK = timezone(timedelta(hours=3))
-DAILY_TARGET = 8          # analyses wanted for matches in the next 24h
-PER_RUN = 3               # model calls per job run (spreads cost/latency over the day)
+DAILY_TARGET = 14         # analyses wanted for matches in the next 24h (owner: more express candidates)
+PER_RUN = 4               # model calls per job run (spreads cost/latency over the day)
 RUN_EVERY_S = 2 * 3600
 ACTIVE_HOURS = range(8, 23)
 EXPRESS_LEG_ODDS = (1.3, 2.4)
