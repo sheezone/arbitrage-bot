@@ -279,6 +279,14 @@ def register_api(
             "vilki_run_days": billing.VILKI_RUN_DAYS,
         }
 
+    @app.post("/api/vilki/stop")
+    async def post_vilki_stop(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        _get_user(repo, chat_id)
+        repo.stop_vilki(chat_id)
+        return {"ok": True}
+
     @app.post("/api/vilki/start")
     async def post_vilki_start(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)

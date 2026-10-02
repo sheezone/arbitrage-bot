@@ -311,6 +311,10 @@ class Repository:
         self._conn.commit()
         return until
 
+    def stop_vilki(self, chat_id: int) -> None:
+        self._conn.execute("UPDATE users SET is_active = 0, vilki_until = NULL WHERE chat_id = ?", (chat_id,))
+        self._conn.commit()
+
     def expire_vilki(self, now_iso: str) -> list[int]:
         """Switch off every user whose vilka run has ended; returns their chat_ids."""
         rows = self._conn.execute(

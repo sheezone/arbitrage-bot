@@ -350,3 +350,10 @@ html, body { background: radial-gradient(ellipse at 50% -10%, #241042 0%, #0b061
 @keyframes rdBlip { 0% { opacity: 0; transform: scale(0.4); } 6% { opacity: 1; transform: scale(1.4); } 40% { opacity: 0.6; transform: scale(1); } 100% { opacity: 0; transform: scale(0.8); } }
 .brand-text b { letter-spacing: 0.04em; }
 @media (prefers-reduced-motion: reduce) { .rd-sweep, .rd-blips circle { animation: none; } .rd-blips circle { opacity: 0.8; } }
+
+/* no sideways scroll: 100vw canvases overflowed by the scrollbar width */
+html, body { overflow-x: hidden; max-width: 100%; }
+#money-rain, #lightning { width: 100%; }
+.vk-run .vk-stop { width: auto; padding: 8px 12px; font-size: 13px; }
+.screen-head { flex-wrap: nowrap; min-width: 0; }
+#screen-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
