@@ -367,3 +367,12 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .sport-chip:first-child { font-size: 13px; }
 .sport-chip.on { background: linear-gradient(180deg, #c99bff, #8b3ff0); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), 0 3px 0 #5a1fb0, 0 6px 14px rgba(140, 60, 255, 0.5); }
 .sport-chip:active { transform: translateY(3px); }
+
+/* final AI verdict at the end of an analysis */
+.vd-block { border: 2px solid #b26bff; background: radial-gradient(circle at 90% 0%, rgba(178, 107, 255, 0.25), transparent 55%), #170d2a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 5px 0 #2a1450, 0 0 24px rgba(178, 107, 255, 0.25); }
+.vd-main { font-size: 18px; margin: 4px 0 6px; }
+.vd-main b { color: #d6b0ff; }
+.vd-others { color: var(--hint); font-size: 13px; margin-bottom: 8px; }
+.vd-pick { padding-top: 8px; border-top: 1px solid rgba(178, 107, 255, 0.25); font-size: 14px; }
+.vd-note { margin-top: 8px; font-size: 11.5px; color: #c9b8e6; }

@@ -2352,7 +2352,7 @@ an_news: "News (injuries, form, suspensions)",
   // itself stays in Russian (one shared cached analysis per match).
   const HL = {
     ru: {
-      brand_sub: "AI ПРОГНОЗЫ", all_sports: "Все",
+      brand_sub: "AI ПРОГНОЗЫ", vd_title: "🏁 Итог ИИ", vd_win: "Победит <b>{t}</b> — <b>{p}%</b>", vd_draw: "Ничья — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Ничья — {p}%", vd_pick: "Уверенная ставка ИИ", vd_note: "⚠️ Это только наш анализ ИИ, а не гарантия результата. Решение о ставке вы принимаете сами. 18+", all_sports: "Все",
       vk_on: "Поиск вилок запущен", vk_stop: "Стоп", vk_stopped: "Поиск вилок остановлен", vk_until: "до {d}", vk_off: "Поиск вилок выключен", vk_start: "Запустить на {n} дня", vk_started: "Поиск вилок запущен на {n} дня",
       t_ai: "ИИ-Прогнозы", t_picks: "Готовые прогнозы", t_express: "Экспрессы", t_vilki: "Вилки",
       t_settings: "Настройки вилок", t_sub: "MAX-доступ", t_admin: "Админ-панель", t_help: "Помощь", t_aistats: "Статистика ИИ",
@@ -2397,7 +2397,7 @@ an_news: "News (injuries, form, suspensions)",
       h_note: "Сервис — аналитика: он не принимает ставки и не гарантирует выигрыш. 18+",
     },
     en: {
-      brand_sub: "AI FORECASTS", all_sports: "All",
+      brand_sub: "AI FORECASTS", vd_title: "🏁 AI verdict", vd_win: "<b>{t}</b> wins — <b>{p}%</b>", vd_draw: "Draw — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Draw — {p}%", vd_pick: "AI confident bet", vd_note: "⚠️ This is purely our AI analysis, not a guarantee of the result. The betting decision is yours. 18+", all_sports: "All",
       vk_on: "Arb search is on", vk_stop: "Stop", vk_stopped: "Arb search stopped", vk_until: "until {d}", vk_off: "Arb search is off", vk_start: "Start for {n} days", vk_started: "Arb search started for {n} days",
       t_ai: "AI Forecasts", t_picks: "Ready picks", t_express: "Accumulators", t_vilki: "Arbs",
       t_settings: "Arb settings", t_sub: "MAX access", t_admin: "Admin panel", t_help: "Help", t_aistats: "AI statistics",
@@ -2442,7 +2442,7 @@ an_news: "News (injuries, form, suspensions)",
       h_note: "The service is analytics: it does not accept bets and does not guarantee winnings. 18+",
     },
     tg: {
-      brand_sub: "ПЕШГӮИҲОИ AI", all_sports: "Ҳама",
+      brand_sub: "ПЕШГӮИҲОИ AI", vd_title: "🏁 Хулосаи ИИ", vd_win: "<b>{t}</b> мебарад — <b>{p}%</b>", vd_draw: "Мусовӣ — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Мусовӣ — {p}%", vd_pick: "Ставкаи боэътимоди ИИ", vd_note: "⚠️ Ин танҳо таҳлили ИИ аст, на кафолати натиҷа. Қарорро худатон мебароред. 18+", all_sports: "Ҳама",
       vk_on: "Ҷустуҷӯи вилка фаъол аст", vk_stop: "Қатъ", vk_stopped: "Ҷустуҷӯи вилка қатъ шуд", vk_until: "то {d}", vk_off: "Ҷустуҷӯи вилка хомӯш аст", vk_start: "Барои {n} рӯз оғоз", vk_started: "Ҷустуҷӯи вилка барои {n} рӯз оғоз шуд",
       t_ai: "Пешгӯиҳои ИИ", t_picks: "Пешгӯиҳои тайёр", t_express: "Экспрессҳо", t_vilki: "Вилкаҳо",
       t_settings: "Танзимоти вилка", t_sub: "Дастрасии MAX", t_admin: "Панели админ", t_help: "Кумак", t_aistats: "Омори ИИ",
@@ -2728,6 +2728,35 @@ an_news: "News (injuries, form, suspensions)",
       ${row("П1 · " + m.team_a, p.p1)}${p.x ? row(tr("draw"), p.x) : ""}${row("П2 · " + m.team_b, p.p2)}</div>`;
   }
 
+  // Final verdict at the end of an analysis: who the AI expects to win and with what
+  // probability, plus its pick -- explicitly labelled as the AI's own analysis.
+  function verdictBlock(a, m) {
+    const p = a.probabilities;
+    if (!p) return "";
+    const outcomes = [
+      { name: m.team_a, v: p.p1, kind: "team" },
+      { name: tr("draw"), v: p.x, kind: "draw" },
+      { name: m.team_b, v: p.p2, kind: "team" },
+    ].filter((o) => o.v > 0);
+    outcomes.sort((x, y) => y.v - x.v);
+    const top = outcomes[0];
+    const head = top.kind === "draw"
+      ? tr("vd_draw", { p: top.v })
+      : tr("vd_win", { t: esc(top.name), p: top.v });
+    const others = outcomes.slice(1).map((o) =>
+      o.kind === "draw" ? tr("vd_other_draw", { p: o.v }) : tr("vd_other", { t: esc(o.name), p: o.v })).join("<br>");
+    const pick = a.pick
+      ? `<div class="vd-pick">🎯 ${tr("vd_pick")}: <b>${esc(a.pick.label)}</b> @ <b>${a.pick.odds.toFixed(2)}</b> · ${tr("confidence")} ${confMeter(a.confidence)}</div>`
+      : "";
+    return `<div class="an-block vd-block">
+      <div class="an-h">${tr("vd_title")}</div>
+      <div class="vd-main">${head}</div>
+      ${others ? `<div class="vd-others">${others}</div>` : ""}
+      ${pick}
+      <div class="vd-note">${tr("vd_note")}</div>
+    </div>`;
+  }
+
   async function renderAiAnalysis(url) {
     haptic("light");
     content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div><div class="ai-sub">${tr("loading_sub")}</div></div>`;
@@ -2771,6 +2800,7 @@ an_news: "News (injuries, form, suspensions)",
       ${a.injuries ? `<div class="an-block"><div class="an-h">${tr("injuries")}</div><div>${esc(a.injuries)}</div></div>` : ""}
       ${a.motivation ? `<div class="an-block"><div class="an-h">${tr("motivation")}</div><div>${esc(a.motivation)}</div></div>` : ""}
       <div class="an-block an-risk"><div class="an-h">${tr("risks")}</div><div>${esc(a.risks)}</div></div>
+      ${verdictBlock(a, m)}
       <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>${tr("an_foot")}</p></div>
       <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
     document.getElementById("an-back").addEventListener("click", () => renderAiMatches());
