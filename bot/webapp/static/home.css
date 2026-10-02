@@ -195,3 +195,8 @@ nav.tabs { display: none !important; }
 .art-vilki { background: url(img/card-vilki.jpg) center/cover; }
 .art-ai::after, .art-express::after, .art-picks::after, .art-vilki::after { content: none; }
 .pro-art::before { display: none; }
+
+/* falling-money backdrop (app.js moneyRain) */
+#money-rain { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+#app { position: relative; z-index: 1; }
+.tiles-grid.tiles-2 { grid-template-columns: repeat(2, 1fr); }

@@ -2411,10 +2411,9 @@ an_news: "News (injuries, form, suspensions)",
         <div class="home-row">
           <h2 class="home-welcome">Добро пожаловать!</h2>
         </div>
-        <div class="tiles tiles-grid${h.is_admin ? " tiles-4" : ""}" id="home-tiles">
+        <div class="tiles tiles-grid${h.is_admin ? "" : " tiles-2"}" id="home-tiles">
           <button type="button" class="tile art-t-help" data-go="help"><span class="tile-emoji">🤖</span><span class="tile-label">Помощь</span></button>
           <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">🏆</span><span class="tile-label">Статистика</span></button>
-          <button type="button" class="tile art-t-support" data-go="support"><span class="tile-emoji">🎧</span><span class="tile-label">Поддержка</span></button>
           ${h.is_admin ? '<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">Админ</span></button>' : ""}
         </div>
         <h2 class="home-pro">MAX-доступ${locked ? ' <button type="button" class="pro-buy" data-go="sub">Оформить</button>' : ""}</h2>
@@ -2672,6 +2671,64 @@ an_news: "News (injuries, form, suspensions)",
   const screenBack = document.getElementById("screen-back");
   if (screenBack) screenBack.addEventListener("click", () => go(PARENT[currentTab] || "home"));
   renderUserChip();
+
+  // Endless falling-money backdrop behind the whole app (owner's request, 2026-10-03).
+  // One canvas, ~22 emoji sprites, paused while the app is hidden; off for reduced motion.
+  (function moneyRain() {
+    if (REDUCE_MOTION) return;
+    const canvas = document.createElement("canvas");
+    canvas.id = "money-rain";
+    document.body.prepend(canvas);
+    const ctx = canvas.getContext("2d");
+    const ICONS = ["💵", "💸", "🪙", "💰", "💵"];
+    let w = 0, h = 0, dpr = 1, drops = [];
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function drop(randomY) {
+      return {
+        x: Math.random() * w, y: randomY ? Math.random() * h : -40,
+        size: 16 + Math.random() * 18, speed: 30 + Math.random() * 55,
+        sway: Math.random() * Math.PI * 2, swaySpeed: 0.6 + Math.random() * 1.2,
+        rot: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 1.6,
+        icon: ICONS[(Math.random() * ICONS.length) | 0], alpha: 0.18 + Math.random() * 0.22,
+      };
+    }
+    resize();
+    drops = Array.from({ length: 22 }, () => drop(true));
+    window.addEventListener("resize", resize);
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      ctx.clearRect(0, 0, w, h);
+      for (const d of drops) {
+        d.y += d.speed * dt;
+        d.sway += d.swaySpeed * dt;
+        d.rot += d.rotSpeed * dt;
+        if (d.y > h + 40) Object.assign(d, drop(false));
+        ctx.save();
+        ctx.globalAlpha = d.alpha;
+        ctx.translate(d.x + Math.sin(d.sway) * 18, d.y);
+        ctx.rotate(d.rot);
+        ctx.font = `${d.size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(d.icon, 0, 0);
+        ctx.restore();
+      }
+      if (!document.hidden) requestAnimationFrame(frame);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) { last = performance.now(); requestAnimationFrame(frame); }
+    });
+    requestAnimationFrame(frame);
+  })();
 
   boot();
 })();
