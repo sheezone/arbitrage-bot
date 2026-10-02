@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bot.core.emoji import button_icon
 from bot.db.repository import Repository
 from bot.handlers.commands import (
+    AI_BUTTON_TEXT,
     LANG_BUTTON_TEXT,
     LANGUAGE_CHOICES,
     PROFILE_BUTTON_TEXT_EN,
@@ -51,11 +52,11 @@ def test_language_choices_are_ru_en_tg():
     assert list(LANGUAGE_CHOICES) == ["ru", "en", "tg"]
 
 
-def test_main_menu_keyboard_is_just_search_and_profile(tmp_path):
+def test_main_menu_keyboard_is_ai_then_search_and_profile(tmp_path):
     kb = _main_menu_keyboard("ru")
     texts = [btn.text for row in kb.keyboard for btn in row]
     # Leading emoji moves to a premium icon (icon_custom_emoji_id); label keeps the words.
-    assert texts == [button_icon(SEARCH_BUTTON_TEXT_RU)[0], button_icon(PROFILE_BUTTON_TEXT_RU)[0]]
+    assert texts == [button_icon(AI_BUTTON_TEXT['ru'])[0], button_icon(SEARCH_BUTTON_TEXT_RU)[0], button_icon(PROFILE_BUTTON_TEXT_RU)[0]]
     assert all(btn.icon_custom_emoji_id for row in kb.keyboard for btn in row)
     assert LANG_BUTTON_TEXT not in texts
 
@@ -64,7 +65,7 @@ def test_main_menu_keyboard_tajik_labels(tmp_path):
     kb = _main_menu_keyboard("tg")
     texts = [btn.text for row in kb.keyboard for btn in row]
     # Leading emoji moves to a premium icon (icon_custom_emoji_id); label keeps the words.
-    assert texts == [button_icon(SEARCH_BUTTON_TEXT_TG)[0], button_icon(PROFILE_BUTTON_TEXT_TG)[0]]
+    assert texts == [button_icon(AI_BUTTON_TEXT['tg'])[0], button_icon(SEARCH_BUTTON_TEXT_TG)[0], button_icon(PROFILE_BUTTON_TEXT_TG)[0]]
     assert all(btn.icon_custom_emoji_id for row in kb.keyboard for btn in row)
 
 
@@ -81,7 +82,7 @@ def test_main_menu_keyboard_english_labels(tmp_path):
     kb = _main_menu_keyboard("en")
     texts = [btn.text for row in kb.keyboard for btn in row]
     # Leading emoji moves to a premium icon (icon_custom_emoji_id); label keeps the words.
-    assert texts == [button_icon(SEARCH_BUTTON_TEXT_EN)[0], button_icon(PROFILE_BUTTON_TEXT_EN)[0]]
+    assert texts == [button_icon(AI_BUTTON_TEXT['en'])[0], button_icon(SEARCH_BUTTON_TEXT_EN)[0], button_icon(PROFILE_BUTTON_TEXT_EN)[0]]
     assert all(btn.icon_custom_emoji_id for row in kb.keyboard for btn in row)
 
 

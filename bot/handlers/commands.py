@@ -100,6 +100,8 @@ GAME_LABELS = {
     "volleyball": "Волейбол",
 }
 
+# The main section since 2026-10-02 (bot/handlers/analysis.py) -- first bottom button.
+AI_BUTTON_TEXT = {"ru": "🧠 ИИ-анализ", "en": "🧠 AI analysis", "tg": "🧠 Таҳлили ИИ"}
 SEARCH_BUTTON_TEXT_RU = "🔍 Поиск вилок"
 SEARCH_BUTTON_TEXT_TG = "🔍 Ҷустуҷӯи вилкаҳо"
 SEARCH_BUTTON_TEXT_EN = "🔍 Find arbs"
@@ -165,6 +167,7 @@ def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     (NAV_LANGUAGE) now, not a third bottom-bar button."""
     return ReplyKeyboardMarkup(
         keyboard=[
+            [icon_reply_button(AI_BUTTON_TEXT.get(language, AI_BUTTON_TEXT["ru"]))],
             [icon_reply_button(_search_button_text(language)), icon_reply_button(_profile_button_text(language))],
         ],
         resize_keyboard=True,

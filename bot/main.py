@@ -5,7 +5,7 @@ import logging
 import socket
 
 import uvicorn
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, Router
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
@@ -14,6 +14,7 @@ from bot.config import load_config
 from bot.core.monitor import run_monitor_loop
 from bot.core.state import LatestState
 from bot.db.repository import Repository
+from bot.handlers.analysis import register_analysis_handlers
 from bot.handlers.commands import _main_menu_keyboard, register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.cryptobot import CryptoPayClient
@@ -110,6 +111,22 @@ async def main() -> None:
 
     me = await _get_me_with_retries(bot)
 
+    ai_router = Router(name="ai_analysis")
+    analyzer = None
+    settle_task: asyncio.Task | None = None
+    if config.anthropic_api_key:
+        from bot.analysis.ai import Analyzer
+        from bot.analysis.results import run_settler
+
+        analyzer = Analyzer(
+            repo, config.anthropic_api_key, model=config.news_model,
+            api_football_key=config.api_football_key, football_data_key=config.football_data_key,
+        )
+        settle_task = asyncio.create_task(run_settler(repo))
+    register_analysis_handlers(ai_router, repo, analyzer, config.admin_chat_ids)
+    # before the main router: its catch-all text handlers must not swallow the AI button
+    dp.include_router(ai_router)
+
     dp.include_router(
         register_handlers(
             repo,
@@ -175,6 +192,7 @@ async def main() -> None:
         )
     )
 
+
     news_task: asyncio.Task | None = None
     if config.news_chat_id and config.anthropic_api_key:
         from bot.core.news_channel import NewsPoster
@@ -217,6 +235,8 @@ async def main() -> None:
             webapp_task.cancel()
         if news_task is not None:
             news_task.cancel()
+        if settle_task is not None:
+            settle_task.cancel()
         for source in sources:
             await source.close()
         await surebet_finder.close()

@@ -80,3 +80,31 @@ CREATE TABLE IF NOT EXISTS news_posts (
     posted_at TEXT NOT NULL,
     published INTEGER NOT NULL DEFAULT 0
 );
+
+-- AI match analysis: one shared analysis per match (cached, reused by every user) and
+-- its single pick, settled from the final score for an honest hit-rate.
+CREATE TABLE IF NOT EXISTS ai_analyses (
+    match_id TEXT PRIMARY KEY,
+    team_a TEXT NOT NULL,
+    team_b TEXT NOT NULL,
+    league TEXT NOT NULL,
+    start_utc TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    option_id TEXT NOT NULL,
+    option_kind TEXT NOT NULL,
+    option_line REAL NOT NULL,
+    option_label TEXT NOT NULL,
+    odds REAL NOT NULL,
+    confidence TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    result TEXT,
+    score TEXT,
+    settled_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ai_usage (
+    chat_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    match_id TEXT NOT NULL,
+    PRIMARY KEY (chat_id, day, match_id)
+);

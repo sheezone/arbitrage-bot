@@ -167,6 +167,49 @@ class Repository:
         )
         self._conn.commit()
 
+    # --- AI analysis -------------------------------------------------------------
+    def get_ai_analysis(self, match_id: str) -> sqlite3.Row | None:
+        return self._conn.execute("SELECT * FROM ai_analyses WHERE match_id = ?", (match_id,)).fetchone()
+
+    def save_ai_analysis(self, match_id: str, team_a: str, team_b: str, league: str, start_utc: str,
+                         payload: str, option_id: str, option_kind: str, option_line: float,
+                         option_label: str, odds: float, confidence: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO ai_analyses (match_id, team_a, team_b, league, start_utc, payload, option_id, "
+            "option_kind, option_line, option_label, odds, confidence, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (match_id, team_a, team_b, league, start_utc, payload, option_id, option_kind, option_line,
+             option_label, odds, confidence, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def unsettled_ai_analyses(self, started_before_iso: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM ai_analyses WHERE result IS NULL AND start_utc < ?", (started_before_iso,)
+        ).fetchall()
+
+    def settle_ai_analysis(self, match_id: str, result: str, score: str) -> None:
+        self._conn.execute(
+            "UPDATE ai_analyses SET result = ?, score = ?, settled_at = ? WHERE match_id = ?",
+            (result, score, datetime.now(timezone.utc).isoformat(), match_id),
+        )
+        self._conn.commit()
+
+    def ai_hit_rate(self, since_iso: str = "") -> tuple[int, int]:
+        """(wins, settled) over picks settled win/lose since `since_iso` (match start)."""
+        row = self._conn.execute(
+            "SELECT SUM(result = 'win'), COUNT(*) FROM ai_analyses WHERE result IN ('win','lose') AND start_utc >= ?",
+            (since_iso,),
+        ).fetchone()
+        return int(row[0] or 0), int(row[1] or 0)
+
+    def ai_usage_today(self, chat_id: int, day: str) -> set[str]:
+        rows = self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ? AND day = ?", (chat_id, day)).fetchall()
+        return {r[0] for r in rows}
+
+    def record_ai_usage(self, chat_id: int, day: str, match_id: str) -> None:
+        self._conn.execute("INSERT OR IGNORE INTO ai_usage (chat_id, day, match_id) VALUES (?, ?, ?)", (chat_id, day, match_id))
+        self._conn.commit()
+
     def news_already_posted(self, source_url: str) -> bool:
         return self._conn.execute("SELECT 1 FROM news_posts WHERE source_url = ?", (source_url,)).fetchone() is not None
 

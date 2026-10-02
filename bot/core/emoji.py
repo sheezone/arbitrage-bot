@@ -100,7 +100,7 @@ _BUTTON_EXACT = {
 
 _BUTTON_EMOJI = {
     "⭐": "star_color", "⚡": "sbp", "💳": "cart", "💎": "usdt",
-    "⏸": "pause", "▶": "play", "🔔": "bell", "🔕": "mute",
+    "⏸": "pause", "▶": "play", "🔔": "bell", "🔕": "mute", "🧠": "bulb",
     "🤝": "crown", "🌐": "globe", "ℹ": "info", "🛠": "wrench",
     "✅": "check_color", "✉": "mail", "🔄": "refresh",
     "💰": "money_bag", "📊": "chart", "📅": "calendar", "🧮": "calc",
