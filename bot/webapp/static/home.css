@@ -187,3 +187,11 @@ nav.tabs { display: none !important; }
 .brand { cursor: pointer; }
 .bn-max .bn-ico { filter: drop-shadow(0 0 10px rgba(198, 244, 50, 0.9)); }
 .bn-max { opacity: 1; }
+
+/* generated card backgrounds (scripts/gen_card_backgrounds.py) */
+.art-ai { background: url(img/card-ai.jpg) center/cover; }
+.art-express { background: url(img/card-express.jpg) center/cover; }
+.art-picks { background: url(img/card-picks.jpg) center/cover; }
+.art-vilki { background: url(img/card-vilki.jpg) center/cover; }
+.art-ai::after, .art-express::after, .art-picks::after, .art-vilki::after { content: none; }
+.pro-art::before { display: none; }
