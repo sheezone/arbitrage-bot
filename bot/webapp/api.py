@@ -27,7 +27,7 @@ from bot.core import billing
 from bot.core.emoji import vi
 from bot.core.arbitrage import calc_stakes
 from bot.analysis.ai import AI_FREE_PER_DAY, AI_PAID_PER_DAY
-from bot.analysis.catalog import FootballMatch, _name_score, find_match, get_catalog, get_full_line, match_by_teams
+from bot.analysis.catalog import SPORTS, FootballMatch, _name_score, find_match, get_catalog, get_full_line, match_by_teams
 from bot.analysis.picks import build_expresses, pick_from_row, upcoming_picks
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
@@ -232,7 +232,7 @@ def register_api(
 
     def _match_out(m) -> dict:
         return {
-            "id": m.id, "team_a": m.team_a, "team_b": m.team_b, "league": m.league,
+            "id": m.id, "team_a": m.team_a, "team_b": m.team_b, "league": m.league, "sport": m.sport,
             "start_utc": m.start_utc.isoformat(), "start_label": format_match_start(m.start_utc.isoformat()),
             "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b),
         }
@@ -297,16 +297,17 @@ def register_api(
         return {"vilki_until": repo.start_vilki(chat_id, billing.VILKI_RUN_DAYS)}
 
     @app.get("/api/ai/matches")
-    async def get_ai_matches(authorization: str | None = Header(default=None)):
+    async def get_ai_matches(sport: str | None = None, authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         _get_user(repo, chat_id)
         try:
-            matches = await get_catalog()
+            matches = await get_catalog(sport if sport in SPORTS else None)
         except Exception:
             matches = []
         analyzed = {p["match_id"] for p in upcoming_picks(repo)}
-        return {"matches": [{**_match_out(m), "analyzed": m.id in analyzed} for m in matches]}
+        return {"matches": [{**_match_out(m), "analyzed": m.id in analyzed} for m in matches],
+                "sports": [{"key": k, "emoji": v["emoji"], "name": v["name"]} for k, v in SPORTS.items()]}
 
     async def _run_analysis(chat_id: int, user, match) -> dict:
         if analyzer is None:

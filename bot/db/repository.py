@@ -125,6 +125,9 @@ class Repository:
             # rather than cleared by a cron job, so no scheduled task is needed.
             self._conn.execute("ALTER TABLE users ADD COLUMN daily_vilki_date TEXT")
             self._conn.execute("ALTER TABLE users ADD COLUMN daily_vilki_seen TEXT NOT NULL DEFAULT ''")
+        ai_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(ai_analyses)")}
+        if ai_cols and "sport" not in ai_cols:
+            self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN sport TEXT NOT NULL DEFAULT 'football'")
         if "vilki_until" not in columns:
             # Vilka search runs for VILKI_RUN_DAYS after the user presses «Запустить», then
             # switches itself off (owner, 2026-10-03). NULL = no expiry (users who had it
@@ -179,12 +182,12 @@ class Repository:
 
     def save_ai_analysis(self, match_id: str, team_a: str, team_b: str, league: str, start_utc: str,
                          payload: str, option_id: str, option_kind: str, option_line: float,
-                         option_label: str, odds: float, confidence: str) -> None:
+                         option_label: str, odds: float, confidence: str, sport: str = "football") -> None:
         self._conn.execute(
             "INSERT OR REPLACE INTO ai_analyses (match_id, team_a, team_b, league, start_utc, payload, option_id, "
-            "option_kind, option_line, option_label, odds, confidence, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "option_kind, option_line, option_label, odds, confidence, created_at, sport) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (match_id, team_a, team_b, league, start_utc, payload, option_id, option_kind, option_line,
-             option_label, odds, confidence, datetime.now(timezone.utc).isoformat()),
+             option_label, odds, confidence, datetime.now(timezone.utc).isoformat(), sport),
         )
         self._conn.commit()
 

@@ -357,3 +357,13 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .vk-run .vk-stop { width: auto; padding: 8px 12px; font-size: 13px; }
 .screen-head { flex-wrap: nowrap; min-width: 0; }
 #screen-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* sport filter chips in AI forecasts */
+.sport-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+.sport-chips::-webkit-scrollbar { display: none; }
+.sport-chip { flex: none; min-width: 44px; height: 40px; padding: 0 12px; border-radius: 12px; font-size: 18px; font-weight: 800; color: #fff;
+  background: linear-gradient(180deg, #2a1c45, #170f29); border: 1px solid rgba(178, 107, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 3px 0 #0c0617; cursor: pointer; transition: transform 0.1s; }
+.sport-chip:first-child { font-size: 13px; }
+.sport-chip.on { background: linear-gradient(180deg, #c99bff, #8b3ff0); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), 0 3px 0 #5a1fb0, 0 6px 14px rgba(140, 60, 255, 0.5); }
+.sport-chip:active { transform: translateY(3px); }

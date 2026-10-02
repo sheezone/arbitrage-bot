@@ -109,3 +109,18 @@ def test_express_message_full_and_teaser():
     assert "Ваш экспресс готов" in full and "Зенит — Спартак" in full and "@ <b>1.80</b>" in full and "3.06" in full
     teaser = express_message(e, False)
     assert "Экспресс дня готов" in teaser and "Зенит" not in teaser
+
+
+def test_catalog_two_way_sport_gets_winner_options_and_settles():
+    start = int((NOW + timedelta(hours=5)).timestamp())
+    raw = {
+        "sports": [{"id": 50, "kind": "segment", "parentId": 4, "name": "ATP. Пекин"}],
+        "events": [{"id": 9, "place": "line", "sportId": 50, "team1": "Хачанов К", "team2": "Рублев А", "startTime": start}],
+        "customFactors": [{"e": 9, "factors": [_f(921, 1.9), _f(923, 1.95)]}],
+    }
+    (m,) = parse_catalog(raw, NOW)
+    assert m.sport == "tennis" and [o.id for o in m.options] == ["1", "2"] and m.options[0].kind == "winner"
+    assert settle(m.options[0], 2, 1) == "win" and settle(m.options[1], 2, 1) == "lose"
+    from bot.analysis.ai import market_probabilities
+    p = market_probabilities(m)
+    assert p["x"] == 0 and p["p1"] + p["p2"] == 100

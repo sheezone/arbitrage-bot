@@ -66,7 +66,7 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-SYSTEM = """Ты — футбольный аналитик. По присланным данным разбери матч и выбери ОДНУ
+SYSTEM = """Ты — спортивный аналитик (футбол, хоккей, баскетбол, теннис, киберспорт и др.). По присланным данным разбери матч и выбери ОДНУ
 ставку из списка доступных вариантов (верни её id в option_id).
 
 Правила:
@@ -84,7 +84,8 @@ SYSTEM = """Ты — футбольный аналитик. По прислан�
   reasoning — почему именно эта ставка, 2–3 предложения. risks — что может сломать
   прогноз, 1–2 предложения.
 - probabilities — твоя оценка шансов в процентах: p1 (победа первой команды), x (ничья),
-  p2 (победа второй), целые числа, сумма 100. Если даны коэффициенты, рыночные
+  p2 (победа второй), целые числа, сумма 100. В видах спорта без ничьих (теннис,
+  баскетбол, волейбол, киберспорт, настольный теннис) x = 0. Если даны коэффициенты, рыночные
   вероятности из них — ориентир; отклоняйся от них только когда данные это обосновывают.
 - Если списка доступных ставок нет (матча нет в линии), option_id — пустая строка, а
   reasoning объясняет, какой исход вероятнее и почему.
@@ -118,9 +119,15 @@ RESOLVE_SCHEMA = {
 
 def market_probabilities(match: FootballMatch) -> dict | None:
     """1X2 odds with the bookmaker margin removed, in % -- what the market prices in."""
-    odds = {o.id: o.odds for o in match.options if o.kind == "1x2"}
-    if set(odds) != {"1", "X", "2"}:
+    odds = {o.id: o.odds for o in match.options if o.kind in ("1x2", "winner")}
+    if set(odds) == {"1", "2"}:
+        odds["X"] = 0
+    if not {"1", "2"} <= set(odds) or "X" not in odds:
         return None
+    if not odds["X"]:
+        inv1, inv2 = 1 / odds["1"], 1 / odds["2"]
+        p1 = round(inv1 / (inv1 + inv2) * 100)
+        return {"p1": p1, "x": 0, "p2": 100 - p1}
     inv = {k: 1 / v for k, v in odds.items()}
     total = sum(inv.values())
     p1, x = round(inv["1"] / total * 100), round(inv["X"] / total * 100)
@@ -159,7 +166,13 @@ class Analyzer:
             result = await self._ask(match, data)
             if result is None:
                 return None
-            result["probabilities"] = _normalise(result["probabilities"])
+            from bot.analysis.catalog import SPORTS
+
+            probs = dict(result["probabilities"])
+            if match.options and not SPORTS.get(match.sport, {}).get("draw", True):
+                probs["x"] = 0
+            result["probabilities"] = _normalise(probs)
+            result["sport"] = match.sport
             result["market"] = market_probabilities(match)
             if not match.options:
                 result["pick"] = None
@@ -173,7 +186,7 @@ class Analyzer:
             self.repo.save_ai_analysis(
                 match.id, match.team_a, match.team_b, match.league, match.start_utc.isoformat(),
                 json.dumps(result, ensure_ascii=False), option.id, option.kind, option.line,
-                option.label, option.odds, result["confidence"],
+                option.label, option.odds, result["confidence"], match.sport,
             )
             return result
 
@@ -199,9 +212,13 @@ class Analyzer:
                 except Exception:
                     return []
 
-            form_a, form_b, h2h_data, headlines = await asyncio.gather(
-                form(match.team_a), form(match.team_b), h2h(), news()
-            )
+            if match.sport == "football":
+                form_a, form_b, h2h_data, headlines = await asyncio.gather(
+                    form(match.team_a), form(match.team_b), h2h(), news()
+                )
+            else:
+                form_a = form_b = h2h_data = None
+                headlines = await news()
         research = await self._research(match)
         return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines, "research": research}
 
@@ -232,7 +249,11 @@ class Analyzer:
         line = (f"Доступные ставки (выбери одну по id):\n{options}\n\n" if options
                 else "Матча нет в линии букмекеров: коэффициентов нет, option_id оставь пустым.\n\n")
         when = f"Начало (UTC): {match.start_utc:%Y-%m-%d %H:%M}\n" if match.start_utc.year > 2000 else ""
+        from bot.analysis.catalog import SPORTS
+
+        sport_name = SPORTS.get(match.sport, {}).get("name", "определи сам")
         content = (
+            f"Вид спорта: {sport_name}\n"
             f"Матч: {match.team_a} — {match.team_b}\nТурнир: {match.league or 'неизвестен'}\n"
             f"{when}\n{line}"
             f"Форма и таблица {match.team_a}: {json.dumps(data['form_a'], ensure_ascii=False, default=str)}\n"

@@ -2352,7 +2352,7 @@ an_news: "News (injuries, form, suspensions)",
   // itself stays in Russian (one shared cached analysis per match).
   const HL = {
     ru: {
-      brand_sub: "AI ПРОГНОЗЫ",
+      brand_sub: "AI ПРОГНОЗЫ", all_sports: "Все",
       vk_on: "Поиск вилок запущен", vk_stop: "Стоп", vk_stopped: "Поиск вилок остановлен", vk_until: "до {d}", vk_off: "Поиск вилок выключен", vk_start: "Запустить на {n} дня", vk_started: "Поиск вилок запущен на {n} дня",
       t_ai: "ИИ-Прогнозы", t_picks: "Готовые прогнозы", t_express: "Экспрессы", t_vilki: "Вилки",
       t_settings: "Настройки вилок", t_sub: "MAX-доступ", t_admin: "Админ-панель", t_help: "Помощь", t_aistats: "Статистика ИИ",
@@ -2360,7 +2360,7 @@ an_news: "News (injuries, form, suspensions)",
       hb_collect: "🆕 Статистика копится: {n}/{m}", hb_rate: "📊 {p}% проходимость · {n} матчей",
       welcome: "Добро пожаловать!", tile_help: "Помощь", tile_stats: "Статистика", tile_admin: "Админ",
       max_access: "MAX-доступ", buy: "Оформить",
-      c_ai1: "🎯 Разбор матчей", c_ai2: "⚽ Форма и новости", c_ai3: "💰 Ищем ценность в линии",
+      c_ai1: "🎯 Разбор матчей", c_ai2: "⚽🏀🎾 7 видов спорта", c_ai3: "💰 Ищем ценность в линии",
       c_ex_badge: "{n} на сегодня", c_ex1: "🤖 Отбор через ИИ", c_ex2: "💰 Кэф x2–x6", c_ex3: "🔥 Каждый день новые",
       hot: "🔥 ХИТ", c_pk1: "📋 Прогнозы дня", c_pk2: "📝 С обоснованием", c_pk3: "📊 Честная статистика",
       c_vk_badge: "{n} сейчас", c_vk1: "🏦 9 букмекеров", c_vk2: "⏱ Раз в минуту", c_vk3: "🧮 Расчёт ставок",
@@ -2397,7 +2397,7 @@ an_news: "News (injuries, form, suspensions)",
       h_note: "Сервис — аналитика: он не принимает ставки и не гарантирует выигрыш. 18+",
     },
     en: {
-      brand_sub: "AI FORECASTS",
+      brand_sub: "AI FORECASTS", all_sports: "All",
       vk_on: "Arb search is on", vk_stop: "Stop", vk_stopped: "Arb search stopped", vk_until: "until {d}", vk_off: "Arb search is off", vk_start: "Start for {n} days", vk_started: "Arb search started for {n} days",
       t_ai: "AI Forecasts", t_picks: "Ready picks", t_express: "Accumulators", t_vilki: "Arbs",
       t_settings: "Arb settings", t_sub: "MAX access", t_admin: "Admin panel", t_help: "Help", t_aistats: "AI statistics",
@@ -2405,7 +2405,7 @@ an_news: "News (injuries, form, suspensions)",
       hb_collect: "🆕 Collecting stats: {n}/{m}", hb_rate: "📊 {p}% hit rate · {n} matches",
       welcome: "Welcome!", tile_help: "Help", tile_stats: "Statistics", tile_admin: "Admin",
       max_access: "MAX access", buy: "Get MAX",
-      c_ai1: "🎯 Match analysis", c_ai2: "⚽ Form and news", c_ai3: "💰 Value in the line",
+      c_ai1: "🎯 Match analysis", c_ai2: "⚽🏀🎾 7 sports", c_ai3: "💰 Value in the line",
       c_ex_badge: "{n} today", c_ex1: "🤖 Picked by AI", c_ex2: "💰 Odds x2–x6", c_ex3: "🔥 New every day",
       hot: "🔥 HOT", c_pk1: "📋 Picks of the day", c_pk2: "📝 With reasoning", c_pk3: "📊 Honest stats",
       c_vk_badge: "{n} now", c_vk1: "🏦 9 bookmakers", c_vk2: "⏱ Every minute", c_vk3: "🧮 Stake calculator",
@@ -2442,7 +2442,7 @@ an_news: "News (injuries, form, suspensions)",
       h_note: "The service is analytics: it does not accept bets and does not guarantee winnings. 18+",
     },
     tg: {
-      brand_sub: "ПЕШГӮИҲОИ AI",
+      brand_sub: "ПЕШГӮИҲОИ AI", all_sports: "Ҳама",
       vk_on: "Ҷустуҷӯи вилка фаъол аст", vk_stop: "Қатъ", vk_stopped: "Ҷустуҷӯи вилка қатъ шуд", vk_until: "то {d}", vk_off: "Ҷустуҷӯи вилка хомӯш аст", vk_start: "Барои {n} рӯз оғоз", vk_started: "Ҷустуҷӯи вилка барои {n} рӯз оғоз шуд",
       t_ai: "Пешгӯиҳои ИИ", t_picks: "Пешгӯиҳои тайёр", t_express: "Экспрессҳо", t_vilki: "Вилкаҳо",
       t_settings: "Танзимоти вилка", t_sub: "Дастрасии MAX", t_admin: "Панели админ", t_help: "Кумак", t_aistats: "Омори ИИ",
@@ -2450,7 +2450,7 @@ an_news: "News (injuries, form, suspensions)",
       hb_collect: "🆕 Омор ҷамъ мешавад: {n}/{m}", hb_rate: "📊 {p}% гузариш · {n} бозӣ",
       welcome: "Хуш омадед!", tile_help: "Кумак", tile_stats: "Омор", tile_admin: "Админ",
       max_access: "Дастрасии MAX", buy: "Харидан",
-      c_ai1: "🎯 Таҳлили бозиҳо", c_ai2: "⚽ Шакл ва хабарҳо", c_ai3: "💰 Арзиш дар хат",
+      c_ai1: "🎯 Таҳлили бозиҳо", c_ai2: "⚽🏀🎾 7 намуди варзиш", c_ai3: "💰 Арзиш дар хат",
       c_ex_badge: "{n} барои имрӯз", c_ex1: "🤖 Интихоби ИИ", c_ex2: "💰 Коэф x2–x6", c_ex3: "🔥 Ҳар рӯз нав",
       hot: "🔥 ХИТ", c_pk1: "📋 Пешгӯиҳои рӯз", c_pk2: "📝 Бо асос", c_pk3: "📊 Омори ростқавлона",
       c_vk_badge: "{n} ҳоло", c_vk1: "🏦 9 букмекер", c_vk2: "⏱ Ҳар дақиқа", c_vk3: "🧮 Ҳисоби ставка",
@@ -2619,8 +2619,12 @@ an_news: "News (injuries, form, suspensions)",
     return `${m.team_a_flag ? m.team_a_flag + " " : ""}${esc(m.team_a)} — ${m.team_b_flag ? m.team_b_flag + " " : ""}${esc(m.team_b)}`;
   }
 
+  const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐" };
+  let aiSport = "";
+  try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
+
   async function renderAiMatches() {
-    const data = await api("/api/ai/matches");
+    const data = await api(`/api/ai/matches${aiSport ? `?sport=${encodeURIComponent(aiSport)}` : ""}`);
     const h = homeCache;
     const quota = h && h.ai_quota.limit != null ? tr("quota", { u: h.ai_quota.used, l: h.ai_quota.limit }) : tr("unlimited");
     let html = `<div class="ai-ask">
@@ -2636,19 +2640,30 @@ an_news: "News (injuries, form, suspensions)",
         </div>
         <div class="ai-quota">${quota}</div>
       </div>
-      <h3 class="sec-h">${tr("or_pick")}</h3>`;
+      <h3 class="sec-h">${tr("or_pick")}</h3>
+      <div class="sport-chips">
+        <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
+        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sp.emoji}</button>`).join("")}
+      </div>`;
     if (!data.matches.length) html += `<div class="ai-empty">${tr("no_matches")}</div>`;
     let league = null;
     for (const m of data.matches) {
       if (m.league !== league) {
         league = m.league;
-        html += `<div class="ai-league">🏆 ${esc(league)}</div>`;
+        html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(league)}</div>`;
       }
       html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
         <span class="ai-teams">${teamsLine(m)}</span>
         <span class="ai-meta">🕒 ${esc(m.start_label || "")}${m.analyzed ? ` · <span class="ai-done">${tr("analyzed")}</span>` : ""}</span></button>`;
     }
     content.innerHTML = html;
+    content.querySelectorAll(".sport-chip").forEach((b) =>
+      b.addEventListener("click", () => {
+        aiSport = b.dataset.sport;
+        try { localStorage.setItem("ai_sport", aiSport); } catch (e) { /* ignore */ }
+        haptic("light");
+        renderAiMatches();
+      }));
     content.querySelectorAll(".ai-match").forEach((b) =>
       b.addEventListener("click", () => renderAiAnalysis(`/api/ai/analysis?match_id=${encodeURIComponent(b.dataset.id)}`)));
     const ask = () => {
@@ -2710,7 +2725,7 @@ an_news: "News (injuries, form, suspensions)",
     const row = (name, v) => `<div class="pb-row"><span class="pb-name">${esc(name)}</span>
       <span class="pb-bar"><i style="width:${v}%"></i></span><b class="pb-val">${v}%</b></div>`;
     return `<div class="an-block ${cls || ""}"><div class="an-h">${title}</div>
-      ${row("П1 · " + m.team_a, p.p1)}${row(tr("draw"), p.x)}${row("П2 · " + m.team_b, p.p2)}</div>`;
+      ${row("П1 · " + m.team_a, p.p1)}${p.x ? row(tr("draw"), p.x) : ""}${row("П2 · " + m.team_b, p.p2)}</div>`;
   }
 
   async function renderAiAnalysis(url) {
@@ -2770,7 +2785,7 @@ an_news: "News (injuries, form, suspensions)",
          ${p.reasoning ? `<div class="pk-why">${esc(p.reasoning)}</div>` : ""}`;
     return `<div class="pk-card">
       <div class="pk-top"><span class="pk-league">${esc(p.league)}</span>${res}</div>
-      <div class="pk-teams">${esc(p.team_a)} — ${esc(p.team_b)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
+      <div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${esc(p.team_a)} — ${esc(p.team_b)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
       ${body}</div>`;
   }
 

@@ -24,15 +24,17 @@ logger = logging.getLogger(__name__)
 SCORE_URL = "https://ad.betcity.ru/d/score/sports"
 SCORE_PARAMS = {"rev": 1, "ver": 1, "csn": "ooca9s"}
 FOOTBALL = "1"
+BETCITY_SPORT = {"football": "1", "basketball": "3", "tennis": "2", "volleyball": "12",
+                 "table_tennis": "46", "esports": "73"}  # hockey deliberately absent
 SETTLE_AFTER = timedelta(hours=2, minutes=30)
 GIVE_UP_AFTER = timedelta(days=3)
 CHECK_EVERY_S = 1800
 MSK = timezone(timedelta(hours=3))
 
 
-def parse_results(raw: dict) -> list[tuple[str, str, datetime, int, int]]:
+def parse_results(raw: dict, sport_id: str = FOOTBALL) -> list[tuple[str, str, datetime, int, int]]:
     out = []
-    sport = ((raw.get("reply") or {}).get("sports") or {}).get(FOOTBALL) or {}
+    sport = ((raw.get("reply") or {}).get("sports") or {}).get(sport_id) or {}
     for champ in (sport.get("chmps") or {}).values():
         for ev in (champ.get("evts") or {}).values():
             m = re.fullmatch(r"\s*(\d+)\s*:\s*(\d+)\s*", str(ev.get("sc_ev") or ""))
@@ -69,14 +71,22 @@ async def settle_pending(repo: Repository, client: httpx.AsyncClient) -> int:
     # the feed returns one MSK day per request (`date=YYYY-MM-DD`, default today)
     days = {datetime.fromisoformat(r["start_utc"]).astimezone(MSK).date() for r in pending}
     days.add(now.astimezone(MSK).date())
-    results = []
+    raws = []
     for day in sorted(days):
-        raw = (await client.get(SCORE_URL, params={**SCORE_PARAMS, "date": day.isoformat()})).json()
-        results += parse_results(raw)
+        raws.append((await client.get(SCORE_URL, params={**SCORE_PARAMS, "date": day.isoformat()})).json())
+    by_sport: dict[str, list] = {}
     settled = 0
     for row in pending:
         start = datetime.fromisoformat(row["start_utc"])
-        score = find_score(row["team_a"], row["team_b"], start, results)
+        sport = row["sport"] if "sport" in row.keys() else "football"
+        sid = BETCITY_SPORT.get(sport)
+        if sid is None:  # e.g. hockey: regular-time markets vs a final score incl. OT
+            if now - start > GIVE_UP_AFTER:
+                repo.settle_ai_analysis(row["match_id"], "unknown", "")
+            continue
+        if sport not in by_sport:
+            by_sport[sport] = [r for raw in raws for r in parse_results(raw, sid)]
+        score = find_score(row["team_a"], row["team_b"], start, by_sport[sport])
         if score is None:
             if now - start > GIVE_UP_AFTER:
                 repo.settle_ai_analysis(row["match_id"], "unknown", "")

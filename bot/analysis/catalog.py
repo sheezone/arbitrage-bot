@@ -29,12 +29,27 @@ from bot.providers._line_platform import (
 )
 
 FOOTBALL_PARENT_SPORT = 1
+# Sports the AI analyses (owner, 2026-10-03): Fonbet top-level sport id, whether the
+# main market has a draw, total/handicap ranges that are sane for the sport (None = the
+# market isn't offered for it). Virtual sims (cyber FIFA/NBA/NHL) are deliberately not
+# here: the outcome is decided by a game engine, form and news mean nothing there.
+SPORTS: dict[str, dict] = {
+    "football":     {"parent": 1,     "draw": True,  "totals": (1.5, 4.5),     "hcp": 2.5,  "emoji": "⚽", "name": "Футбол"},
+    "hockey":       {"parent": 2,     "draw": True,  "totals": (3.5, 7.5),     "hcp": 2.5,  "emoji": "🏒", "name": "Хоккей"},
+    "basketball":   {"parent": 3,     "draw": False, "totals": (100.5, 260.5), "hcp": 30.5, "emoji": "🏀", "name": "Баскетбол"},
+    "tennis":       {"parent": 4,     "draw": False, "totals": None,           "hcp": None, "emoji": "🎾", "name": "Теннис"},
+    "esports":      {"parent": 29086, "draw": False, "totals": None,           "hcp": None, "emoji": "🎮", "name": "Киберспорт"},
+    "table_tennis": {"parent": 3088,  "draw": False, "totals": None,           "hcp": None, "emoji": "🏓", "name": "Настольный теннис"},
+    "volleyball":   {"parent": 9,     "draw": False, "totals": None,           "hcp": None, "emoji": "🏐", "name": "Волейбол"},
+}
+PARENT_TO_SPORT = {v["parent"]: k for k, v in SPORTS.items()}
 CATALOG_TTL = 300
 HORIZON = timedelta(hours=48)      # the browsable top list
 LOOKUP_HORIZON = timedelta(days=7)  # matches a user can find by name/screenshot
 MAX_MATCHES = 40
 
-SKIP_SEGMENT_WORDS = ("Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер")
+SKIP_SEGMENT_WORDS = ("Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер",
+                      "NBA 2K", "NHL 2", "FIFA", "eFootball", "Виртуал", "Победитель", "Специальн")
 # Shown first, in this order; anything else that's a real match comes after.
 TOP_LEAGUES = (
     "Лига Чемпионов УЕФА", "Лига Европы УЕФА", "Лига конференций УЕФА", "Лига Конференций УЕФА",
@@ -52,7 +67,7 @@ class Option:
     id: str      # stable within a match, e.g. "1", "X", "2", "TO2.5", "TU2.5", "H1-1.5"
     label: str   # human text, e.g. "П1", "Тотал больше 2.5", "Фора Реал (-1.5)"
     odds: float
-    kind: str    # "1x2" | "total_over" | "total_under" | "handicap1" | "handicap2"
+    kind: str    # "1x2" | "winner" | "total_over" | "total_under" | "handicap1" | "handicap2"
     line: float = 0.0
 
 
@@ -64,9 +79,12 @@ class FootballMatch:
     start_utc: datetime
     league: str
     options: list[Option] = field(default_factory=list)
+    sport: str = "football"
 
     @property
     def priority(self) -> int:
+        if self.sport != "football":
+            return len(TOP_LEAGUES)
         for n, prefix in enumerate(TOP_LEAGUES):
             if self.league.startswith(prefix):
                 return n
@@ -80,9 +98,9 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
                   limit: int | None = MAX_MATCHES) -> list[FootballMatch]:
     now = now or datetime.now(timezone.utc)
     segments = {
-        s["id"]: s.get("name") or ""
+        s["id"]: (s.get("name") or "", PARENT_TO_SPORT[s.get("parentId")])
         for s in raw.get("sports", [])
-        if s.get("kind") == "segment" and s.get("parentId") == FOOTBALL_PARENT_SPORT
+        if s.get("kind") == "segment" and s.get("parentId") in PARENT_TO_SPORT
         and not any(w in (s.get("name") or "") for w in SKIP_SEGMENT_WORDS)
     }
     factors = {
@@ -100,22 +118,30 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
         if not (now < start <= now + horizon):
             continue
         f = factors.get(ev.get("id"), {})
-        win = [f.get(TEAM1_WIN_FACTOR, {}).get("v"), f.get(DRAW_FACTOR, {}).get("v"), f.get(TEAM2_WIN_FACTOR, {}).get("v")]
-        if not all(win):
+        league, sport = segments[ev["sportId"]]
+        cfg = SPORTS[sport]
+        w1, wx, w2 = (f.get(k, {}).get("v") for k in (TEAM1_WIN_FACTOR, DRAW_FACTOR, TEAM2_WIN_FACTOR))
+        if not w1 or not w2 or (cfg["draw"] and not wx):
             continue
-        m = FootballMatch(str(ev["id"]), a, b, start, segments[ev["sportId"]])
-        m.options += [
-            Option("1", f"П1 ({a})", float(win[0]), "1x2"),
-            Option("X", "Ничья", float(win[1]), "1x2"),
-            Option("2", f"П2 ({b})", float(win[2]), "1x2"),
-        ]
-        m.options += _totals(f) + _handicaps(f, a, b)
+        m = FootballMatch(str(ev["id"]), a, b, start, league, sport=sport)
+        if cfg["draw"]:
+            m.options += [
+                Option("1", f"П1 ({a})", float(w1), "1x2"),
+                Option("X", "Ничья", float(wx), "1x2"),
+                Option("2", f"П2 ({b})", float(w2), "1x2"),
+            ]
+        else:
+            m.options += [Option("1", f"Победа {a}", float(w1), "winner"), Option("2", f"Победа {b}", float(w2), "winner")]
+        if cfg["totals"]:
+            m.options += _totals(f, cfg["totals"])
+        if cfg["hcp"]:
+            m.options += _handicaps(f, a, b, cfg["hcp"])
         matches.append(m)
     matches.sort(key=lambda m: (m.priority, m.start_utc))
     return matches[:limit] if limit else matches
 
 
-def _totals(f: dict) -> list[Option]:
+def _totals(f: dict, rng: tuple[float, float] = (1.5, 4.5)) -> list[Option]:
     out, seen = [], set()
     for over_id, under_id in TOTAL_LADDER_PAIRS:
         over, under = f.get(over_id), f.get(under_id)
@@ -123,7 +149,7 @@ def _totals(f: dict) -> list[Option]:
             line = float(over["pt"]) if over and under and over.get("pt") == under.get("pt") else None
         except (TypeError, ValueError):
             line = None
-        if line is None or line in seen or (line * 2) % 2 != 1 or not 1.5 <= line <= 4.5:
+        if line is None or line in seen or (line * 2) % 2 != 1 or not rng[0] <= line <= rng[1]:
             continue
         seen.add(line)
         out.append(Option(f"TO{line:g}", f"Тотал больше {line:g}", float(over["v"]), "total_over", line))
@@ -131,7 +157,7 @@ def _totals(f: dict) -> list[Option]:
     return sorted(out, key=lambda o: (o.line, o.kind))
 
 
-def _handicaps(f: dict, a: str, b: str) -> list[Option]:
+def _handicaps(f: dict, a: str, b: str, max_abs: float = 2.5) -> list[Option]:
     out, seen = [], set()
     for t1, t2 in HANDICAP_PAIRS:
         f1, f2 = f.get(t1), f.get(t2)
@@ -140,7 +166,7 @@ def _handicaps(f: dict, a: str, b: str) -> list[Option]:
             o1, o2 = float(f1["v"]), float(f2["v"])
         except (TypeError, ValueError, KeyError):
             continue
-        if h1 != -h2 or (abs(h1) * 2) % 2 != 1 or abs(h1) > 2.5 or h1 in seen:
+        if h1 != -h2 or (abs(h1) * 2) % 2 != 1 or abs(h1) > max_abs or h1 in seen:
             continue
         seen.add(h1)
         out.append(Option(f"H1{h1:+g}", f"Фора {a} ({h1:+g})", o1, "handicap1", h1))
@@ -163,10 +189,12 @@ async def get_full_line() -> list[FootballMatch]:
     return matches
 
 
-async def get_catalog() -> list[FootballMatch]:
-    """The browsable list: top leagues first, next HORIZON only, MAX_MATCHES at most."""
+async def get_catalog(sport: str | None = None) -> list[FootballMatch]:
+    """The browsable list: next HORIZON only, MAX_MATCHES at most (per sport when one is
+    given; "all" keeps football's top leagues first, then everything by kick-off)."""
     soon = datetime.now(timezone.utc) + HORIZON
-    return [m for m in await get_full_line() if m.start_utc <= soon][:MAX_MATCHES]
+    pool = [m for m in await get_full_line() if m.start_utc <= soon and (sport is None or m.sport == sport)]
+    return pool[:MAX_MATCHES]
 
 
 async def find_match(match_id: str) -> FootballMatch | None:
@@ -209,6 +237,8 @@ def settle(option: Option, goals_a: int, goals_b: int) -> str:
     total, diff = goals_a + goals_b, goals_a - goals_b
     if option.kind == "1x2":
         won = {"1": diff > 0, "X": diff == 0, "2": diff < 0}[option.id]
+    elif option.kind == "winner":
+        won = diff > 0 if option.id == "1" else diff < 0
     elif option.kind == "total_over":
         won = total > option.line
     elif option.kind == "total_under":

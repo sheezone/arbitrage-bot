@@ -33,6 +33,7 @@ def pick_from_row(row) -> dict:
     payload = json.loads(row["payload"])
     return {
         "match_id": row["match_id"],
+        "sport": row["sport"] if "sport" in row.keys() else "football",
         "team_a": row["team_a"],
         "team_b": row["team_b"],
         "league": row["league"],
