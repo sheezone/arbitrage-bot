@@ -100,6 +100,7 @@
   }
 
   let currentTab = "vilki";
+  const SWIPE_TABS_OFF = true;
   let swipeActive = false; // true while a horizontal tab-swipe owns the gesture
   let meCache = null;
   let bookmakersCache = null;
@@ -625,7 +626,8 @@ an_news: "News (injuries, form, suspensions)",
       /* per-viewer convenience only */
     }
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
-    content.innerHTML = skeletons[tab] || "";
+    updateScreenHead(tab);
+    content.innerHTML = skeletons[tab] || `<div class="skeleton sk-block" style="height:160px;margin-bottom:12px"></div>`.repeat(2);
     loadTab(tab);
   }
 
@@ -717,7 +719,8 @@ an_news: "News (injuries, form, suspensions)",
     }
 
     content.addEventListener("touchstart", (e) => {
-      if (e.touches.length !== 1 || animating || !calcModal.hidden || !analysisModal.hidden || !statsModal.hidden) return;
+      // No tab swiping in the home + bottom-nav layout: screens open from home cards.
+      if (SWIPE_TABS_OFF || e.touches.length !== 1 || animating || !calcModal.hidden || !analysisModal.hidden || !statsModal.hidden) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startT = Date.now();
@@ -849,7 +852,12 @@ an_news: "News (injuries, form, suspensions)",
   async function loadTab(tab, manual) {
     if (manual) refreshBtn.classList.add("spinning");
     try {
-      if (tab === "vilki") await renderVilki();
+      if (tab === "home") await renderHome();
+      else if (tab === "ai") await renderAiMatches();
+      else if (tab === "picks") await renderPicks();
+      else if (tab === "express") await renderExpress();
+      else if (tab === "help") renderHelp();
+      else if (tab === "vilki") await renderVilki();
       else if (tab === "news") await renderNews();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
@@ -2250,18 +2258,19 @@ an_news: "News (injuries, form, suspensions)",
     if (me.is_admin) document.getElementById("admin-tab").hidden = false;
 
     // Reopen on the tab the user left, if it still exists / is allowed.
-    let startTab = "vilki";
+    let startTab = "home"; // AI-first redesign (2026-10-02): always open on home
     try {
       const saved = localStorage.getItem("last_tab");
       const ok = Array.from(document.querySelectorAll(".tab")).some(
         (b) => !b.hidden && b.dataset.tab === saved
       );
-      if (ok) startTab = saved;
+      if (ok && saved === "home") startTab = saved;
     } catch (e) {
       /* default vilki */
     }
     currentTab = startTab;
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === startTab));
+    updateScreenHead(startTab);
     content.innerHTML = skeletons[startTab] || "";
     loadTab(startTab);
     if (!refreshTimer) {
@@ -2302,7 +2311,7 @@ an_news: "News (injuries, form, suspensions)",
     } catch (e) {
       return;
     }
-    setTimeout(showHintBar, 1600); // let the greeting toast clear first
+    return; // swipe hint retired with the home + bottom-nav layout (2026-10-02)
   }
   function showHintBar() {
     const bar = document.createElement("div");
@@ -2319,6 +2328,229 @@ an_news: "News (injuries, form, suspensions)",
     document.body.appendChild(bar);
     setTimeout(() => bar.isConnected && bar.remove(), 12000);
   }
+
+  // ================= AI home (2026-10-02 redesign) =================
+  // Home screen in the style the owner asked for: welcome tiles, PRO cards, bottom nav.
+  // Every number shown is real: hit-rate only from settled picks (never a made-up %).
+  const SCREEN_TITLES = { ai: "ИИ-Прогнозы", picks: "Готовые прогнозы", express: "Экспрессы", vilki: "Вилки",
+    news: "Новости", settings: "Настройки", sub: "PRO-доступ", admin: "Админ", help: "Помощь" };
+  let homeCache = null;
+
+  function updateScreenHead(tab) {
+    const head = document.getElementById("screen-head");
+    if (!head) return;
+    head.hidden = tab === "home";
+    const title = document.getElementById("screen-title");
+    if (title) title.textContent = SCREEN_TITLES[tab] || "";
+    document.querySelectorAll(".bn-item").forEach((b) =>
+      b.classList.toggle("active", b.dataset.go === tab || (b.dataset.go === "home" && tab !== "help")));
+  }
+
+  function go(tab) {
+    haptic("light");
+    if (tab === "support") return openSupport();
+    if (tab === "stats") return openStats();
+    if (tab === "calc") return openCalc();
+    switchTab(tab);
+    window.scrollTo(0, 0);
+  }
+
+  function openSupport() {
+    const u = (homeCache && homeCache.bot_username) || "";
+    if (u && tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${u}`);
+    else toast("Напишите нам в бота: «ℹ️ Помощь» → «Написать менеджеру»");
+  }
+
+  function hitBadge(h) {
+    if (!h) return "";
+    if (h.total < h.min_total) return `<span class="hb-badge">🆕 Статистика копится: ${h.total}/${h.min_total}</span>`;
+    return `<span class="hb-badge">📊 ${Math.round((h.wins / h.total) * 100)}% проходимость · ${h.total} матчей</span>`;
+  }
+
+  function proCard(key, icon, title, badge, chips, art, locked) {
+    return `<button type="button" class="pro-card" data-go="${key}">
+      <div class="pro-head"><span class="pro-icon">${icon}</span><span class="pro-title">${esc(title)}</span>${badge}${locked ? '<span class="hb-lock">🔒 PRO</span>' : ""}</div>
+      <div class="pro-art art-${art}">
+        <div class="pro-chips">${chips.map((c) => `<span class="pro-chip">${esc(c)}</span>`).join("")}</div>
+      </div>
+    </button>`;
+  }
+
+  async function renderHome() {
+    let h = homeCache;
+    try {
+      h = await api("/api/home");
+      homeCache = h;
+    } catch (e) {
+      if (!h) throw e;
+    }
+    const locked = !h.has_access;
+    const quota = h.ai_quota.limit == null ? "" : ` · ${h.ai_quota.used}/${h.ai_quota.limit}`;
+    content.innerHTML = `
+      <section class="home">
+        <div class="home-row">
+          <h2 class="home-welcome">Добро пожаловать!</h2>
+          <div class="home-arrows"><button type="button" data-scroll="-1">‹</button><button type="button" data-scroll="1">›</button></div>
+        </div>
+        <div class="tiles" id="home-tiles">
+          <button type="button" class="tile art-t-help" data-go="help"><span class="tile-emoji">🤖</span><span class="tile-label">Помощь</span></button>
+          <button type="button" class="tile art-t-stats" data-go="stats"><span class="tile-emoji">🏆</span><span class="tile-label">Статистика</span></button>
+          <button type="button" class="tile art-t-support" data-go="support"><span class="tile-emoji">🎧</span><span class="tile-label">Поддержка</span></button>
+          <button type="button" class="tile art-t-news" data-go="news"><span class="tile-emoji">📰</span><span class="tile-label">Новости</span></button>
+          <button type="button" class="tile art-t-calc" data-go="calc"><span class="tile-emoji">🧮</span><span class="tile-label">Калькулятор</span></button>
+        </div>
+        <h2 class="home-pro">PRO-доступ${locked ? ' <button type="button" class="pro-buy" data-go="sub">Оформить</button>' : ""}</h2>
+        ${proCard("ai", "🧠", "ИИ-Прогнозы", hitBadge(h.hit_rate), ["🎯 Разбор матчей" + quota, "⚽ Форма и новости", "💰 Ищем ценность в линии"], "ai", false)}
+        ${proCard("express", "📈", "Экспрессы", h.express_count ? `<span class="hb-badge">${h.express_count} на сегодня</span>` : "", ["🤖 Отбор через ИИ", "💰 Кэф x2–x6", "🔥 Каждый день новые"], "express", locked)}
+        ${proCard("picks", "⚽", "Готовые прогнозы", '<span class="hb-badge hb-hot">🔥 ХИТ</span>', ["📋 Прогнозы дня" + (h.picks_count ? ` · ${h.picks_count}` : ""), "📝 С обоснованием", "📊 Честная статистика"], "picks", locked)}
+        ${proCard("vilki", "⚡", "Вилки", h.vilki_count ? `<span class="hb-badge">${h.vilki_count} сейчас</span>` : "", ["🏦 9 букмекеров", "⏱ Каждые 20 сек", "🧮 Расчёт ставок"], "vilki", locked)}
+        <p class="home-note">Аналитика, а не гарантия выигрыша. 18+</p>
+      </section>`;
+    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+    content.querySelectorAll("[data-scroll]").forEach((b) =>
+      b.addEventListener("click", () => {
+        document.getElementById("home-tiles").scrollBy({ left: Number(b.dataset.scroll) * 160, behavior: "smooth" });
+      }));
+  }
+
+  function confMeter(c) {
+    const n = { "низкая": 1, "средняя": 2, "высокая": 3 }[c] || 1;
+    return `<span class="conf"><span class="conf-bars">${[1, 2, 3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>${esc(c)}</span>`;
+  }
+
+  function teamsLine(m) {
+    return `${m.team_a_flag ? m.team_a_flag + " " : ""}${esc(m.team_a)} — ${m.team_b_flag ? m.team_b_flag + " " : ""}${esc(m.team_b)}`;
+  }
+
+  async function renderAiMatches() {
+    const data = await api("/api/ai/matches");
+    const h = homeCache;
+    const quota = h && h.ai_quota.limit != null ? `Сегодня разобрано: <b>${h.ai_quota.used}/${h.ai_quota.limit}</b>` : "Без ограничений";
+    if (!data.matches.length) {
+      content.innerHTML = `<div class="ai-empty">Сейчас нет ближайших матчей в линии — загляните позже.</div>`;
+      return;
+    }
+    let html = `<div class="ai-intro">Выберите матч — ИИ разберёт форму, личные встречи, новости и линию и предложит одну ставку с объяснением.<div class="ai-quota">${quota}</div></div>`;
+    let league = null;
+    for (const m of data.matches) {
+      if (m.league !== league) {
+        league = m.league;
+        html += `<div class="ai-league">🏆 ${esc(league)}</div>`;
+      }
+      html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
+        <span class="ai-teams">${teamsLine(m)}</span>
+        <span class="ai-meta">🕒 ${esc(m.start_label || "")}${m.analyzed ? ' · <span class="ai-done">✓ разобран</span>' : ""}</span></button>`;
+    }
+    content.innerHTML = html;
+    content.querySelectorAll(".ai-match").forEach((b) => b.addEventListener("click", () => renderAiAnalysis(b.dataset.id)));
+  }
+
+  async function renderAiAnalysis(matchId) {
+    haptic("light");
+    content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>ИИ анализирует матч…</div><div class="ai-sub">Форма, личные встречи, новости и линия. До минуты.</div></div>`;
+    window.scrollTo(0, 0);
+    let data;
+    try {
+      data = await api(`/api/ai/analysis?match_id=${encodeURIComponent(matchId)}`);
+    } catch (e) {
+      toast(e.message);
+      if (e.status === 429 && homeCache && !homeCache.has_access) return switchTab("sub");
+      return renderAiMatches();
+    }
+    if (homeCache) homeCache.ai_quota.used = Math.max(homeCache.ai_quota.used, 1);
+    const a = data.analysis;
+    const m = data.match;
+    content.innerHTML = `
+      <div class="an-hero">
+        <div class="an-league">🏆 ${esc(m.league)}</div>
+        <div class="an-teams">${teamsLine(m)}</div>
+        <div class="an-time">🕒 ${esc(m.start_label || "")}</div>
+      </div>
+      <div class="an-pick">
+        <div class="an-pick-k">🎯 Прогноз ИИ</div>
+        <div class="an-pick-v">${esc(a.pick.label)} <span class="an-odds">@ ${a.pick.odds.toFixed(2)}</span></div>
+        <div class="an-conf">Уверенность: ${confMeter(a.confidence)}</div>
+        <div class="an-why">${esc(a.reasoning)}</div>
+      </div>
+      <div class="an-block"><div class="an-h">📋 Кратко</div><div>${esc(a.summary)}</div></div>
+      <div class="an-block"><div class="an-h">🔎 Ключевые факторы</div>
+        ${a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join("")}</div>
+      <div class="an-block an-risk"><div class="an-h">⚠️ Риски</div><div>${esc(a.risks)}</div></div>
+      <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>Коэффициенты на момент анализа — проверяйте у букмекера. Аналитика, а не гарантия. 18+</p></div>
+      <button type="button" class="btn-ghost" id="an-back">‹ К списку матчей</button>`;
+    document.getElementById("an-back").addEventListener("click", () => renderAiMatches());
+  }
+
+  function pickCard(p) {
+    const res = p.result === "win" ? '<span class="res win">✅ Зашёл</span>' : p.result === "lose" ? '<span class="res lose">❌ Не зашёл</span>' : "";
+    const body = p.locked
+      ? `<div class="pk-locked">🔒 Прогноз доступен в PRO</div>`
+      : `<div class="pk-pick">🎯 ${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span></div>
+         <div class="an-conf">${confMeter(p.confidence)}</div>
+         ${p.reasoning ? `<div class="pk-why">${esc(p.reasoning)}</div>` : ""}`;
+    return `<div class="pk-card">
+      <div class="pk-top"><span class="pk-league">${esc(p.league)}</span>${res}</div>
+      <div class="pk-teams">${esc(p.team_a)} — ${esc(p.team_b)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
+      ${body}</div>`;
+  }
+
+  async function renderPicks() {
+    const data = await api("/api/ai/picks");
+    const h = homeCache ? homeCache.hit_rate : null;
+    let html = `<div class="pk-stat">${hitBadge(h)}<div class="ai-sub">Считаем только по результатам сыгранных матчей.</div></div>`;
+    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть прогнозы — PRO</button>`;
+    html += `<h3 class="sec-h">Ближайшие матчи</h3>`;
+    html += data.upcoming.length ? data.upcoming.map(pickCard).join("") : `<div class="ai-empty">ИИ готовит прогнозы — загляните чуть позже.</div>`;
+    if (data.recent.length) html += `<h3 class="sec-h">Последние результаты</h3>` + data.recent.map(pickCard).join("");
+    content.innerHTML = html;
+    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+  }
+
+  async function renderExpress() {
+    const data = await api("/api/ai/express");
+    let html = `<div class="ai-intro">Экспресс собирается из прогнозов ИИ с уверенностью «средняя» и выше на разные матчи, общий кэф от 2 до 6. Экспресс проигрывает, если не зашла хоть одна ставка.</div>`;
+    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть экспрессы — PRO</button>`;
+    if (!data.expresses.length) html += `<div class="ai-empty">Пока мало прогнозов для экспресса — ИИ разбирает матчи в течение дня.</div>`;
+    data.expresses.forEach((e, i) => {
+      html += `<div class="ex-card"><div class="ex-head"><span>Экспресс №${i + 1}</span>${e.total_odds ? `<span class="ex-total">кэф ${e.total_odds.toFixed(2)}</span>` : '<span class="hb-lock">🔒 PRO</span>'}</div>
+        ${e.legs.map((p) => `<div class="ex-leg"><div class="pk-teams">${esc(p.team_a)} — ${esc(p.team_b)}</div>
+          <div class="ex-pick">${p.locked ? "🔒 скрыто" : `${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>`}</div></div>`).join("")}</div>`;
+    });
+    content.innerHTML = html;
+    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+  }
+
+  function renderHelp() {
+    content.innerHTML = `
+      <div class="an-block"><div class="an-h">🧠 ИИ-Прогнозы</div><div>Выберите матч — ИИ соберёт форму команд, таблицу, личные встречи, свежие новости и коэффициенты и предложит одну ставку из реальной линии с объяснением и уровнем уверенности.</div></div>
+      <div class="an-block"><div class="an-h">📊 Честная статистика</div><div>Каждый прогноз сохраняется и после матча сверяется со счётом. Проходимость считается только по сыгранным матчам.</div></div>
+      <div class="an-block"><div class="an-h">📈 Экспрессы и готовые прогнозы</div><div>ИИ каждый день сам разбирает топовые матчи. Из лучших прогнозов собираются экспрессы с кэфом 2–6.</div></div>
+      <div class="an-block"><div class="an-h">⚡ Вилки</div><div>Расхождения коэффициентов у 9 лицензированных БК. Уведомления о вилках включаются в боте: «🔍 Поиск вилок» → «Включить уведомления».</div></div>
+      <div class="an-block"><div class="an-h">🌐 Язык</div><div class="lang-row">
+        <button class="pro-chip lang-set" data-lang="ru">🇷🇺 Русский</button><button class="pro-chip lang-set" data-lang="en">🇬🇧 English</button><button class="pro-chip lang-set" data-lang="tg">🇹🇯 Тоҷикӣ</button></div></div>
+      <button type="button" class="pro-buy wide" data-go="support">🎧 Написать в поддержку</button>
+      <p class="home-note">Сервис — аналитика: он не принимает ставки и не гарантирует выигрыш. 18+</p>`;
+    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+    content.querySelectorAll(".lang-set").forEach((b) =>
+      b.addEventListener("click", () => {
+        const item = document.querySelector(`.lang-menu-item[data-lang="${b.dataset.lang}"]`);
+        if (item) item.click();
+      }));
+  }
+
+  function renderUserChip() {
+    const el = document.getElementById("user-chip");
+    if (!el) return;
+    const u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
+    const name = esc(u.username || u.first_name || "");
+    const ava = u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : `<span>${esc((u.first_name || "?")[0])}</span>`;
+    el.innerHTML = `<span class="uc-ava">${ava}</span><span class="uc-text"><b>${name}</b><small>ID: ${u.id || ""}</small></span>`;
+  }
+
+  document.querySelectorAll(".bn-item").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+  const screenBack = document.getElementById("screen-back");
+  if (screenBack) screenBack.addEventListener("click", () => go("home"));
+  renderUserChip();
 
   boot();
 })();

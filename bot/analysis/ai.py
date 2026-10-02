@@ -31,6 +31,9 @@ from bot.webapp.team_form import get_team_form as espn_team_form
 logger = logging.getLogger(__name__)
 
 CONFIDENCE = ("низкая", "средняя", "высокая")
+# Distinct matches a user may open per MSK day (re-opening one already opened is free).
+AI_FREE_PER_DAY = 1
+AI_PAID_PER_DAY = 15
 
 SCHEMA = {
     "type": "object",

@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Арбитражный бот</title>
+<title>LINEYKA AI</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="home.css">
 </head>
 <body>
 <div class="bg-anim" aria-hidden="true">
@@ -16,27 +17,35 @@
 <div id="splash">
   <div class="splash-logo">
     <span class="splash-ring"></span>
-    <span class="splash-emoji">⚡</span>
+    <span class="splash-emoji">🧠</span>
   </div>
-  <div class="splash-title">Арбитражный бот</div>
+  <div class="splash-title">LINEYKA AI</div>
   <div class="splash-bar"><span></span></div>
 </div>
 <div id="app">
   <header class="topbar">
-    <div class="topbar-title" id="topbar-title">🔍 Арбитражный бот</div>
-    <div class="lang-picker">
-      <button id="lang-btn" class="icon-btn" title="Забон / Язык / Language">🌐</button>
-      <div id="lang-menu" class="lang-menu" hidden>
-        <button class="lang-menu-item" data-lang="ru">🇷🇺 Русский</button>
-        <button class="lang-menu-item" data-lang="en">🇬🇧 English</button>
-        <button class="lang-menu-item" data-lang="tg">🇹🇯 Тоҷикӣ</button>
-      </div>
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="6" r="3"/><rect x="22.5" y="7" width="3" height="6" rx="1.5"/><rect x="8" y="13" width="32" height="24" rx="9"/><circle cx="18" cy="25" r="4" class="eye"/><circle cx="30" cy="25" r="4" class="eye"/><path d="M14 41h20" stroke-width="3" stroke-linecap="round" class="mouth"/></svg>
+      <span class="brand-text"><b>LINEYKA</b><small>AI ПРОГНОЗЫ</small></span>
     </div>
-    <button id="calc-btn" class="icon-btn" title="Калькулятор">🧮</button>
-    <button id="refresh-btn" class="icon-btn" title="Обновить">🔄</button>
+    <div class="topbar-right">
+      <div class="lang-picker">
+        <button id="lang-btn" class="icon-btn" title="Забон / Язык / Language">🌐</button>
+        <div id="lang-menu" class="lang-menu" hidden>
+          <button class="lang-menu-item" data-lang="ru">🇷🇺 Русский</button>
+          <button class="lang-menu-item" data-lang="en">🇬🇧 English</button>
+          <button class="lang-menu-item" data-lang="tg">🇹🇯 Тоҷикӣ</button>
+        </div>
+      </div>
+      <button id="calc-btn" class="icon-btn" title="Калькулятор" hidden>🧮</button>
+      <button id="refresh-btn" class="icon-btn" title="Обновить" hidden>🔄</button>
+      <div id="user-chip" class="user-chip"></div>
+    </div>
+    <div id="topbar-title" hidden></div>
   </header>
+  <div class="topbar-line"></div>
 
-  <nav class="tabs">
+  <nav class="tabs" hidden>
     <button class="tab active" data-tab="vilki">Вилки</button>
     <button class="tab" data-tab="news">Новости</button>
     <button class="tab" data-tab="settings">Настройки</button>
@@ -44,11 +53,21 @@
     <button class="tab" data-tab="admin" id="admin-tab" hidden>Админ</button>
   </nav>
 
+  <div id="screen-head" class="screen-head" hidden>
+    <button type="button" id="screen-back" class="screen-back">‹</button>
+    <span id="screen-title"></span>
+  </div>
+
   <div class="content-wrap">
     <div id="ptr-indicator">🔄</div>
     <main id="content"></main>
   </div>
   <div id="toast" class="toast"></div>
+  <nav class="bottom-nav">
+    <button type="button" class="bn-item" data-go="help"><span class="bn-ico">🧠</span><span>Помощь</span></button>
+    <button type="button" class="bn-item active" data-go="home"><span class="bn-ico">💸</span><span>PRO</span></button>
+    <button type="button" class="bn-item" data-go="support"><span class="bn-ico">🎧</span><span>Поддержка</span></button>
+  </nav>
 
   <div id="stats-modal" class="modal" hidden>
     <div class="modal-backdrop"></div>

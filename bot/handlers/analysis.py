@@ -14,7 +14,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
-from bot.analysis.ai import Analyzer, hit_rate_line
+from bot.analysis.ai import AI_FREE_PER_DAY, AI_PAID_PER_DAY, Analyzer, hit_rate_line
 from bot.analysis.catalog import FootballMatch, find_match, get_catalog
 from bot.core import billing
 from bot.core.emoji import button_texts, vi
@@ -23,8 +23,6 @@ from bot.db.repository import Repository
 from bot.handlers.commands import AI_BUTTON_TEXT, _btn, _render
 
 AI_BUTTON_TEXTS = tuple(AI_BUTTON_TEXT.values())
-AI_FREE_PER_DAY = 1
-AI_PAID_PER_DAY = 15
 PAGE_SIZE = 10
 MSK = timezone(timedelta(hours=3))
 CB_LIST = "ai:list:"

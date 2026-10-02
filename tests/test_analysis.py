@@ -61,3 +61,16 @@ def test_results_match_by_names_and_swap_orientation():
     start = datetime(2026, 10, 2, 17, tzinfo=timezone.utc)  # 20:00 MSK
     assert find_score("Арсенал", "Челси", start, res) == (1, 3)
     assert find_score("Ливерпуль", "Эвертон", start, res) is None
+
+
+def test_build_expresses_uses_distinct_medium_high_picks_within_total_range():
+    from bot.analysis.picks import build_expresses
+
+    def p(i, odds, conf="средняя"):
+        return {"match_id": f"m{i}", "odds": odds, "confidence": conf}
+
+    picks = [p(1, 1.5), p(2, 1.6, "высокая"), p(3, 1.7), p(4, 1.9, "низкая"), p(5, 3.0)]
+    ex = build_expresses(picks)
+    assert ex and all(2.0 <= e["total_odds"] <= 6.0 for e in ex)
+    legs = [leg["match_id"] for e in ex for leg in e["legs"]]
+    assert len(legs) == len(set(legs)) and "m4" not in legs and "m5" not in legs

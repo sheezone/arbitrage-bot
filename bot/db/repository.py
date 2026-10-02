@@ -202,6 +202,17 @@ class Repository:
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
 
+    def ai_analyses_between(self, start_from_iso: str, start_to_iso: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM ai_analyses WHERE start_utc >= ? AND start_utc < ? ORDER BY start_utc",
+            (start_from_iso, start_to_iso),
+        ).fetchall()
+
+    def ai_recent_settled(self, limit: int = 20) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM ai_analyses WHERE result IN ('win','lose') ORDER BY start_utc DESC LIMIT ?", (limit,)
+        ).fetchall()
+
     def ai_usage_today(self, chat_id: int, day: str) -> set[str]:
         rows = self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ? AND day = ?", (chat_id, day)).fetchall()
         return {r[0] for r in rows}

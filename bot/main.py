@@ -114,6 +114,7 @@ async def main() -> None:
     ai_router = Router(name="ai_analysis")
     analyzer = None
     settle_task: asyncio.Task | None = None
+    picks_task: asyncio.Task | None = None
     if config.anthropic_api_key:
         from bot.analysis.ai import Analyzer
         from bot.analysis.results import run_settler
@@ -123,6 +124,9 @@ async def main() -> None:
             api_football_key=config.api_football_key, football_data_key=config.football_data_key,
         )
         settle_task = asyncio.create_task(run_settler(repo))
+        from bot.analysis.picks import run_daily_picks
+
+        picks_task = asyncio.create_task(run_daily_picks(analyzer, repo))
     register_analysis_handlers(ai_router, repo, analyzer, config.admin_chat_ids)
     # before the main router: its catch-all text handlers must not swallow the AI button
     dp.include_router(ai_router)
@@ -165,6 +169,7 @@ async def main() -> None:
             yookassa_provider_token=config.yookassa_provider_token,
             yookassa_client=yookassa_client,
             bot_username=me.username or "",
+            analyzer=analyzer,
         )
         uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")
         webapp_task = asyncio.create_task(uvicorn.Server(uv_config).serve())
@@ -237,6 +242,8 @@ async def main() -> None:
             news_task.cancel()
         if settle_task is not None:
             settle_task.cancel()
+        if picks_task is not None:
+            picks_task.cancel()
         for source in sources:
             await source.close()
         await surebet_finder.close()

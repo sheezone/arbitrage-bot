@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -26,6 +26,9 @@ from pydantic import BaseModel
 from bot.core import billing
 from bot.core.emoji import vi
 from bot.core.arbitrage import calc_stakes
+from bot.analysis.ai import AI_FREE_PER_DAY, AI_PAID_PER_DAY
+from bot.analysis.catalog import find_match, get_catalog
+from bot.analysis.picks import build_expresses, pick_from_row, upcoming_picks
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
 from bot.core.subscription import is_subscribed
@@ -156,6 +159,7 @@ def register_api(
     yookassa_provider_token: str = "",
     yookassa_client: YooKassaClient | None = None,
     bot_username: str = "",
+    analyzer=None,
 ) -> FastAPI:
     """Builds and returns a fresh FastAPI app wired to the given Repository/LatestState --
     NOT a module-level singleton mutated in place. Call this once from bot/main.py with
@@ -208,6 +212,101 @@ def register_api(
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
+
+    # ---------------- AI analysis (main section since 2026-10-02) ----------------
+    MSK_TZ = timezone(timedelta(hours=3))
+
+    def _ai_quota(user, now) -> tuple[int | None, set[str]]:
+        day = now.astimezone(MSK_TZ).date().isoformat()
+        used = repo.ai_usage_today(user.chat_id, day)
+        if billing.is_admin(user, admin_chat_ids):
+            return None, used
+        return (AI_PAID_PER_DAY if billing.has_access(user, now, admin_chat_ids) else AI_FREE_PER_DAY), used
+
+    def _match_out(m) -> dict:
+        return {
+            "id": m.id, "team_a": m.team_a, "team_b": m.team_b, "league": m.league,
+            "start_utc": m.start_utc.isoformat(), "start_label": format_match_start(m.start_utc.isoformat()),
+            "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b),
+        }
+
+    @app.get("/api/home")
+    async def get_home(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        now = datetime.now(timezone.utc)
+        wins, total = repo.ai_hit_rate()
+        limit, used = _ai_quota(user, now)
+        picks = upcoming_picks(repo, now)
+        return {
+            "has_access": billing.has_access(user, now, admin_chat_ids),
+            "is_admin": billing.is_admin(user, admin_chat_ids),
+            "hit_rate": {"wins": wins, "total": total, "min_total": 20},
+            "ai_quota": {"limit": limit, "used": len(used)},
+            "picks_count": len(picks),
+            "express_count": len(build_expresses(picks)),
+            "vilki_count": len(state.matches),
+            "bot_username": bot_username,
+        }
+
+    @app.get("/api/ai/matches")
+    async def get_ai_matches(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        _get_user(repo, chat_id)
+        try:
+            matches = await get_catalog()
+        except Exception:
+            matches = []
+        analyzed = {p["match_id"] for p in upcoming_picks(repo)}
+        return {"matches": [{**_match_out(m), "analyzed": m.id in analyzed} for m in matches]}
+
+    @app.get("/api/ai/analysis")
+    async def get_ai_analysis(match_id: str, authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        if analyzer is None:
+            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+        match = await find_match(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Матч уже начался или пропал из линии")
+        now = datetime.now(timezone.utc)
+        limit, used = _ai_quota(user, now)
+        if limit is not None and match_id not in used and len(used) >= limit:
+            raise HTTPException(status_code=429, detail=(
+                f"Лимит на сегодня: {limit}. Оформите PRO — до {AI_PAID_PER_DAY} анализов в день."
+                if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
+        result = await analyzer.analyze(match)
+        if result is None:
+            raise HTTPException(status_code=502, detail="Не удалось разобрать этот матч, попробуйте другой")
+        repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match_id)
+        wins, total = repo.ai_hit_rate()
+        return {"match": _match_out(match), "analysis": result, "hit_rate": {"wins": wins, "total": total, "min_total": 20}}
+
+    def _lock(pick: dict) -> dict:
+        return {**pick, "label": None, "odds": None, "reasoning": "", "locked": True}
+
+    @app.get("/api/ai/picks")
+    async def get_ai_picks(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
+        upcoming = upcoming_picks(repo)
+        recent = [pick_from_row(r) for r in repo.ai_recent_settled(20)]
+        return {"pro": pro, "upcoming": upcoming if pro else [_lock(p) for p in upcoming], "recent": recent}
+
+    @app.get("/api/ai/express")
+    async def get_ai_express(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
+        expresses = build_expresses(upcoming_picks(repo))
+        if not pro:
+            expresses = [{**e, "legs": [_lock(p) for p in e["legs"]], "total_odds": None} for e in expresses]
+        return {"pro": pro, "expresses": expresses}
 
     @app.get("/api/me")
     async def get_me(authorization: str | None = Header(default=None)):
