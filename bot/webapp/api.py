@@ -859,7 +859,7 @@ def register_api(
                 url = payment["confirmation"]["confirmation_url"]
             except Exception:
                 logger.exception("Mini App: failed to create ЮKassa СБП payment for chat_id=%s", chat_id)
-                raise HTTPException(status_code=502, detail="Не удалось создать платёж, попробуйте позже")
+                raise HTTPException(status_code=424, detail="Не удалось создать платёж, попробуйте позже")
             asyncio.create_task(poll_yookassa_sbp(bot, repo, yookassa_client, chat_id, payment["id"]))
             return {"type": "sbp", "url": url, "payment_id": payment["id"]}
 
