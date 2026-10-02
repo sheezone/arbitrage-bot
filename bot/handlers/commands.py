@@ -30,6 +30,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
+    ReplyKeyboardRemove,
+    WebAppInfo,
     CallbackQuery,
     FSInputFile,
     InlineKeyboardButton,
@@ -75,6 +77,7 @@ logger = logging.getLogger(__name__)
 MOSCOW_TZ = timezone(timedelta(hours=3))
 _ASSETS = Path(__file__).resolve().parent.parent / "assets"
 BANNER_PATH = _ASSETS / "banner.png"
+RADAR_PATH = _ASSETS / "radar_avatar.png"
 BANNER_REFERRAL_PATH = _ASSETS / "banner_referral.png"
 BANNER_STATUS_ACTIVE_PATH = _ASSETS / "banner_status_active.png"
 BANNER_STATUS_PAUSED_PATH = _ASSETS / "banner_status_paused.png"
@@ -1140,6 +1143,80 @@ def register_handlers(
 ) -> Router:
     # СБП via Prodamus needs a payform URL AND a public webhook target (WEBAPP_URL).
     sbp_enabled = bool(prodamus_form_url and webapp_url)
+
+    # ---- App-first bot (owner, 2026-10-03): everything lives in the Mini App; the chat
+    # bot is the entry card + notifications + payments. Old screens stay in the code but
+    # are no longer reachable from the bot UI.
+    support_cache: dict[str, list[str]] = {}
+
+    async def _support_url(bot: Bot, chat_id: int) -> str | None:
+        if "u" not in support_cache:
+            names = []
+            for admin_id in sorted(admin_chat_ids):
+                try:
+                    chat = await bot.get_chat(admin_id)
+                    if chat.username:
+                        names.append(chat.username)
+                except Exception:
+                    pass
+            support_cache["u"] = names
+        names = support_cache["u"]
+        return f"https://t.me/{names[chat_id % len(names)]}" if names else None
+
+    async def _app_entry(bot: Bot, chat_id: int) -> None:
+        user = repo.get_user(chat_id)
+        # drop the old bottom reply keyboard for good
+        try:
+            m = await bot.send_message(chat_id, "📡", reply_markup=ReplyKeyboardRemove())
+            await bot.delete_message(chat_id, m.message_id)
+        except Exception:
+            pass
+        if required_channel_id is not None and chat_id not in admin_chat_ids:
+            if not await is_subscribed(bot, required_channel_id, chat_id):
+                text, keyboard = _subscription_gate_view(required_channel_username)
+                await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+                return
+        ref = f"https://t.me/{bot_username}?start={chat_id}" if bot_username else ""
+        text = (
+            "📡 <b>Матч-Радар</b> — ИИ-аналитика футбольных матчей\n\n"
+            "🧠 Шансы в процентах на любой матч — по названиям или скриншоту\n"
+            "📋 Готовые прогнозы и 📈 экспрессы каждый день\n"
+            "⚡ Вилки у 9 лицензированных букмекеров\n\n"
+            "Всё — в приложении 👇"
+            + (f"\n\n🎁 Пригласите друга — <b>+{billing.REFERRAL_BONUS_DAYS} дня</b> бесплатно:\n{ref}" if ref else "")
+            + "\n\n<i>Аналитика, а не гарантия выигрыша. 18+</i>"
+        )
+        rows = []
+        if webapp_url:
+            rows.append([InlineKeyboardButton(text="📡 Открыть Матч-Радар", web_app=WebAppInfo(url=webapp_url))])
+        support = await _support_url(bot, chat_id)
+        if support:
+            rows.append([InlineKeyboardButton(text="🎧 Поддержка", url=support)])
+        if user and user.menu_message_id:
+            try:
+                await bot.delete_message(chat_id, user.menu_message_id)
+            except Exception:
+                pass
+        sent = await bot.send_photo(
+            chat_id, FSInputFile(RADAR_PATH), caption=text, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if rows else None,
+        )
+        repo.set_menu_message_id(chat_id, sent.message_id)
+
+    _OLD_BUTTONS = button_texts(
+        list(_SEARCH_BUTTON_TEXT.values()) + list(_PROFILE_BUTTON_TEXT.values())
+        + list(AI_BUTTON_TEXT.values()) + [HELP_BUTTON_TEXT, LANG_BUTTON_TEXT]
+    )
+
+    @router.message(F.text.in_(_OLD_BUTTONS))
+    async def on_old_menu_button(message: Message, state: FSMContext, bot: Bot) -> None:
+        """Taps on the retired bottom keyboard (cached on some clients) -> the app card."""
+        await state.clear()
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await _app_entry(bot, message.chat.id)
     @router.callback_query(F.data == NAV_CHECK_CHANNEL_SUB)
     async def on_check_channel_subscription(callback: CallbackQuery, bot: Bot) -> None:
         if required_channel_id is None or callback.message is None:
@@ -1211,19 +1288,7 @@ def register_handlers(
             except Exception:
                 pass
 
-        # First launch ever: show ONLY the language picker. Everything else (keyboard,
-        # welcome note, dashboard) is sent once a language is picked -- see
-        # on_select_language, which calls _send_start_ui.
-        if not user.lang_chosen:
-            text, keyboard = _language_menu_view()
-            await message.answer(text, reply_markup=keyboard)
-            try:
-                await message.delete()
-            except Exception:
-                pass
-            return
-
-        await _send_start_ui(bot, message.chat.id, user, send_welcome=is_new_user)
+        await _app_entry(bot, message.chat.id)
         try:
             await message.delete()
         except Exception:
@@ -1505,10 +1570,16 @@ def register_handlers(
         if not billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids):
             await callback.answer("Уведомления о вилках — для подписчиков. Оформите подписку в «💳 Подписка».", show_alert=True)
             return
-        repo.start_vilki(chat_id, billing.VILKI_RUN_DAYS)
-        user = repo.get_user(chat_id)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
-        await _render(bot, repo, chat_id, callback.message.message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
+        until = repo.start_vilki(chat_id, billing.VILKI_RUN_DAYS)
+        until_txt = datetime.fromisoformat(until).astimezone(MOSCOW_TZ).strftime("%d.%m %H:%M")
+        try:
+            await callback.message.edit_text(
+                f"🟢 Поиск вилок запущен до {until_txt} МСК. Новые вилки будут приходить сюда.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                    text="📡 Открыть Матч-Радар", web_app=WebAppInfo(url=webapp_url))]]) if webapp_url else None,
+            )
+        except Exception:
+            pass
         await callback.answer(f"Поиск вилок запущен на {billing.VILKI_RUN_DAYS} дня")
 
     @router.callback_query(F.data == NAV_TOGGLE_MUTED)

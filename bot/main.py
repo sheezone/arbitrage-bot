@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import logging
 import socket
@@ -9,14 +10,13 @@ import uvicorn
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
-from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, MenuButtonWebApp, WebAppInfo
 
 from bot.config import load_config
 from bot.core.monitor import run_monitor_loop
 from bot.core.state import LatestState
 from bot.db.repository import Repository
-from bot.handlers.analysis import register_analysis_handlers
-from bot.handlers.commands import _main_menu_keyboard, register_handlers
+from bot.handlers.commands import register_handlers
 from bot.providers.baltbet import BaltbetProvider
 from bot.providers.cryptobot import CryptoPayClient
 from bot.providers.yookassa_api import YooKassaClient
@@ -56,6 +56,13 @@ async def _get_me_with_retries(bot: Bot):
             logger.warning("bot.get_me() failed (attempt %d/%d): %s", attempt, STARTUP_RETRY_ATTEMPTS, e)
             await asyncio.sleep(STARTUP_RETRY_DELAY_SECONDS)
     raise last_error
+
+
+def _open_app_markup(_language: str = "ru"):
+    url = os.environ.get("WEBAPP_URL", "").rstrip("/")
+    if not url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📡 Открыть Матч-Радар", web_app=WebAppInfo(url=url))]])
 
 
 async def main() -> None:
@@ -112,7 +119,6 @@ async def main() -> None:
 
     me = await _get_me_with_retries(bot)
 
-    ai_router = Router(name="ai_analysis")
     analyzer = None
     settle_task: asyncio.Task | None = None
     picks_task: asyncio.Task | None = None
@@ -130,9 +136,8 @@ async def main() -> None:
         picks_task = asyncio.create_task(run_daily_picks(
             analyzer, repo, bot, config.webapp_url, config.admin_chat_ids,
         ))
-    register_analysis_handlers(ai_router, repo, analyzer, config.admin_chat_ids)
-    # before the main router: its catch-all text handlers must not swallow the AI button
-    dp.include_router(ai_router)
+    # AI analysis lives in the Mini App only now (app-first bot, 2026-10-03); the chat-bot
+    # AI screens (bot/handlers/analysis.py) are no longer registered.
 
     dp.include_router(
         register_handlers(
@@ -196,7 +201,8 @@ async def main() -> None:
             # Silently refreshes the persistent bottom keyboard on every notification a
             # user gets -- see _notify_group's docstring for why (Telegram clients have
             # been seen dropping it with no action on our side that would explain it).
-            keyboard_factory=_main_menu_keyboard,
+            # every notification carries an "open the app" button (app-first bot)
+            keyboard_factory=_open_app_markup,
         )
     )
 
