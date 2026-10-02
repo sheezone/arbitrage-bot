@@ -699,6 +699,10 @@ def register_api(
             "payments": repo.get_payments_summary(),
             "acquisition_sources": repo.get_acquisition_source_counts(),
             "opportunities": repo.get_opportunity_stats(),
+            "ai": {
+                **repo.ai_admin_stats(now.astimezone(MSK_TZ).date().isoformat()),
+                "wins": repo.ai_hit_rate()[0], "settled": repo.ai_hit_rate()[1],
+            },
             "recent_users": [
                 {
                     "chat_id": u.chat_id,

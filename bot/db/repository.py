@@ -213,6 +213,13 @@ class Repository:
             "SELECT * FROM ai_analyses WHERE result IN ('win','lose') ORDER BY start_utc DESC LIMIT ?", (limit,)
         ).fetchall()
 
+    def ai_admin_stats(self, day: str) -> dict:
+        total = self._conn.execute("SELECT COUNT(*) FROM ai_analyses").fetchone()[0]
+        today_uses = self._conn.execute("SELECT COUNT(*), COUNT(DISTINCT chat_id) FROM ai_usage WHERE day = ?", (day,)).fetchone()
+        all_uses = self._conn.execute("SELECT COUNT(*), COUNT(DISTINCT chat_id) FROM ai_usage").fetchone()
+        return {"analyses_total": total, "uses_today": today_uses[0], "users_today": today_uses[1],
+                "uses_total": all_uses[0], "users_total": all_uses[1]}
+
     def ai_usage_today(self, chat_id: int, day: str) -> set[str]:
         rows = self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ? AND day = ?", (chat_id, day)).fetchall()
         return {r[0] for r in rows}

@@ -857,6 +857,7 @@ an_news: "News (injuries, form, suspensions)",
       else if (tab === "picks") await renderPicks();
       else if (tab === "express") await renderExpress();
       else if (tab === "help") renderHelp();
+      else if (tab === "aistats") await renderAiStats();
       else if (tab === "vilki") await renderVilki();
       else if (tab === "news") await renderNews();
       else if (tab === "settings") await renderSettings();
@@ -2168,6 +2169,14 @@ an_news: "News (injuries, form, suspensions)",
         <div class="stat-card"><div class="stat-value" data-v="${s.referred_count}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_referred")}</div></div>
       </div>
 
+      <div class="section-title">🧠 ИИ-аналитика</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-value" data-v="${s.ai ? s.ai.uses_today : 0}" data-suf="" data-dec="0">0</div><div class="stat-label">Разборов сегодня</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.ai ? s.ai.users_today : 0}" data-suf="" data-dec="0">0</div><div class="stat-label">Пользователей сегодня</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.ai ? s.ai.analyses_total : 0}" data-suf="" data-dec="0">0</div><div class="stat-label">Матчей разобрано всего</div></div>
+        <div class="stat-card"><div class="stat-value" data-v="${s.ai && s.ai.settled ? Math.round((s.ai.wins / s.ai.settled) * 100) : 0}" data-suf="%" data-dec="0">0</div><div class="stat-label">Проходимость (${s.ai ? s.ai.wins : 0}/${s.ai ? s.ai.settled : 0})</div></div>
+      </div>
+
       <div class="section-title">${t("admin_payments")}</div>
       <div class="card">${paymentsRows}</div>
 
@@ -2333,7 +2342,9 @@ an_news: "News (injuries, form, suspensions)",
   // Home screen in the style the owner asked for: welcome tiles, PRO cards, bottom nav.
   // Every number shown is real: hit-rate only from settled picks (never a made-up %).
   const SCREEN_TITLES = { ai: "ИИ-Прогнозы", picks: "Готовые прогнозы", express: "Экспрессы", vilki: "Вилки",
-    news: "Новости", settings: "Настройки", sub: "PRO-доступ", admin: "Админ", help: "Помощь" };
+    settings: "Настройки вилок", sub: "PRO-доступ", admin: "Админ-панель", help: "Помощь", aistats: "Статистика ИИ" };
+  // Back button target: vilki settings live inside the Вилки section, everything else under home.
+  const PARENT = { settings: "vilki" };
   let homeCache = null;
 
   function updateScreenHead(tab) {
@@ -2342,6 +2353,14 @@ an_news: "News (injuries, form, suspensions)",
     head.hidden = tab === "home";
     const title = document.getElementById("screen-title");
     if (title) title.textContent = SCREEN_TITLES[tab] || "";
+    // Вилки is its own section: settings, calculator and vilki stats live in its header.
+    const actions = document.getElementById("screen-actions");
+    if (actions) {
+      actions.innerHTML = tab === "vilki"
+        ? `<button type="button" class="sa-btn" data-act="settings">⚙️</button><button type="button" class="sa-btn" data-act="calc">🧮</button><button type="button" class="sa-btn" data-act="vstats">📊</button>`
+        : "";
+      actions.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => go(b.dataset.act)));
+    }
     document.querySelectorAll(".bn-item").forEach((b) =>
       b.classList.toggle("active", b.dataset.go === tab || (b.dataset.go === "home" && tab !== "help")));
   }
@@ -2349,7 +2368,7 @@ an_news: "News (injuries, form, suspensions)",
   function go(tab) {
     haptic("light");
     if (tab === "support") return openSupport();
-    if (tab === "stats") return openStats();
+    if (tab === "vstats") return openStats();
     if (tab === "calc") return openCalc();
     switchTab(tab);
     window.scrollTo(0, 0);
@@ -2390,14 +2409,12 @@ an_news: "News (injuries, form, suspensions)",
       <section class="home">
         <div class="home-row">
           <h2 class="home-welcome">Добро пожаловать!</h2>
-          <div class="home-arrows"><button type="button" data-scroll="-1">‹</button><button type="button" data-scroll="1">›</button></div>
         </div>
-        <div class="tiles" id="home-tiles">
+        <div class="tiles tiles-grid${h.is_admin ? " tiles-4" : ""}" id="home-tiles">
           <button type="button" class="tile art-t-help" data-go="help"><span class="tile-emoji">🤖</span><span class="tile-label">Помощь</span></button>
-          <button type="button" class="tile art-t-stats" data-go="stats"><span class="tile-emoji">🏆</span><span class="tile-label">Статистика</span></button>
+          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">🏆</span><span class="tile-label">Статистика</span></button>
           <button type="button" class="tile art-t-support" data-go="support"><span class="tile-emoji">🎧</span><span class="tile-label">Поддержка</span></button>
-          <button type="button" class="tile art-t-news" data-go="news"><span class="tile-emoji">📰</span><span class="tile-label">Новости</span></button>
-          <button type="button" class="tile art-t-calc" data-go="calc"><span class="tile-emoji">🧮</span><span class="tile-label">Калькулятор</span></button>
+          ${h.is_admin ? '<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">Админ</span></button>' : ""}
         </div>
         <h2 class="home-pro">PRO-доступ${locked ? ' <button type="button" class="pro-buy" data-go="sub">Оформить</button>' : ""}</h2>
         ${proCard("ai", "🧠", "ИИ-Прогнозы", hitBadge(h.hit_rate), ["🎯 Разбор матчей" + quota, "⚽ Форма и новости", "💰 Ищем ценность в линии"], "ai", false)}
@@ -2407,10 +2424,26 @@ an_news: "News (injuries, form, suspensions)",
         <p class="home-note">Аналитика, а не гарантия выигрыша. 18+</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
-    content.querySelectorAll("[data-scroll]").forEach((b) =>
-      b.addEventListener("click", () => {
-        document.getElementById("home-tiles").scrollBy({ left: Number(b.dataset.scroll) * 160, behavior: "smooth" });
-      }));
+  }
+
+  async function renderAiStats() {
+    const [home, data] = await Promise.all([api("/api/home"), api("/api/ai/picks")]);
+    homeCache = home;
+    const h = home.hit_rate;
+    const pct = h.total ? Math.round((h.wins / h.total) * 100) : null;
+    let html = `<div class="st-hero">
+        <div class="st-big">${h.total >= h.min_total && pct != null ? pct + "%" : "—"}</div>
+        <div class="st-cap">проходимость ИИ-прогнозов</div>
+        <div class="ai-sub">${h.total >= h.min_total ? `${h.wins} из ${h.total} прогнозов зашли` : `Считаем честно: цифра появится после ${h.min_total} сыгранных матчей (сейчас ${h.total})`}</div>
+      </div>
+      <div class="st-grid">
+        <div class="st-cell"><b>${h.total}</b><span>сыграно</span></div>
+        <div class="st-cell"><b>${h.wins}</b><span>зашло</span></div>
+        <div class="st-cell"><b>${h.total - h.wins}</b><span>не зашло</span></div>
+      </div>`;
+    html += data.recent.length ? `<h3 class="sec-h">Последние результаты</h3>` + data.recent.map(pickCard).join("")
+      : `<div class="ai-empty">Пока нет сыгранных матчей с прогнозами ИИ.</div>`;
+    content.innerHTML = html;
   }
 
   function confMeter(c) {
@@ -2556,6 +2589,8 @@ an_news: "News (injuries, form, suspensions)",
       <div class="an-block"><div class="an-h">📋 Кратко</div><div>${esc(a.summary)}</div></div>
       <div class="an-block"><div class="an-h">🔎 Ключевые факторы</div>
         ${a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join("")}</div>
+      ${a.injuries ? `<div class="an-block"><div class="an-h">🚑 Травмы и составы</div><div>${esc(a.injuries)}</div></div>` : ""}
+      ${a.motivation ? `<div class="an-block"><div class="an-h">🔥 Мотивация</div><div>${esc(a.motivation)}</div></div>` : ""}
       <div class="an-block an-risk"><div class="an-h">⚠️ Риски</div><div>${esc(a.risks)}</div></div>
       <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>Коэффициенты на момент анализа — проверяйте у букмекера. Аналитика, а не гарантия. 18+</p></div>
       <button type="button" class="btn-ghost" id="an-back">‹ К списку матчей</button>`;
@@ -2606,7 +2641,8 @@ an_news: "News (injuries, form, suspensions)",
       <div class="an-block"><div class="an-h">🧠 ИИ-Прогнозы</div><div>Выберите матч — ИИ соберёт форму команд, таблицу, личные встречи, свежие новости и коэффициенты и предложит одну ставку из реальной линии с объяснением и уровнем уверенности.</div></div>
       <div class="an-block"><div class="an-h">📊 Честная статистика</div><div>Каждый прогноз сохраняется и после матча сверяется со счётом. Проходимость считается только по сыгранным матчам.</div></div>
       <div class="an-block"><div class="an-h">📈 Экспрессы и готовые прогнозы</div><div>ИИ каждый день сам разбирает топовые матчи. Из лучших прогнозов собираются экспрессы с кэфом 2–6.</div></div>
-      <div class="an-block"><div class="an-h">⚡ Вилки</div><div>Расхождения коэффициентов у 9 лицензированных БК. Уведомления о вилках включаются в боте: «🔍 Поиск вилок» → «Включить уведомления».</div></div>
+      <div class="an-block"><div class="an-h">🎟 Лимиты</div><div>Без подписки — 1 ИИ-разбор в день, с PRO — 5 в день. Повторно открыть уже разобранный сегодня матч — бесплатно.</div></div>
+      <div class="an-block"><div class="an-h">⚡ Вилки</div><div>Отдельный раздел: расхождения коэффициентов у 9 лицензированных БК, настройки ⚙️, калькулятор 🧮 и статистика 📊 — вверху экрана «Вилки». Уведомления о вилках включаются в боте: «🔍 Поиск вилок» → «Включить уведомления».</div></div>
       <div class="an-block"><div class="an-h">🌐 Язык</div><div class="lang-row">
         <button class="pro-chip lang-set" data-lang="ru">🇷🇺 Русский</button><button class="pro-chip lang-set" data-lang="en">🇬🇧 English</button><button class="pro-chip lang-set" data-lang="tg">🇹🇯 Тоҷикӣ</button></div></div>
       <button type="button" class="pro-buy wide" data-go="support">🎧 Написать в поддержку</button>
@@ -2630,7 +2666,7 @@ an_news: "News (injuries, form, suspensions)",
 
   document.querySelectorAll(".bn-item").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
   const screenBack = document.getElementById("screen-back");
-  if (screenBack) screenBack.addEventListener("click", () => go("home"));
+  if (screenBack) screenBack.addEventListener("click", () => go(PARENT[currentTab] || "home"));
   renderUserChip();
 
   boot();

@@ -138,7 +138,7 @@ def register_analysis_handlers(router: Router, repo: Repository, analyzer: Analy
             limit = AI_PAID_PER_DAY if billing.has_access(user, now, admin_chat_ids) else AI_FREE_PER_DAY
             if len(used) >= limit:
                 msg = (f"Лимит на сегодня: {limit} матч(ей). " +
-                       ("Оформите подписку — до 15 анализов в день." if limit == AI_FREE_PER_DAY else "Возвращайтесь завтра."))
+                       (f"Оформите подписку — до {AI_PAID_PER_DAY} анализов в день." if limit == AI_FREE_PER_DAY else "Возвращайтесь завтра."))
                 await callback.answer(msg, show_alert=True)
                 return
         await callback.answer()

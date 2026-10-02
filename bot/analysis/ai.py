@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 CONFIDENCE = ("низкая", "средняя", "высокая")
 # Distinct matches a user may open per MSK day (re-opening one already opened is free).
 AI_FREE_PER_DAY = 1
-AI_PAID_PER_DAY = 15
+AI_PAID_PER_DAY = 5
 
 SCHEMA = {
     "type": "object",
@@ -58,8 +58,11 @@ SCHEMA = {
         "confidence": {"type": "string", "enum": list(CONFIDENCE)},
         "reasoning": {"type": "string"},
         "risks": {"type": "string"},
+        "injuries": {"type": "string"},
+        "motivation": {"type": "string"},
     },
-    "required": ["summary", "factors", "probabilities", "option_id", "confidence", "reasoning", "risks"],
+    "required": ["summary", "factors", "probabilities", "option_id", "confidence", "reasoning", "risks",
+                 "injuries", "motivation"],
     "additionalProperties": False,
 }
 
@@ -85,7 +88,19 @@ SYSTEM = """Ты — футбольный аналитик. По прислан�
   вероятности из них — ориентир; отклоняйся от них только когда данные это обосновывают.
 - Если списка доступных ставок нет (матча нет в линии), option_id — пустая строка, а
   reasoning объясняет, какой исход вероятнее и почему.
+- injuries — травмы, дисквалификации и ожидаемые составы по данным из раздела «Свежая
+  информация из интернета», 1–3 предложения; если таких данных нет — так и напиши.
+- motivation — турнирная мотивация: за что борются команды, ротация, график, 1–2
+  предложения.
 - Пиши по-русски, коротко и по делу."""
+
+RESEARCH_SYSTEM = """Ты собираешь фактуру перед футбольным матчем. Найди в интернете свежую
+информацию именно об этом матче: травмы и дисквалификации, ожидаемые/подтверждённые
+составы, слова тренеров, турнирную мотивацию (положение, за что борются, ротация перед
+другими турнирами), смену тренера, превью и статистику последних игр. Выпиши только
+факты с короткой пометкой, откуда они (сайт). Никаких прогнозов и ставок. По-русски,
+списком, до 15 пунктов. Если по матчу ничего не нашлось — так и напиши."""
+WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 5}
 
 SCREENSHOT_SCHEMA = {
     "type": "object",
@@ -187,7 +202,30 @@ class Analyzer:
             form_a, form_b, h2h_data, headlines = await asyncio.gather(
                 form(match.team_a), form(match.team_b), h2h(), news()
             )
-        return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines}
+        research = await self._research(match)
+        return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines, "research": research}
+
+    async def _research(self, match: FootballMatch) -> str:
+        """Fresh facts from the web (injuries, lineups, motivation, previews) via the
+        server-side web search tool. Best effort: "" if the gateway doesn't support the
+        tool or anything fails -- the analysis then runs on the other data alone."""
+        when = f" ({match.start_utc:%d.%m.%Y})" if match.start_utc.year > 2000 else ""
+        messages = [{"role": "user", "content": f"Матч: {match.team_a} — {match.team_b}{when}. {match.league}"}]
+        try:
+            for _ in range(3):  # server tool loops may pause; resume up to twice
+                response = await self.claude.messages.create(
+                    model=self.model, max_tokens=6000, system=RESEARCH_SYSTEM,
+                    messages=messages, tools=[WEB_SEARCH_TOOL], output_config={"effort": "low"},
+                )
+                if response.stop_reason != "pause_turn":
+                    break
+                messages = messages + [{"role": "assistant", "content": response.content}]
+            if response.stop_reason == "refusal":
+                return ""
+            return "\n".join(b.text for b in response.content if b.type == "text").strip()[:6000]
+        except Exception:
+            logger.warning("Web research unavailable for %s", match.id, exc_info=True)
+            return ""
 
     async def _ask(self, match: FootballMatch, data: dict) -> dict | None:
         options = "\n".join(f"- id={o.id}: {o.label} @ {o.odds:.2f}" for o in match.options)
@@ -201,6 +239,7 @@ class Analyzer:
             f"Форма и таблица {match.team_b}: {json.dumps(data['form_b'], ensure_ascii=False, default=str)}\n"
             f"Личные встречи: {json.dumps(data['h2h'], ensure_ascii=False, default=str)}\n"
             f"Новости за сутки (заголовки): {json.dumps(data['news'], ensure_ascii=False, default=str)}\n"
+            f"\nСвежая информация из интернета:\n{data.get('research') or 'нет данных'}\n"
         )
         return await self._json_call(SYSTEM, content, SCHEMA, effort="medium")
 
