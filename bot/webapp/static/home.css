@@ -189,10 +189,10 @@ nav.tabs { display: none !important; }
 .bn-max { opacity: 1; }
 
 /* generated card backgrounds (scripts/gen_card_backgrounds.py) */
-.art-ai { background: url(img/card-ai.jpg) center/cover; }
-.art-express { background: url(img/card-express.jpg) center/cover; }
-.art-picks { background: url(img/card-picks.jpg) center/cover; }
-.art-vilki { background: url(img/card-vilki.jpg) center/cover; }
+.art-ai { background: url(img/card-ai.jpg?v=202610030155) center/cover; }
+.art-express { background: url(img/card-express.jpg?v=202610030155) center/cover; }
+.art-picks { background: url(img/card-picks.jpg?v=202610030155) center/cover; }
+.art-vilki { background: url(img/card-vilki.jpg?v=202610030155) center/cover; }
 .art-ai::after, .art-express::after, .art-picks::after, .art-vilki::after { content: none; }
 .pro-art::before { display: none; }
 
@@ -288,7 +288,7 @@ html, body { background: radial-gradient(ellipse at 50% -10%, #241042 0%, #0b061
 /* ===== 3D cards, round 2 (2026-10-03): thicker edge, glass gloss, living artwork ===== */
 .pro-card { perspective: 900px; }
 .pro-art {
-  background-size: 118% auto !important;
+  background-size: 108% auto !important;
   animation: artPan 16s ease-in-out infinite alternate;
   transform: rotateX(3deg);
   transform-origin: 50% 100%;

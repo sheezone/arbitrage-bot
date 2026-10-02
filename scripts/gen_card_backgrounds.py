@@ -13,16 +13,49 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
+# Drawing code works in 1200x430 "design" units; everything is rendered at S x that
+# (2400x860) through _Scaled so the cards stay sharp on retina phones.
 W, H = 1200, 430
+S = 2
 OUT = Path(__file__).resolve().parent.parent / "bot" / "webapp" / "static" / "img"
 LIME = (178, 107, 255)   # brand violet (2026-10-03 purple redesign)
 TEAL = (255, 92, 225)    # magenta accent
 
 
+class _Scaled:
+    """ImageDraw proxy: multiplies coordinates, radii and widths by S."""
+
+    def __init__(self, img: Image.Image):
+        self.d = ImageDraw.Draw(img)
+
+    @staticmethod
+    def _xy(xy):
+        if isinstance(xy, (list, tuple)) and xy and isinstance(xy[0], (list, tuple)):
+            return [(x * S, y * S) for x, y in xy]
+        return [v * S for v in xy]
+
+    def __getattr__(self, name):
+        fn = getattr(self.d, name)
+
+        def call(xy, *a, **kw):
+            if "width" in kw:
+                kw["width"] = max(1, int(round(kw["width"] * S)))
+            return fn(self._xy(xy), *a, **kw)
+        return call
+
+
+def new(color=(0, 0, 0)) -> Image.Image:
+    return Image.new("RGB", (W * S, H * S), color)
+
+
+def Draw(img: Image.Image) -> _Scaled:
+    return _Scaled(img)
+
+
 def glow_layer(draw_fn, blur: int) -> Image.Image:
-    layer = Image.new("RGB", (W, H), (0, 0, 0))
-    draw_fn(ImageDraw.Draw(layer))
-    return layer.filter(ImageFilter.GaussianBlur(blur))
+    layer = new()
+    draw_fn(Draw(layer))
+    return layer.filter(ImageFilter.GaussianBlur(blur * S)) if blur else layer
 
 
 def add(base: Image.Image, layer: Image.Image, k: float = 1.0) -> Image.Image:
@@ -33,24 +66,24 @@ def add(base: Image.Image, layer: Image.Image, k: float = 1.0) -> Image.Image:
 
 def stadium(seed: int, tint: tuple[int, int, int], pitch_tint=(40, 22, 70)) -> Image.Image:
     rnd = random.Random(seed)
-    img = Image.new("RGB", (W, H))
-    d = ImageDraw.Draw(img)
+    img = new()
+    d = Draw(img)
     for y in range(H):  # night sky -> stands
         t = y / H
-        d.line([(0, y), (W, y)], fill=(int(6 + tint[0] * 0.10 * (1 - t)), int(8 + tint[1] * 0.10 * (1 - t)), int(12 + tint[2] * 0.12 * (1 - t))))
+        d.line([(0, y), (W, y)], fill=(int(6 + tint[0] * 0.10 * (1 - t)), int(8 + tint[1] * 0.10 * (1 - t)), int(12 + tint[2] * 0.12 * (1 - t))), width=1)
     # crowd bokeh in the stands (upper band)
-    crowd = Image.new("RGB", (W, H))
-    cd = ImageDraw.Draw(crowd)
-    for _ in range(2600):
+    crowd = new()
+    cd = Draw(crowd)
+    for _ in range(5200):
         x, y = rnd.uniform(0, W), rnd.uniform(H * 0.12, H * 0.55)
-        r = rnd.uniform(1.0, 3.2)
+        r = rnd.uniform(0.6, 2.4)
         c = rnd.choice([(255, 255, 255), (255, 210, 120), tint, (120, 160, 255), (255, 120, 120)])
         a = rnd.uniform(0.15, 0.6)
         cd.ellipse([x - r, y - r, x + r, y + r], fill=tuple(int(v * a) for v in c))
-    img = add(img, crowd.filter(ImageFilter.GaussianBlur(1.6)))
+    img = add(img, crowd.filter(ImageFilter.GaussianBlur(1.1 * S)))
     # pitch in perspective with mowing stripes and lines
-    pitch = Image.new("RGB", (W, H))
-    pd = ImageDraw.Draw(pitch)
+    pitch = new()
+    pd = Draw(pitch)
     top, bot = H * 0.55, H
     for i in range(14):
         y0 = top + (bot - top) * (i / 14) ** 1.2
@@ -61,10 +94,10 @@ def stadium(seed: int, tint: tuple[int, int, int], pitch_tint=(40, 22, 70)) -> I
     pd.line([(W * 0.85, H), (W * 0.58, top)], fill=(120, 90, 150), width=2)
     pd.line([(0, top + 2), (W, top + 2)], fill=(110, 80, 140), width=2)
     pd.ellipse([W * 0.42, H * 0.78, W * 0.58, H * 0.98], outline=(110, 80, 140), width=2)
-    img = Image.composite(pitch, img, Image.new("L", (W, H), 0).point(lambda _: 0))  # keep sky
-    mask = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(mask).rectangle([0, top, W, H], fill=255)
-    img.paste(pitch, (0, 0), mask.filter(ImageFilter.GaussianBlur(6)))
+    img = Image.composite(pitch, img, Image.new("L", (W * S, H * S), 0).point(lambda _: 0))  # keep sky
+    mask = Image.new("L", (W * S, H * S), 0)
+    Draw(mask).rectangle([0, top, W, H], fill=255)
+    img.paste(pitch, (0, 0), mask.filter(ImageFilter.GaussianBlur(6 * S)))
     # floodlights
     def lights(dd):
         for x in (W * 0.08, W * 0.3, W * 0.7, W * 0.92):
@@ -75,16 +108,16 @@ def stadium(seed: int, tint: tuple[int, int, int], pitch_tint=(40, 22, 70)) -> I
 
 
 def vignette(img: Image.Image) -> Image.Image:
-    mask = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(mask).ellipse([-W * 0.25, -H * 0.6, W * 1.25, H * 1.6], fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(90))
-    dark = Image.new("RGB", (W, H), (0, 0, 0))
+    mask = Image.new("L", (W * S, H * S), 0)
+    Draw(mask).ellipse([-W * 0.25, -H * 0.6, W * 1.25, H * 1.6], fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(90 * S))
+    dark = new()
     out = Image.composite(img, dark, mask)
     # darken the bottom-left where the chips sit, so their text stays readable
-    grad = Image.new("L", (W, H), 0)
-    gd = ImageDraw.Draw(grad)
+    grad = Image.new("L", (W * S, H * S), 0)
+    gd = Draw(grad)
     for y in range(H):
-        gd.line([(0, y), (W, y)], fill=int(150 * max(0, (y / H) - 0.45) / 0.55))
+        gd.line([(0, y), (W, y)], fill=int(150 * max(0, (y / H) - 0.45) / 0.55), width=1)
     return Image.composite(dark, out, grad)
 
 
@@ -122,17 +155,17 @@ def card_express() -> Image.Image:
         trophy(dd, W * 0.82, H * 0.46, 1.6, gold)
         trophy(dd, W * 0.94, H * 0.55, 1.15, gold)
     img = add(img, glow_layer(cups, 30), 0.6)
-    layer = Image.new("RGB", (W, H))
-    cups(ImageDraw.Draw(layer))
+    layer = new()
+    cups(Draw(layer))
     img = Image.composite(layer, img, layer.convert("L").point(lambda v: 255 if v > 10 else 0))
-    hl = Image.new("RGB", (W, H))
-    hd = ImageDraw.Draw(hl)
+    hl = new()
+    hd = Draw(hl)
     for x, y, s in ((W * 0.68, H * 0.52, 1.25), (W * 0.82, H * 0.46, 1.6), (W * 0.94, H * 0.55, 1.15)):
         hd.polygon([(x - 40 * s, y - 66 * s), (x - 20 * s, y - 66 * s), (x - 12 * s, y - 6 * s), (x - 24 * s, y - 6 * s)], fill=light)
-    img = add(img, hl.filter(ImageFilter.GaussianBlur(3)), 0.5)
+    img = add(img, hl.filter(ImageFilter.GaussianBlur(3 * S)), 0.5)
     rnd = random.Random(22)
-    coins = Image.new("RGB", (W, H))
-    cd = ImageDraw.Draw(coins)
+    coins = new()
+    cd = Draw(coins)
     for _ in range(40):
         x, y = rnd.uniform(W * 0.55, W), rnd.uniform(H * 0.72, H * 0.98)
         r = rnd.uniform(14, 26)
@@ -184,7 +217,7 @@ def card_vilki() -> Image.Image:
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for name, fn in (("ai", card_ai), ("express", card_express), ("picks", card_picks), ("vilki", card_vilki)):
-        fn().save(OUT / f"card-{name}.jpg", quality=82, optimize=True, progressive=True)
+        fn().filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=3)).save(OUT / f"card-{name}.jpg", quality=90, optimize=True, progressive=True)
         print("saved", name)
 
 
