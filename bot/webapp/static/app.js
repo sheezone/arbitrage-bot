@@ -2374,10 +2374,13 @@ an_news: "News (injuries, form, suspensions)",
     window.scrollTo(0, 0);
   }
 
+  // Support = a direct DM with the admin (their @username comes from /api/home).
   function openSupport() {
-    const u = (homeCache && homeCache.bot_username) || "";
+    const admin = homeCache && homeCache.support_username;
+    const u = admin || (homeCache && homeCache.bot_username) || "";
     if (u && tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${u}`);
-    else toast("Напишите нам в бота: «ℹ️ Помощь» → «Написать менеджеру»");
+    else if (u) window.open(`https://t.me/${u}`, "_blank");
+    else toast("Поддержка временно недоступна");
   }
 
   function hitBadge(h) {

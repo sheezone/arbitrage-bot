@@ -235,6 +235,25 @@ def register_api(
             "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b),
         }
 
+    support_cache: dict[str, str | None] = {}
+
+    async def _support_username() -> str | None:
+        """@username of the first admin who has one -- the Mini App's «Поддержка» opens a
+        DM with them (owner's request, 2026-10-03). Resolved once via getChat, cached."""
+        if "u" in support_cache:
+            return support_cache["u"]
+        name = None
+        for admin_id in sorted(admin_chat_ids):
+            try:
+                chat = await bot.get_chat(admin_id) if bot is not None else None
+            except Exception:
+                chat = None
+            if chat is not None and chat.username:
+                name = chat.username
+                break
+        support_cache["u"] = name
+        return name
+
     @app.get("/api/home")
     async def get_home(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
@@ -252,6 +271,7 @@ def register_api(
             "express_count": len(build_expresses(picks)),
             "vilki_count": len(state.matches),
             "bot_username": bot_username,
+            "support_username": await _support_username(),
         }
 
     @app.get("/api/ai/matches")
