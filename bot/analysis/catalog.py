@@ -30,7 +30,8 @@ from bot.providers._line_platform import (
 
 FOOTBALL_PARENT_SPORT = 1
 CATALOG_TTL = 300
-HORIZON = timedelta(hours=48)
+HORIZON = timedelta(hours=48)      # the browsable top list
+LOOKUP_HORIZON = timedelta(days=7)  # matches a user can find by name/screenshot
 MAX_MATCHES = 40
 
 SKIP_SEGMENT_WORDS = ("Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер")
@@ -75,7 +76,8 @@ class FootballMatch:
         return next((o for o in self.options if o.id == option_id), None)
 
 
-def parse_catalog(raw: dict, now: datetime | None = None) -> list[FootballMatch]:
+def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = HORIZON,
+                  limit: int | None = MAX_MATCHES) -> list[FootballMatch]:
     now = now or datetime.now(timezone.utc)
     segments = {
         s["id"]: s.get("name") or ""
@@ -95,7 +97,7 @@ def parse_catalog(raw: dict, now: datetime | None = None) -> list[FootballMatch]
         if not a or not b or "(" in a or "(" in b or {a, b} == {"Хозяева", "Гости"}:
             continue  # stat-prop pseudo matches: "(угловые)" names, "Хозяева - Гости" aggregates
         start = datetime.fromtimestamp(ev.get("startTime") or 0, tz=timezone.utc)
-        if not (now < start <= now + HORIZON):
+        if not (now < start <= now + horizon):
             continue
         f = factors.get(ev.get("id"), {})
         win = [f.get(TEAM1_WIN_FACTOR, {}).get("v"), f.get(DRAW_FACTOR, {}).get("v"), f.get(TEAM2_WIN_FACTOR, {}).get("v")]
@@ -110,7 +112,7 @@ def parse_catalog(raw: dict, now: datetime | None = None) -> list[FootballMatch]
         m.options += _totals(f) + _handicaps(f, a, b)
         matches.append(m)
     matches.sort(key=lambda m: (m.priority, m.start_utc))
-    return matches[:MAX_MATCHES]
+    return matches[:limit] if limit else matches
 
 
 def _totals(f: dict) -> list[Option]:
@@ -149,19 +151,57 @@ def _handicaps(f: dict, a: str, b: str) -> list[Option]:
 _cache: dict[str, object] = {"at": 0.0, "matches": []}
 
 
-async def get_catalog() -> list[FootballMatch]:
+async def get_full_line() -> list[FootballMatch]:
+    """Every real football match in the line for the next LOOKUP_HORIZON (cached)."""
     if time.time() - _cache["at"] < CATALOG_TTL and _cache["matches"]:
         return _cache["matches"]  # type: ignore[return-value]
     async with httpx.AsyncClient(base_url=fonbet.BASE_URL, timeout=60, headers={"User-Agent": "Mozilla/5.0"}) as c:
         resp = await c.get(fonbet.EVENTS_PATH, params={"lang": "ru", "scopeMarket": fonbet.SCOPE_MARKET})
         resp.raise_for_status()
-        matches = parse_catalog(resp.json())
+        matches = parse_catalog(resp.json(), horizon=LOOKUP_HORIZON, limit=None)
     _cache.update(at=time.time(), matches=matches)
     return matches
 
 
+async def get_catalog() -> list[FootballMatch]:
+    """The browsable list: top leagues first, next HORIZON only, MAX_MATCHES at most."""
+    soon = datetime.now(timezone.utc) + HORIZON
+    return [m for m in await get_full_line() if m.start_utc <= soon][:MAX_MATCHES]
+
+
 async def find_match(match_id: str) -> FootballMatch | None:
-    return next((m for m in await get_catalog() if m.id == match_id), None)
+    return next((m for m in await get_full_line() if m.id == match_id), None)
+
+
+def _name_score(query: str, team: str) -> float:
+    from bot.core.reconcile import _similarity, normalize_team
+
+    q, t = normalize_team(query), normalize_team(team)
+    if not q or not t:
+        return 0.0
+    if q == t:
+        return 1.0
+    # "Реал" for "Реал Мадрид", "Спартак" for "Спартак Москва": a whole-word prefix/part
+    if f" {q} " in f" {t} " or t.startswith(q):
+        return 0.9
+    return _similarity(q, t)
+
+
+NAME_THRESHOLD = 0.7
+
+
+def match_by_teams(matches: list[FootballMatch], team_a: str, team_b: str) -> FootballMatch | None:
+    """Best line match for two user-typed (or screenshot-read) team names, either order."""
+    best, best_score = None, NAME_THRESHOLD * 2
+    for m in matches:
+        straight = _name_score(team_a, m.team_a) + _name_score(team_b, m.team_b)
+        crossed = _name_score(team_a, m.team_b) + _name_score(team_b, m.team_a)
+        score = max(straight, crossed)
+        if min(_name_score(team_a, m.team_a), _name_score(team_b, m.team_b)) < NAME_THRESHOLD and                 min(_name_score(team_a, m.team_b), _name_score(team_b, m.team_a)) < NAME_THRESHOLD:
+            continue  # each team must match on its own, not just on the sum
+        if score > best_score or (score == best_score and best and m.start_utc < best.start_utc):
+            best, best_score = m, score
+    return best
 
 
 def settle(option: Option, goals_a: int, goals_b: int) -> str:

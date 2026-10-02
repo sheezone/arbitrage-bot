@@ -2426,11 +2426,21 @@ an_news: "News (injuries, form, suspensions)",
     const data = await api("/api/ai/matches");
     const h = homeCache;
     const quota = h && h.ai_quota.limit != null ? `Сегодня разобрано: <b>${h.ai_quota.used}/${h.ai_quota.limit}</b>` : "Без ограничений";
-    if (!data.matches.length) {
-      content.innerHTML = `<div class="ai-empty">Сейчас нет ближайших матчей в линии — загляните позже.</div>`;
-      return;
-    }
-    let html = `<div class="ai-intro">Выберите матч — ИИ разберёт форму, личные встречи, новости и линию и предложит одну ставку с объяснением.<div class="ai-quota">${quota}</div></div>`;
+    let html = `<div class="ai-ask">
+        <div class="ai-ask-h">🧠 Узнать шансы на матч</div>
+        <div class="ai-ask-row">
+          <input id="ai-team-a" class="ai-input" placeholder="Команда 1" maxlength="60" autocomplete="off">
+          <span class="ai-vs">VS</span>
+          <input id="ai-team-b" class="ai-input" placeholder="Команда 2" maxlength="60" autocomplete="off">
+        </div>
+        <div class="ai-ask-btns">
+          <label class="btn-ghost ai-shot">📷 Скриншот<input id="ai-shot" type="file" accept="image/*" hidden></label>
+          <button type="button" class="pro-buy ai-go" id="ai-go">Анализировать</button>
+        </div>
+        <div class="ai-quota">${quota}</div>
+      </div>
+      <h3 class="sec-h">Или выберите матч из линии</h3>`;
+    if (!data.matches.length) html += `<div class="ai-empty">Сейчас нет ближайших матчей в линии.</div>`;
     let league = null;
     for (const m of data.matches) {
       if (m.league !== league) {
@@ -2442,16 +2452,77 @@ an_news: "News (injuries, form, suspensions)",
         <span class="ai-meta">🕒 ${esc(m.start_label || "")}${m.analyzed ? ' · <span class="ai-done">✓ разобран</span>' : ""}</span></button>`;
     }
     content.innerHTML = html;
-    content.querySelectorAll(".ai-match").forEach((b) => b.addEventListener("click", () => renderAiAnalysis(b.dataset.id)));
+    content.querySelectorAll(".ai-match").forEach((b) =>
+      b.addEventListener("click", () => renderAiAnalysis(`/api/ai/analysis?match_id=${encodeURIComponent(b.dataset.id)}`)));
+    const ask = () => {
+      const a = document.getElementById("ai-team-a").value.trim();
+      const b = document.getElementById("ai-team-b").value.trim();
+      if (!a || !b) return toast("Введите обе команды или загрузите скриншот");
+      renderAiAnalysis(`/api/ai/analyze?team_a=${encodeURIComponent(a)}&team_b=${encodeURIComponent(b)}`);
+    };
+    document.getElementById("ai-go").addEventListener("click", ask);
+    document.getElementById("ai-team-b").addEventListener("keydown", (e) => e.key === "Enter" && ask());
+    document.getElementById("ai-shot").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) readScreenshot(file);
+    });
   }
 
-  async function renderAiAnalysis(matchId) {
+  // Downscale to <= 1600px JPEG before upload: phone screenshots are several MB and the
+  // model doesn't need more than that to read two team names.
+  function imageToJpegBase64(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k);
+        c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(img.src);
+        resolve(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function readScreenshot(file) {
+    haptic("light");
+    const btn = document.getElementById("ai-go");
+    if (btn) { btn.disabled = true; btn.textContent = "Читаю скриншот…"; }
+    try {
+      const image = await imageToJpegBase64(file);
+      const r = await api("/api/ai/screenshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image, media_type: "image/jpeg" }),
+      });
+      document.getElementById("ai-team-a").value = r.team_a;
+      document.getElementById("ai-team-b").value = r.team_b;
+      toast(`Нашёл матч: ${r.team_a} — ${r.team_b}`);
+      renderAiAnalysis(`/api/ai/analyze?team_a=${encodeURIComponent(r.team_a)}&team_b=${encodeURIComponent(r.team_b)}`);
+    } catch (e) {
+      toast(e.message);
+      if (btn) { btn.disabled = false; btn.textContent = "Анализировать"; }
+    }
+  }
+
+  function probBlock(title, p, m, cls) {
+    if (!p) return "";
+    const row = (name, v) => `<div class="pb-row"><span class="pb-name">${esc(name)}</span>
+      <span class="pb-bar"><i style="width:${v}%"></i></span><b class="pb-val">${v}%</b></div>`;
+    return `<div class="an-block ${cls || ""}"><div class="an-h">${title}</div>
+      ${row("П1 · " + m.team_a, p.p1)}${row("Ничья", p.x)}${row("П2 · " + m.team_b, p.p2)}</div>`;
+  }
+
+  async function renderAiAnalysis(url) {
     haptic("light");
     content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>ИИ анализирует матч…</div><div class="ai-sub">Форма, личные встречи, новости и линия. До минуты.</div></div>`;
     window.scrollTo(0, 0);
     let data;
     try {
-      data = await api(`/api/ai/analysis?match_id=${encodeURIComponent(matchId)}`);
+      data = await api(url);
     } catch (e) {
       toast(e.message);
       if (e.status === 429 && homeCache && !homeCache.has_access) return switchTab("sub");
@@ -2460,18 +2531,28 @@ an_news: "News (injuries, form, suspensions)",
     if (homeCache) homeCache.ai_quota.used = Math.max(homeCache.ai_quota.used, 1);
     const a = data.analysis;
     const m = data.match;
+    const pickHtml = a.pick
+      ? `<div class="an-pick">
+          <div class="an-pick-k">🎯 Прогноз ИИ</div>
+          <div class="an-pick-v">${esc(a.pick.label)} <span class="an-odds">@ ${a.pick.odds.toFixed(2)}</span></div>
+          <div class="an-conf">Уверенность: ${confMeter(a.confidence)}</div>
+          <div class="an-why">${esc(a.reasoning)}</div>
+        </div>`
+      : `<div class="an-pick">
+          <div class="an-pick-k">🎯 Вывод ИИ</div>
+          <div class="an-conf">Уверенность: ${confMeter(a.confidence)}</div>
+          <div class="an-why">${esc(a.reasoning)}</div>
+          <div class="ai-sub">Матча нет в линии букмекеров — разбор без коэффициентов.</div>
+        </div>`;
     content.innerHTML = `
       <div class="an-hero">
-        <div class="an-league">🏆 ${esc(m.league)}</div>
+        ${m.league ? `<div class="an-league">🏆 ${esc(m.league)}</div>` : ""}
         <div class="an-teams">${teamsLine(m)}</div>
-        <div class="an-time">🕒 ${esc(m.start_label || "")}</div>
+        ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>
-      <div class="an-pick">
-        <div class="an-pick-k">🎯 Прогноз ИИ</div>
-        <div class="an-pick-v">${esc(a.pick.label)} <span class="an-odds">@ ${a.pick.odds.toFixed(2)}</span></div>
-        <div class="an-conf">Уверенность: ${confMeter(a.confidence)}</div>
-        <div class="an-why">${esc(a.reasoning)}</div>
-      </div>
+      ${probBlock("📊 Шансы по оценке ИИ", a.probabilities, m, "an-probs")}
+      ${pickHtml}
+      ${probBlock("🏦 Шансы по коэффициентам букмекеров", a.market, m, "an-probs-market")}
       <div class="an-block"><div class="an-h">📋 Кратко</div><div>${esc(a.summary)}</div></div>
       <div class="an-block"><div class="an-h">🔎 Ключевые факторы</div>
         ${a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join("")}</div>

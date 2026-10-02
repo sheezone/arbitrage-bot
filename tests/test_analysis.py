@@ -74,3 +74,23 @@ def test_build_expresses_uses_distinct_medium_high_picks_within_total_range():
     assert ex and all(2.0 <= e["total_odds"] <= 6.0 for e in ex)
     legs = [leg["match_id"] for e in ex for leg in e["legs"]]
     assert len(legs) == len(set(legs)) and "m4" not in legs and "m5" not in legs
+
+
+def test_match_by_teams_short_names_either_order_and_rejects_half_match():
+    from bot.analysis.catalog import FootballMatch, match_by_teams
+
+    t = datetime(2026, 10, 3, tzinfo=timezone.utc)
+    line = [FootballMatch("1", "Реал Мадрид", "Барселона", t, "Испания"), FootballMatch("2", "Реал Сосьедад", "Бетис", t, "Испания")]
+    assert match_by_teams(line, "Барселона", "Реал Мадрид").id == "1"
+    assert match_by_teams(line, "реал сосьедад", "бетис").id == "2"
+    assert match_by_teams(line, "Барселона", "Челси") is None
+
+
+def test_market_probabilities_remove_margin():
+    from bot.analysis.ai import _normalise, market_probabilities
+    from bot.analysis.catalog import FootballMatch
+
+    m = FootballMatch("1", "A", "B", NOW, "L", [Option("1", "", 2.0, "1x2"), Option("X", "", 3.5, "1x2"), Option("2", "", 3.8, "1x2")])
+    p = market_probabilities(m)
+    assert sum(p.values()) == 100 and p["p1"] > p["p2"] > 0
+    assert _normalise({"p1": 50, "x": 30, "p2": 30}) == {"p1": 45, "x": 27, "p2": 28}

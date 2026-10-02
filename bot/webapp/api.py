@@ -27,7 +27,7 @@ from bot.core import billing
 from bot.core.emoji import vi
 from bot.core.arbitrage import calc_stakes
 from bot.analysis.ai import AI_FREE_PER_DAY, AI_PAID_PER_DAY
-from bot.analysis.catalog import find_match, get_catalog
+from bot.analysis.catalog import FootballMatch, _name_score, find_match, get_catalog, get_full_line, match_by_teams
 from bot.analysis.picks import build_expresses, pick_from_row, upcoming_picks
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
@@ -131,6 +131,11 @@ async def _user_out(
         "is_subscribed": subscribed,
         "channel_username": required_channel_username,
     }
+
+
+class ScreenshotIn(BaseModel):
+    image: str  # base64, no data: prefix
+    media_type: str
 
 
 class PayIn(BaseModel):
@@ -261,28 +266,92 @@ def register_api(
         analyzed = {p["match_id"] for p in upcoming_picks(repo)}
         return {"matches": [{**_match_out(m), "analyzed": m.id in analyzed} for m in matches]}
 
+    async def _run_analysis(chat_id: int, user, match) -> dict:
+        if analyzer is None:
+            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+        now = datetime.now(timezone.utc)
+        limit, used = _ai_quota(user, now)
+        if limit is not None and match.id not in used and len(used) >= limit:
+            raise HTTPException(status_code=429, detail=(
+                f"Лимит на сегодня: {limit}. Оформите PRO — до {AI_PAID_PER_DAY} анализов в день."
+                if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
+        try:
+            result = await analyzer.analyze(match)
+        except Exception:
+            logger.exception("AI analysis failed for %s", match.id)
+            result = None
+        if result is None:
+            raise HTTPException(status_code=502, detail="Не удалось разобрать этот матч, попробуйте позже")
+        repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
+        wins, total = repo.ai_hit_rate()
+        in_line = bool(match.options)
+        out = _match_out(match) if in_line else {
+            "id": match.id, "team_a": match.team_a, "team_b": match.team_b, "league": "",
+            "start_utc": "", "start_label": "", "team_a_flag": get_team_flag(match.team_a),
+            "team_b_flag": get_team_flag(match.team_b),
+        }
+        return {"match": out, "analysis": result, "in_line": in_line,
+                "hit_rate": {"wins": wins, "total": total, "min_total": 20}}
+
     @app.get("/api/ai/analysis")
     async def get_ai_analysis(match_id: str, authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
-        if analyzer is None:
-            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
         match = await find_match(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="Матч уже начался или пропал из линии")
-        now = datetime.now(timezone.utc)
-        limit, used = _ai_quota(user, now)
-        if limit is not None and match_id not in used and len(used) >= limit:
-            raise HTTPException(status_code=429, detail=(
-                f"Лимит на сегодня: {limit}. Оформите PRO — до {AI_PAID_PER_DAY} анализов в день."
-                if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
-        result = await analyzer.analyze(match)
-        if result is None:
-            raise HTTPException(status_code=502, detail="Не удалось разобрать этот матч, попробуйте другой")
-        repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match_id)
-        wins, total = repo.ai_hit_rate()
-        return {"match": _match_out(match), "analysis": result, "hit_rate": {"wins": wins, "total": total, "min_total": 20}}
+        return await _run_analysis(chat_id, user, match)
+
+    @app.get("/api/ai/analyze")
+    async def get_ai_analyze(team_a: str, team_b: str, authorization: str | None = Header(default=None)):
+        """Two user-typed (or screenshot-read) team names -> the line match if there is one
+        (exact-ish name match first, then the AI picks among the closest candidates), else
+        an analysis without odds."""
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        team_a, team_b = team_a.strip()[:60], team_b.strip()[:60]
+        if not team_a or not team_b or team_a.lower() == team_b.lower():
+            raise HTTPException(status_code=400, detail="Введите две разные команды")
+        if analyzer is None:
+            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+        try:
+            line = await get_full_line()
+        except Exception:
+            line = []
+        match = match_by_teams(line, team_a, team_b)
+        if match is None and line:
+            def closeness(m):
+                return max(_name_score(q, t) for q in (team_a, team_b) for t in (m.team_a, m.team_b))
+            candidates = sorted(line, key=closeness, reverse=True)[:40]
+            try:
+                picked = await analyzer.resolve_teams(team_a, team_b, candidates)
+            except Exception:
+                picked = ""
+            match = next((m for m in candidates if m.id == picked), None)
+        if match is None:
+            key = "custom:" + "|".join(sorted([team_a.lower(), team_b.lower()]))
+            match = FootballMatch(key, team_a, team_b, datetime(1970, 1, 1, tzinfo=timezone.utc), "")
+        return await _run_analysis(chat_id, user, match)
+
+    @app.post("/api/ai/screenshot")
+    async def post_ai_screenshot(body: ScreenshotIn, authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        _get_user(repo, chat_id)
+        if analyzer is None:
+            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+        if body.media_type not in ("image/jpeg", "image/png", "image/webp") or len(body.image) > 6_000_000:
+            raise HTTPException(status_code=400, detail="Нужна картинка JPG/PNG до 4 МБ")
+        try:
+            result = await analyzer.read_screenshot(body.image, body.media_type)
+        except Exception:
+            logger.exception("Screenshot reading failed")
+            result = None
+        if not result or not result.get("found") or not result.get("team_a") or not result.get("team_b"):
+            raise HTTPException(status_code=422, detail="Не удалось найти матч на скриншоте — введите команды вручную")
+        return {"team_a": result["team_a"], "team_b": result["team_b"]}
 
     def _lock(pick: dict) -> dict:
         return {**pick, "label": None, "odds": None, "reasoning": "", "locked": True}
