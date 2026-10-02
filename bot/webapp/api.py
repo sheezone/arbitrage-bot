@@ -268,20 +268,24 @@ def register_api(
 
     async def _run_analysis(chat_id: int, user, match) -> dict:
         if analyzer is None:
-            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+            raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
         now = datetime.now(timezone.utc)
         limit, used = _ai_quota(user, now)
         if limit is not None and match.id not in used and len(used) >= limit:
             raise HTTPException(status_code=429, detail=(
                 f"Лимит на сегодня: {limit}. Оформите PRO — до {AI_PAID_PER_DAY} анализов в день."
                 if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
+        # 424, not 502/503: Cloudflare's tunnel swaps 502/503/504 bodies for its own error
+        # page, so the user would only ever see "HTTP 502" instead of the reason.
         try:
             result = await analyzer.analyze(match)
-        except Exception:
+        except Exception as e:
             logger.exception("AI analysis failed for %s", match.id)
+            if getattr(e, "status_code", None) == 402:
+                raise HTTPException(status_code=424, detail="ИИ временно недоступен — ведутся технические работы. Попробуйте позже.")
             result = None
         if result is None:
-            raise HTTPException(status_code=502, detail="Не удалось разобрать этот матч, попробуйте позже")
+            raise HTTPException(status_code=424, detail="Не удалось разобрать этот матч, попробуйте позже")
         repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
         wins, total = repo.ai_hit_rate()
         in_line = bool(match.options)
@@ -315,7 +319,7 @@ def register_api(
         if not team_a or not team_b or team_a.lower() == team_b.lower():
             raise HTTPException(status_code=400, detail="Введите две разные команды")
         if analyzer is None:
-            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+            raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
         try:
             line = await get_full_line()
         except Exception:
@@ -341,7 +345,7 @@ def register_api(
         await _require_subscribed(chat_id)
         _get_user(repo, chat_id)
         if analyzer is None:
-            raise HTTPException(status_code=503, detail="ИИ-анализ временно недоступен")
+            raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
         if body.media_type not in ("image/jpeg", "image/png", "image/webp") or len(body.image) > 6_000_000:
             raise HTTPException(status_code=400, detail="Нужна картинка JPG/PNG до 4 МБ")
         try:
