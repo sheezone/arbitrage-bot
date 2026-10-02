@@ -183,3 +183,7 @@ nav.tabs { display: none !important; }
 .st-cell { background: #121212; border: 1px solid #222; border-radius: 12px; padding: 10px; text-align: center; display: flex; flex-direction: column; }
 .st-cell b { font-size: 20px; color: #fff; }
 .st-cell span { color: var(--hint); font-size: 11px; }
+
+.brand { cursor: pointer; }
+.bn-max .bn-ico { filter: drop-shadow(0 0 10px rgba(198, 244, 50, 0.9)); }
+.bn-max { opacity: 1; }

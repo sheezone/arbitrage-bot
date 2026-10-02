@@ -122,7 +122,7 @@
       tab_settings: "Настройки",
       tab_stats: "Статистика",
       tab_sub: "Подписка",
-      sub_title: "Подписка",
+      sub_title: "MAX-доступ",
       sub_admin: "♾️ Безлимитный доступ (админ)",
       sub_trial: "⏳ Пробный период · осталось дней: ",
       sub_active: "💳 Подписка активна · осталось дней: ",
@@ -2342,7 +2342,7 @@ an_news: "News (injuries, form, suspensions)",
   // Home screen in the style the owner asked for: welcome tiles, PRO cards, bottom nav.
   // Every number shown is real: hit-rate only from settled picks (never a made-up %).
   const SCREEN_TITLES = { ai: "ИИ-Прогнозы", picks: "Готовые прогнозы", express: "Экспрессы", vilki: "Вилки",
-    settings: "Настройки вилок", sub: "PRO-доступ", admin: "Админ-панель", help: "Помощь", aistats: "Статистика ИИ" };
+    settings: "Настройки вилок", sub: "MAX-доступ", admin: "Админ-панель", help: "Помощь", aistats: "Статистика ИИ" };
   // Back button target: vilki settings live inside the Вилки section, everything else under home.
   const PARENT = { settings: "vilki" };
   let homeCache = null;
@@ -2362,7 +2362,7 @@ an_news: "News (injuries, form, suspensions)",
       actions.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => go(b.dataset.act)));
     }
     document.querySelectorAll(".bn-item").forEach((b) =>
-      b.classList.toggle("active", b.dataset.go === tab || (b.dataset.go === "home" && tab !== "help")));
+      b.classList.toggle("active", b.dataset.go === tab));
   }
 
   function go(tab) {
@@ -2387,8 +2387,9 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   function proCard(key, icon, title, badge, chips, art, locked) {
-    return `<button type="button" class="pro-card" data-go="${key}">
-      <div class="pro-head"><span class="pro-icon">${icon}</span><span class="pro-title">${esc(title)}</span>${badge}${locked ? '<span class="hb-lock">🔒 PRO</span>' : ""}</div>
+    // Locked (no subscription) -> the card opens the in-app payment screen directly.
+    return `<button type="button" class="pro-card" data-go="${locked ? "sub" : key}">
+      <div class="pro-head"><span class="pro-icon">${icon}</span><span class="pro-title">${esc(title)}</span>${badge}${locked ? '<span class="hb-lock">🔒 MAX</span>' : ""}</div>
       <div class="pro-art art-${art}">
         <div class="pro-chips">${chips.map((c) => `<span class="pro-chip">${esc(c)}</span>`).join("")}</div>
       </div>
@@ -2416,7 +2417,7 @@ an_news: "News (injuries, form, suspensions)",
           <button type="button" class="tile art-t-support" data-go="support"><span class="tile-emoji">🎧</span><span class="tile-label">Поддержка</span></button>
           ${h.is_admin ? '<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">Админ</span></button>' : ""}
         </div>
-        <h2 class="home-pro">PRO-доступ${locked ? ' <button type="button" class="pro-buy" data-go="sub">Оформить</button>' : ""}</h2>
+        <h2 class="home-pro">MAX-доступ${locked ? ' <button type="button" class="pro-buy" data-go="sub">Оформить</button>' : ""}</h2>
         ${proCard("ai", "🧠", "ИИ-Прогнозы", hitBadge(h.hit_rate), ["🎯 Разбор матчей" + quota, "⚽ Форма и новости", "💰 Ищем ценность в линии"], "ai", false)}
         ${proCard("express", "📈", "Экспрессы", h.express_count ? `<span class="hb-badge">${h.express_count} на сегодня</span>` : "", ["🤖 Отбор через ИИ", "💰 Кэф x2–x6", "🔥 Каждый день новые"], "express", locked)}
         ${proCard("picks", "⚽", "Готовые прогнозы", '<span class="hb-badge hb-hot">🔥 ХИТ</span>', ["📋 Прогнозы дня" + (h.picks_count ? ` · ${h.picks_count}` : ""), "📝 С обоснованием", "📊 Честная статистика"], "picks", locked)}
@@ -2600,7 +2601,7 @@ an_news: "News (injuries, form, suspensions)",
   function pickCard(p) {
     const res = p.result === "win" ? '<span class="res win">✅ Зашёл</span>' : p.result === "lose" ? '<span class="res lose">❌ Не зашёл</span>' : "";
     const body = p.locked
-      ? `<div class="pk-locked">🔒 Прогноз доступен в PRO</div>`
+      ? `<div class="pk-locked">🔒 Прогноз доступен в MAX</div>`
       : `<div class="pk-pick">🎯 ${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span></div>
          <div class="an-conf">${confMeter(p.confidence)}</div>
          ${p.reasoning ? `<div class="pk-why">${esc(p.reasoning)}</div>` : ""}`;
@@ -2614,7 +2615,7 @@ an_news: "News (injuries, form, suspensions)",
     const data = await api("/api/ai/picks");
     const h = homeCache ? homeCache.hit_rate : null;
     let html = `<div class="pk-stat">${hitBadge(h)}<div class="ai-sub">Считаем только по результатам сыгранных матчей.</div></div>`;
-    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть прогнозы — PRO</button>`;
+    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть прогнозы — MAX</button>`;
     html += `<h3 class="sec-h">Ближайшие матчи</h3>`;
     html += data.upcoming.length ? data.upcoming.map(pickCard).join("") : `<div class="ai-empty">ИИ готовит прогнозы — загляните чуть позже.</div>`;
     if (data.recent.length) html += `<h3 class="sec-h">Последние результаты</h3>` + data.recent.map(pickCard).join("");
@@ -2625,10 +2626,10 @@ an_news: "News (injuries, form, suspensions)",
   async function renderExpress() {
     const data = await api("/api/ai/express");
     let html = `<div class="ai-intro">Экспресс собирается из прогнозов ИИ с уверенностью «средняя» и выше на разные матчи, общий кэф от 2 до 6. Экспресс проигрывает, если не зашла хоть одна ставка.</div>`;
-    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть экспрессы — PRO</button>`;
+    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть экспрессы — MAX</button>`;
     if (!data.expresses.length) html += `<div class="ai-empty">Пока мало прогнозов для экспресса — ИИ разбирает матчи в течение дня.</div>`;
     data.expresses.forEach((e, i) => {
-      html += `<div class="ex-card"><div class="ex-head"><span>Экспресс №${i + 1}</span>${e.total_odds ? `<span class="ex-total">кэф ${e.total_odds.toFixed(2)}</span>` : '<span class="hb-lock">🔒 PRO</span>'}</div>
+      html += `<div class="ex-card"><div class="ex-head"><span>Экспресс №${i + 1}</span>${e.total_odds ? `<span class="ex-total">кэф ${e.total_odds.toFixed(2)}</span>` : '<span class="hb-lock">🔒 MAX</span>'}</div>
         ${e.legs.map((p) => `<div class="ex-leg"><div class="pk-teams">${esc(p.team_a)} — ${esc(p.team_b)}</div>
           <div class="ex-pick">${p.locked ? "🔒 скрыто" : `${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>`}</div></div>`).join("")}</div>`;
     });
@@ -2641,7 +2642,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="an-block"><div class="an-h">🧠 ИИ-Прогнозы</div><div>Выберите матч — ИИ соберёт форму команд, таблицу, личные встречи, свежие новости и коэффициенты и предложит одну ставку из реальной линии с объяснением и уровнем уверенности.</div></div>
       <div class="an-block"><div class="an-h">📊 Честная статистика</div><div>Каждый прогноз сохраняется и после матча сверяется со счётом. Проходимость считается только по сыгранным матчам.</div></div>
       <div class="an-block"><div class="an-h">📈 Экспрессы и готовые прогнозы</div><div>ИИ каждый день сам разбирает топовые матчи. Из лучших прогнозов собираются экспрессы с кэфом 2–6.</div></div>
-      <div class="an-block"><div class="an-h">🎟 Лимиты</div><div>Без подписки — 1 ИИ-разбор в день, с PRO — 5 в день. Повторно открыть уже разобранный сегодня матч — бесплатно.</div></div>
+      <div class="an-block"><div class="an-h">🎟 Лимиты</div><div>Без подписки — 1 ИИ-разбор в день, с MAX — 5 в день. Повторно открыть уже разобранный сегодня матч — бесплатно.</div></div>
       <div class="an-block"><div class="an-h">⚡ Вилки</div><div>Отдельный раздел: расхождения коэффициентов у 9 лицензированных БК, настройки ⚙️, калькулятор 🧮 и статистика 📊 — вверху экрана «Вилки». Уведомления о вилках включаются в боте: «🔍 Поиск вилок» → «Включить уведомления».</div></div>
       <div class="an-block"><div class="an-h">🌐 Язык</div><div class="lang-row">
         <button class="pro-chip lang-set" data-lang="ru">🇷🇺 Русский</button><button class="pro-chip lang-set" data-lang="en">🇬🇧 English</button><button class="pro-chip lang-set" data-lang="tg">🇹🇯 Тоҷикӣ</button></div></div>
@@ -2665,6 +2666,9 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   document.querySelectorAll(".bn-item").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+  // Logo -> home (the bottom bar's middle button now opens the MAX payment screen).
+  const brand = document.querySelector(".brand");
+  if (brand) brand.addEventListener("click", () => go("home"));
   const screenBack = document.getElementById("screen-back");
   if (screenBack) screenBack.addEventListener("click", () => go(PARENT[currentTab] || "home"));
   renderUserChip();
