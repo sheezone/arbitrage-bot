@@ -832,7 +832,7 @@ def _calculator_result_view(bankroll: float, odds_a: float, odds_b: float) -> Vi
 
 
 def _search_keyboard(notifications_on: bool = True) -> InlineKeyboardMarkup:
-    enable_row = [] if notifications_on else [[_btn("🔔 Включить уведомления о вилках", NAV_ENABLE_VILKI)]]
+    enable_row = [] if notifications_on else [[_btn(f"🚀 Запустить поиск вилок ({billing.VILKI_RUN_DAYS} дня)", NAV_ENABLE_VILKI)]]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             *enable_row,
@@ -918,7 +918,10 @@ def _search_view(
 
     header = [f"{vi('search')} <b>ПОИСК ВИЛОК</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not user.is_active:
-        header += ["🔕 Уведомления о новых вилках выключены — включите кнопкой ниже.", ""]
+        header += [f"🔕 Поиск вилок выключен. Нажмите «🚀 Запустить» — бот будет присылать вилки {billing.VILKI_RUN_DAYS} дня.", ""]
+    elif user.vilki_until:
+        until = datetime.fromisoformat(user.vilki_until).astimezone(MOSCOW_TZ).strftime("%d.%m %H:%M")
+        header += [f"🟢 Поиск вилок запущен до {until} МСК.", ""]
     if not matches:
         if hit_daily_limit:
             header.append(
@@ -1483,7 +1486,10 @@ def register_handlers(
     @router.callback_query(F.data == NAV_TOGGLE_ACTIVE)
     async def on_nav_toggle_active(callback: CallbackQuery, bot: Bot) -> None:
         user = repo.get_user(callback.message.chat.id)
-        repo.set_active(callback.message.chat.id, not user.is_active)
+        if user.is_active:
+            repo.set_active(callback.message.chat.id, False)
+        else:
+            repo.start_vilki(callback.message.chat.id, billing.VILKI_RUN_DAYS)
         user = repo.get_user(callback.message.chat.id)
         text, keyboard = _profile_view(user, admin_chat_ids)
         await _render(
@@ -1499,11 +1505,11 @@ def register_handlers(
         if not billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids):
             await callback.answer("Уведомления о вилках — для подписчиков. Оформите подписку в «💳 Подписка».", show_alert=True)
             return
-        repo.set_active(chat_id, True)
+        repo.start_vilki(chat_id, billing.VILKI_RUN_DAYS)
         user = repo.get_user(chat_id)
         text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
         await _render(bot, repo, chat_id, callback.message.message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH)
-        await callback.answer("Уведомления о вилках включены")
+        await callback.answer(f"Поиск вилок запущен на {billing.VILKI_RUN_DAYS} дня")
 
     @router.callback_query(F.data == NAV_TOGGLE_MUTED)
     async def on_nav_toggle_muted(callback: CallbackQuery, bot: Bot) -> None:

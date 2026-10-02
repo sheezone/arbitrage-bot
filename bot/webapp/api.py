@@ -274,7 +274,19 @@ def register_api(
             "vilki_count": len(state.matches),
             "bot_username": bot_username,
             "support_username": await _support_username(chat_id),
+            "vilki_active": user.is_active,
+            "vilki_until": user.vilki_until,
+            "vilki_run_days": billing.VILKI_RUN_DAYS,
         }
+
+    @app.post("/api/vilki/start")
+    async def post_vilki_start(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        if not billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids):
+            raise HTTPException(status_code=402, detail="Поиск вилок — для подписчиков MAX")
+        return {"vilki_until": repo.start_vilki(chat_id, billing.VILKI_RUN_DAYS)}
 
     @app.get("/api/ai/matches")
     async def get_ai_matches(authorization: str | None = Header(default=None)):

@@ -10,7 +10,7 @@ from typing import Awaitable, Callable
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError
-from aiogram.types import LinkPreviewOptions
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 
 from bot.core import billing
 from bot.core.flags import with_flag
@@ -374,6 +374,27 @@ def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, 
 
         results.append((subgroup[0].game, team_a, team_b, market, arb))
     return results
+
+
+async def _expire_vilki_runs(repo: Repository, bot: Bot) -> None:
+    """Vilka search runs for billing.VILKI_RUN_DAYS after «Запустить», then switches off
+    by itself; the user gets one message with a button to start another run."""
+    ids = repo.expire_vilki(datetime.now(timezone.utc).isoformat())
+    if not ids:
+        return
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=f"🚀 Запустить ещё на {billing.VILKI_RUN_DAYS} дня", callback_data="nav:enable_vilki",
+    )]])
+    for chat_id in ids:
+        try:
+            await _send_message_with_retries(
+                bot, chat_id,
+                f"⏸ Поиск вилок остановлен — прошло {billing.VILKI_RUN_DAYS} дня с запуска.\n"
+                "Нажмите кнопку, чтобы снова получать вилки.",
+                reply_markup=keyboard,
+            )
+        except Exception:
+            logger.warning("Could not notify chat_id=%s about the vilka run ending", chat_id)
 
 
 async def _notify_group(
@@ -743,6 +764,11 @@ async def run_monitor_loop(
             except Exception:
                 logger.exception("Failed to send expiry reminders")
             last_expiry_check = time.time()
+
+        try:
+            await _expire_vilki_runs(repo, bot)
+        except Exception:
+            logger.exception("Failed to expire vilka runs")
 
         all_quotes = await _fetch_all_quotes(sources, games, empty_streaks, licensed_bookmakers_only)
         # CPU-heavy (seconds on the full line): off the event loop, so the bot's buttons

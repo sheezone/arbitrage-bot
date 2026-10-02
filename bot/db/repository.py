@@ -30,6 +30,7 @@ class UserSettings:
     language: str = "ru"
     lang_chosen: bool = False
     keyboard_reattached_at: str | None = None
+    vilki_until: str | None = None
 
 
 class Repository:
@@ -124,6 +125,11 @@ class Repository:
             # rather than cleared by a cron job, so no scheduled task is needed.
             self._conn.execute("ALTER TABLE users ADD COLUMN daily_vilki_date TEXT")
             self._conn.execute("ALTER TABLE users ADD COLUMN daily_vilki_seen TEXT NOT NULL DEFAULT ''")
+        if "vilki_until" not in columns:
+            # Vilka search runs for VILKI_RUN_DAYS after the user presses «Запустить», then
+            # switches itself off (owner, 2026-10-03). NULL = no expiry (users who had it
+            # on before this rule keep it as it was).
+            self._conn.execute("ALTER TABLE users ADD COLUMN vilki_until TEXT")
 
     def upsert_user(self, chat_id: int, referred_by: int | None = None, acquisition_source: str | None = None) -> None:
         """`referred_by`/`acquisition_source` only ever take effect for a genuinely new
@@ -284,6 +290,24 @@ class Repository:
             (",".join(games), chat_id),
         )
         self._conn.commit()
+
+    def start_vilki(self, chat_id: int, days: int) -> str:
+        """Turn vilka notifications on for `days` days; returns the expiry (ISO)."""
+        until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+        self._conn.execute("UPDATE users SET is_active = 1, vilki_until = ? WHERE chat_id = ?", (until, chat_id))
+        self._conn.commit()
+        return until
+
+    def expire_vilki(self, now_iso: str) -> list[int]:
+        """Switch off every user whose vilka run has ended; returns their chat_ids."""
+        rows = self._conn.execute(
+            "SELECT chat_id FROM users WHERE is_active = 1 AND vilki_until IS NOT NULL AND vilki_until <= ?", (now_iso,)
+        ).fetchall()
+        ids = [r[0] for r in rows]
+        if ids:
+            self._conn.executemany("UPDATE users SET is_active = 0, vilki_until = NULL WHERE chat_id = ?", [(i,) for i in ids])
+            self._conn.commit()
+        return ids
 
     def set_active(self, chat_id: int, is_active: bool) -> None:
         self._conn.execute(
@@ -586,6 +610,7 @@ def _row_to_user(row: sqlite3.Row) -> UserSettings:
         language=row["language"] or "ru",
         lang_chosen=bool(row["lang_chosen"]),
         keyboard_reattached_at=row["keyboard_reattached_at"],
+        vilki_until=row["vilki_until"],
     )
 
 

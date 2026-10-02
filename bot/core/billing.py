@@ -57,6 +57,9 @@ TEST_PLAN = Plan(id="test30", days=1, label="Тест (админ)", price_rub=3
 # and never consult this at all.
 FREE_DAILY_VILKI_LIMIT = 5
 
+# «Запустить» turns vilka search on for this many days, then it switches itself off.
+VILKI_RUN_DAYS = 3
+
 
 def opportunity_key(game: str, team_a: str, team_b: str, start_time_utc: str) -> str:
     """Stable per-match identity for the free daily-vilki counter -- deliberately looser

@@ -859,7 +859,7 @@ an_news: "News (injuries, form, suspensions)",
       else if (tab === "express") await renderExpress();
       else if (tab === "help") renderHelp();
       else if (tab === "aistats") await renderAiStats();
-      else if (tab === "vilki") await renderVilki();
+      else if (tab === "vilki") { await renderVilki(); await vilkiRunBanner(); }
       else if (tab === "news") await renderNews();
       else if (tab === "settings") await renderSettings();
       else if (tab === "stats") await renderStats();
@@ -2353,6 +2353,7 @@ an_news: "News (injuries, form, suspensions)",
   const HL = {
     ru: {
       brand_sub: "AI ПРОГНОЗЫ",
+      vk_on: "Поиск вилок запущен", vk_until: "до {d}", vk_off: "Поиск вилок выключен", vk_start: "Запустить на {n} дня", vk_started: "Поиск вилок запущен на {n} дня",
       t_ai: "ИИ-Прогнозы", t_picks: "Готовые прогнозы", t_express: "Экспрессы", t_vilki: "Вилки",
       t_settings: "Настройки вилок", t_sub: "MAX-доступ", t_admin: "Админ-панель", t_help: "Помощь", t_aistats: "Статистика ИИ",
       nav_help: "Помощь", nav_support: "Поддержка", support_na: "Поддержка временно недоступна",
@@ -2397,6 +2398,7 @@ an_news: "News (injuries, form, suspensions)",
     },
     en: {
       brand_sub: "AI FORECASTS",
+      vk_on: "Arb search is on", vk_until: "until {d}", vk_off: "Arb search is off", vk_start: "Start for {n} days", vk_started: "Arb search started for {n} days",
       t_ai: "AI Forecasts", t_picks: "Ready picks", t_express: "Accumulators", t_vilki: "Arbs",
       t_settings: "Arb settings", t_sub: "MAX access", t_admin: "Admin panel", t_help: "Help", t_aistats: "AI statistics",
       nav_help: "Help", nav_support: "Support", support_na: "Support is temporarily unavailable",
@@ -2441,6 +2443,7 @@ an_news: "News (injuries, form, suspensions)",
     },
     tg: {
       brand_sub: "ПЕШГӮИҲОИ AI",
+      vk_on: "Ҷустуҷӯи вилка фаъол аст", vk_until: "то {d}", vk_off: "Ҷустуҷӯи вилка хомӯш аст", vk_start: "Барои {n} рӯз оғоз", vk_started: "Ҷустуҷӯи вилка барои {n} рӯз оғоз шуд",
       t_ai: "Пешгӯиҳои ИИ", t_picks: "Пешгӯиҳои тайёр", t_express: "Экспрессҳо", t_vilki: "Вилкаҳо",
       t_settings: "Танзимоти вилка", t_sub: "Дастрасии MAX", t_admin: "Панели админ", t_help: "Кумак", t_aistats: "Омори ИИ",
       nav_help: "Кумак", nav_support: "Дастгирӣ", support_na: "Дастгирӣ муваққатан дастнорас аст",
@@ -2811,6 +2814,32 @@ an_news: "News (injuries, form, suspensions)",
         const item = document.querySelector(`.lang-menu-item[data-lang="${b.dataset.lang}"]`);
         if (item) item.click();
       }));
+  }
+
+  // Vilka search runs VILKI_RUN_DAYS after «Запустить», then switches itself off.
+  async function vilkiRunBanner() {
+    let h;
+    try { h = await api("/api/home"); homeCache = h; } catch (e) { return; }
+    const bar = document.createElement("div");
+    bar.className = "vk-run";
+    if (h.vilki_active) {
+      const until = h.vilki_until ? new Date(h.vilki_until).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+      bar.innerHTML = `<span>🟢 ${tr("vk_on")}${until ? " " + tr("vk_until", { d: until }) : ""}</span>`;
+    } else {
+      bar.innerHTML = `<span>🔕 ${tr("vk_off")}</span><button type="button" class="pro-buy">🚀 ${tr("vk_start", { n: h.vilki_run_days })}</button>`;
+      bar.querySelector("button").addEventListener("click", async () => {
+        try {
+          await api("/api/vilki/start", { method: "POST" });
+          haptic("medium");
+          toast(tr("vk_started", { n: h.vilki_run_days }));
+          switchTab("vilki");
+        } catch (e) {
+          toast(e.message);
+          if (e.status === 402) switchTab("sub");
+        }
+      });
+    }
+    content.prepend(bar);
   }
 
   function renderUserChip() {

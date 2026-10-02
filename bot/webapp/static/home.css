@@ -336,3 +336,6 @@ html, body { background: radial-gradient(ellipse at 50% -10%, #241042 0%, #0b061
 /* headline badges pop a bit */
 .hb-badge, .hb-lock { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 0 rgba(60, 20, 120, 0.9); }
 @media (prefers-reduced-motion: reduce) { .pro-art, .pro-art::after, .tile .tile-emoji, .pro-buy, .pro-buy::after { animation: none !important; } }
+
+.vk-run { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: linear-gradient(180deg, #24173d, #170f29); border: 1px solid rgba(178, 107, 255, 0.4); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; font-weight: 800; font-size: 13px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 0 #0f0820; }
+.vk-run .pro-buy { padding: 9px 12px; font-size: 13px; }

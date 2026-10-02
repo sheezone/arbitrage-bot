@@ -343,3 +343,19 @@ def test_new_users_start_with_vilka_notifications_off(tmp_path):
     repo = _repo(tmp_path)
     repo.upsert_user(1)
     assert repo.get_user(1).is_active is False or repo.get_user(1).is_active == 0
+
+
+def test_vilki_run_expires_after_its_days(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    repo = _repo(tmp_path)
+    repo.upsert_user(1)
+    repo.upsert_user(2)
+    repo.set_active(2, True)  # pre-rule user: on, no expiry
+    until = repo.start_vilki(1, 3)
+    assert repo.get_user(1).is_active and repo.get_user(1).vilki_until == until
+    now = datetime.now(timezone.utc)
+    assert repo.expire_vilki((now + timedelta(days=2)).isoformat()) == []
+    assert repo.expire_vilki((now + timedelta(days=3, minutes=1)).isoformat()) == [1]
+    assert not repo.get_user(1).is_active and repo.get_user(1).vilki_until is None
+    assert repo.get_user(2).is_active
