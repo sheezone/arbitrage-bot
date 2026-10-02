@@ -2276,7 +2276,7 @@ an_news: "News (injuries, form, suspensions)",
     if (!refreshTimer) {
       refreshTimer = setInterval(() => {
         if (currentTab === "vilki") loadTab("vilki");
-      }, 20000);
+      }, 60000);
     }
     startDataAgeTicker();
     maybeShowHint();
@@ -2403,7 +2403,7 @@ an_news: "News (injuries, form, suspensions)",
         ${proCard("ai", "🧠", "ИИ-Прогнозы", hitBadge(h.hit_rate), ["🎯 Разбор матчей" + quota, "⚽ Форма и новости", "💰 Ищем ценность в линии"], "ai", false)}
         ${proCard("express", "📈", "Экспрессы", h.express_count ? `<span class="hb-badge">${h.express_count} на сегодня</span>` : "", ["🤖 Отбор через ИИ", "💰 Кэф x2–x6", "🔥 Каждый день новые"], "express", locked)}
         ${proCard("picks", "⚽", "Готовые прогнозы", '<span class="hb-badge hb-hot">🔥 ХИТ</span>', ["📋 Прогнозы дня" + (h.picks_count ? ` · ${h.picks_count}` : ""), "📝 С обоснованием", "📊 Честная статистика"], "picks", locked)}
-        ${proCard("vilki", "⚡", "Вилки", h.vilki_count ? `<span class="hb-badge">${h.vilki_count} сейчас</span>` : "", ["🏦 9 букмекеров", "⏱ Каждые 20 сек", "🧮 Расчёт ставок"], "vilki", locked)}
+        ${proCard("vilki", "⚡", "Вилки", h.vilki_count ? `<span class="hb-badge">${h.vilki_count} сейчас</span>` : "", ["🏦 9 букмекеров", "⏱ Раз в минуту", "🧮 Расчёт ставок"], "vilki", locked)}
         <p class="home-note">Аналитика, а не гарантия выигрыша. 18+</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
