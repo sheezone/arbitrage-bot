@@ -121,6 +121,7 @@ async def _user_out(
         "is_active": user.is_active,
         "muted": user.muted,
         "is_admin": is_admin,
+        "language": user.language,
         "has_access": billing.has_access(user, now, admin_chat_ids),
         "on_trial": billing.on_trial(user, now),
         "days_left": billing.days_left(user, now),
@@ -149,6 +150,7 @@ class SettingsIn(BaseModel):
     time_horizons: list[int] | None = None
     allowed_bookmakers: list[str] | None = None
     muted: bool | None = None
+    language: str | None = None
 
 
 def register_api(
@@ -426,6 +428,8 @@ def register_api(
             if not valid:
                 raise HTTPException(status_code=400, detail="need at least one valid time horizon")
             repo.set_time_horizons(chat_id, sorted(set(valid)))
+        if body.language is not None and body.language in ("ru", "en", "tg"):
+            repo.set_language(chat_id, body.language)
         if body.allowed_bookmakers is not None:
             valid_bk = [b for b in body.allowed_bookmakers if b in _ALL_BOOKMAKER_KEYS]
             # Selecting everything is stored as empty (== "no restriction"), same

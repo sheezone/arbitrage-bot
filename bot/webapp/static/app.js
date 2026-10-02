@@ -573,6 +573,7 @@ an_news: "News (injuries, form, suspensions)",
       }
       applyStaticLabels();
       switchTab(currentTab);
+      api("/api/settings", { method: "POST", body: JSON.stringify({ language: currentLang }) }).catch(() => {});
     });
   });
 
@@ -2256,6 +2257,12 @@ an_news: "News (injuries, form, suspensions)",
       return;
     }
     meCache = me;
+    // The bot's language setting is the source of truth (shared with the Mini App).
+    if (SUPPORTED_LANGS.includes(me.language) && me.language !== currentLang) {
+      currentLang = me.language;
+      try { localStorage.setItem("lang", currentLang); } catch (e) { /* convenience only */ }
+      applyStaticLabels();
+    }
     hideSplash();
     greet();
     if (me.channel_required && !me.is_subscribed) {
@@ -2339,20 +2346,171 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   // ================= AI home (2026-10-02 redesign) =================
-  // Home screen in the style the owner asked for: welcome tiles, PRO cards, bottom nav.
+  // Home screen in the style the owner asked for: welcome tiles, MAX cards, bottom nav.
   // Every number shown is real: hit-rate only from settled picks (never a made-up %).
-  const SCREEN_TITLES = { ai: "ИИ-Прогнозы", picks: "Готовые прогнозы", express: "Экспрессы", vilki: "Вилки",
-    settings: "Настройки вилок", sub: "MAX-доступ", admin: "Админ-панель", help: "Помощь", aistats: "Статистика ИИ" };
+  // Texts are in HL (ru/en/tg) and follow the language picker; AI-generated analysis text
+  // itself stays in Russian (one shared cached analysis per match).
+  const HL = {
+    ru: {
+      brand_sub: "AI ПРОГНОЗЫ",
+      t_ai: "ИИ-Прогнозы", t_picks: "Готовые прогнозы", t_express: "Экспрессы", t_vilki: "Вилки",
+      t_settings: "Настройки вилок", t_sub: "MAX-доступ", t_admin: "Админ-панель", t_help: "Помощь", t_aistats: "Статистика ИИ",
+      nav_help: "Помощь", nav_support: "Поддержка", support_na: "Поддержка временно недоступна",
+      hb_collect: "🆕 Статистика копится: {n}/{m}", hb_rate: "📊 {p}% проходимость · {n} матчей",
+      welcome: "Добро пожаловать!", tile_help: "Помощь", tile_stats: "Статистика", tile_admin: "Админ",
+      max_access: "MAX-доступ", buy: "Оформить",
+      c_ai1: "🎯 Разбор матчей", c_ai2: "⚽ Форма и новости", c_ai3: "💰 Ищем ценность в линии",
+      c_ex_badge: "{n} на сегодня", c_ex1: "🤖 Отбор через ИИ", c_ex2: "💰 Кэф x2–x6", c_ex3: "🔥 Каждый день новые",
+      hot: "🔥 ХИТ", c_pk1: "📋 Прогнозы дня", c_pk2: "📝 С обоснованием", c_pk3: "📊 Честная статистика",
+      c_vk_badge: "{n} сейчас", c_vk1: "🏦 9 букмекеров", c_vk2: "⏱ Раз в минуту", c_vk3: "🧮 Расчёт ставок",
+      note: "Аналитика, а не гарантия выигрыша. 18+",
+      st_cap: "проходимость ИИ-прогнозов", st_won: "{w} из {n} прогнозов зашли",
+      st_wait: "Считаем честно: цифра появится после {m} сыгранных матчей (сейчас {n})",
+      st_played: "сыграно", st_win: "зашло", st_lose: "не зашло", recent: "Последние результаты",
+      st_none: "Пока нет сыгранных матчей с прогнозами ИИ.",
+      conf_low: "низкая", conf_mid: "средняя", conf_high: "высокая",
+      quota: "Сегодня разобрано: <b>{u}/{l}</b>", unlimited: "Без ограничений",
+      ask_h: "🧠 Узнать шансы на матч", team1: "Команда 1", team2: "Команда 2", shot: "📷 Скриншот",
+      analyze: "Анализировать", or_pick: "Или выберите матч из линии", no_matches: "Сейчас нет ближайших матчей в линии.",
+      analyzed: "✓ разобран", need_teams: "Введите обе команды или загрузите скриншот",
+      reading: "Читаю скриншот…", found: "Нашёл матч: {a} — {b}",
+      draw: "Ничья", loading: "ИИ анализирует матч…", loading_sub: "Форма, личные встречи, новости и линия. До минуты.",
+      pick: "🎯 Прогноз ИИ", verdict: "🎯 Вывод ИИ", confidence: "Уверенность:",
+      no_line: "Матча нет в линии букмекеров — разбор без коэффициентов.",
+      p_ai: "📊 Шансы по оценке ИИ", p_market: "🏦 Шансы по коэффициентам букмекеров",
+      summary: "📋 Кратко", factors: "🔎 Ключевые факторы", injuries: "🚑 Травмы и составы",
+      motivation: "🔥 Мотивация", risks: "⚠️ Риски",
+      an_foot: "Коэффициенты на момент анализа — проверяйте у букмекера. Аналитика, а не гарантия. 18+",
+      back_list: "‹ К списку матчей", won: "✅ Зашёл", lost: "❌ Не зашёл", pick_locked: "🔒 Прогноз доступен в MAX",
+      pk_note: "Считаем только по результатам сыгранных матчей.", open_picks: "🔓 Открыть прогнозы — MAX",
+      upcoming: "Ближайшие матчи", pk_wait: "ИИ готовит прогнозы — загляните чуть позже.",
+      ex_intro: "Экспресс собирается из прогнозов ИИ с уверенностью «средняя» и выше на разные матчи, общий кэф от 2 до 6. Экспресс проигрывает, если не зашла хоть одна ставка.",
+      open_ex: "🔓 Открыть экспрессы — MAX", ex_wait: "Пока мало прогнозов для экспресса — ИИ разбирает матчи в течение дня.",
+      ex_n: "Экспресс №{n}", ex_odds: "кэф {k}", hidden: "🔒 скрыто",
+      h_ai: "🧠 ИИ-Прогнозы", h_ai_t: "Выберите матч или введите две команды (можно скриншот) — ИИ соберёт форму команд, таблицу, личные встречи, свежие новости, травмы и коэффициенты и даст шансы в процентах и одну ставку с объяснением.",
+      h_st: "📊 Честная статистика", h_st_t: "Каждый прогноз сохраняется и после матча сверяется со счётом. Проходимость считается только по сыгранным матчам.",
+      h_ex: "📈 Экспрессы и готовые прогнозы", h_ex_t: "ИИ каждый день сам разбирает топовые матчи. Из лучших прогнозов собираются экспрессы с кэфом 2–6.",
+      h_lim: "🎟 Лимиты", h_lim_t: "Без подписки — 1 ИИ-разбор в день, с MAX — 5 в день. Повторно открыть уже разобранный сегодня матч — бесплатно.",
+      h_vk: "⚡ Вилки", h_vk_t: "Отдельный раздел: расхождения коэффициентов у 9 лицензированных БК, настройки ⚙️, калькулятор 🧮 и статистика 📊 — вверху экрана «Вилки».",
+      h_lang: "🌐 Язык", h_support: "🎧 Написать в поддержку",
+      h_note: "Сервис — аналитика: он не принимает ставки и не гарантирует выигрыш. 18+",
+    },
+    en: {
+      brand_sub: "AI FORECASTS",
+      t_ai: "AI Forecasts", t_picks: "Ready picks", t_express: "Accumulators", t_vilki: "Arbs",
+      t_settings: "Arb settings", t_sub: "MAX access", t_admin: "Admin panel", t_help: "Help", t_aistats: "AI statistics",
+      nav_help: "Help", nav_support: "Support", support_na: "Support is temporarily unavailable",
+      hb_collect: "🆕 Collecting stats: {n}/{m}", hb_rate: "📊 {p}% hit rate · {n} matches",
+      welcome: "Welcome!", tile_help: "Help", tile_stats: "Statistics", tile_admin: "Admin",
+      max_access: "MAX access", buy: "Get MAX",
+      c_ai1: "🎯 Match analysis", c_ai2: "⚽ Form and news", c_ai3: "💰 Value in the line",
+      c_ex_badge: "{n} today", c_ex1: "🤖 Picked by AI", c_ex2: "💰 Odds x2–x6", c_ex3: "🔥 New every day",
+      hot: "🔥 HOT", c_pk1: "📋 Picks of the day", c_pk2: "📝 With reasoning", c_pk3: "📊 Honest stats",
+      c_vk_badge: "{n} now", c_vk1: "🏦 9 bookmakers", c_vk2: "⏱ Every minute", c_vk3: "🧮 Stake calculator",
+      note: "Analytics, not a guarantee of winning. 18+",
+      st_cap: "AI forecast hit rate", st_won: "{w} of {n} forecasts won",
+      st_wait: "Counted honestly: the figure appears after {m} played matches (now {n})",
+      st_played: "played", st_win: "won", st_lose: "lost", recent: "Latest results",
+      st_none: "No played matches with AI forecasts yet.",
+      conf_low: "low", conf_mid: "medium", conf_high: "high",
+      quota: "Analysed today: <b>{u}/{l}</b>", unlimited: "Unlimited",
+      ask_h: "🧠 Get match chances", team1: "Team 1", team2: "Team 2", shot: "📷 Screenshot",
+      analyze: "Analyse", or_pick: "Or pick a match from the line", no_matches: "No upcoming matches in the line right now.",
+      analyzed: "✓ analysed", need_teams: "Enter both teams or upload a screenshot",
+      reading: "Reading screenshot…", found: "Found the match: {a} — {b}",
+      draw: "Draw", loading: "AI is analysing the match…", loading_sub: "Form, head-to-head, news and the line. Up to a minute.",
+      pick: "🎯 AI forecast", verdict: "🎯 AI verdict", confidence: "Confidence:",
+      no_line: "The match is not in the bookmakers' line — analysis without odds.",
+      p_ai: "📊 Chances (AI estimate)", p_market: "🏦 Chances from bookmaker odds",
+      summary: "📋 Summary", factors: "🔎 Key factors", injuries: "🚑 Injuries and line-ups",
+      motivation: "🔥 Motivation", risks: "⚠️ Risks",
+      an_foot: "Odds as of the analysis — check them at the bookmaker. Analytics, not a guarantee. 18+",
+      back_list: "‹ Back to matches", won: "✅ Won", lost: "❌ Lost", pick_locked: "🔒 Forecast available in MAX",
+      pk_note: "Counted only from played matches.", open_picks: "🔓 Unlock picks — MAX",
+      upcoming: "Upcoming matches", pk_wait: "AI is preparing forecasts — check back a bit later.",
+      ex_intro: "An accumulator is built from AI forecasts with medium or high confidence on different matches, total odds 2 to 6. It loses if any single leg loses.",
+      open_ex: "🔓 Unlock accumulators — MAX", ex_wait: "Not enough forecasts for an accumulator yet — AI analyses matches during the day.",
+      ex_n: "Accumulator #{n}", ex_odds: "odds {k}", hidden: "🔒 hidden",
+      h_ai: "🧠 AI Forecasts", h_ai_t: "Pick a match or type two teams (or upload a screenshot) — AI gathers form, table, head-to-head, fresh news, injuries and odds, and gives win chances in % plus one bet with reasoning.",
+      h_st: "📊 Honest statistics", h_st_t: "Every forecast is saved and checked against the final score. The hit rate counts played matches only.",
+      h_ex: "📈 Accumulators and ready picks", h_ex_t: "Every day AI analyses top matches by itself. The best forecasts are combined into accumulators with odds 2–6.",
+      h_lim: "🎟 Limits", h_lim_t: "Without a subscription — 1 AI analysis a day, with MAX — 5 a day. Re-opening a match already analysed today is free.",
+      h_vk: "⚡ Arbs", h_vk_t: "A separate section: odds differences across 9 licensed bookmakers, with settings ⚙️, calculator 🧮 and stats 📊 at the top of the Arbs screen.",
+      h_lang: "🌐 Language", h_support: "🎧 Contact support",
+      h_note: "The service is analytics: it does not accept bets and does not guarantee winnings. 18+",
+    },
+    tg: {
+      brand_sub: "ПЕШГӮИҲОИ AI",
+      t_ai: "Пешгӯиҳои ИИ", t_picks: "Пешгӯиҳои тайёр", t_express: "Экспрессҳо", t_vilki: "Вилкаҳо",
+      t_settings: "Танзимоти вилка", t_sub: "Дастрасии MAX", t_admin: "Панели админ", t_help: "Кумак", t_aistats: "Омори ИИ",
+      nav_help: "Кумак", nav_support: "Дастгирӣ", support_na: "Дастгирӣ муваққатан дастнорас аст",
+      hb_collect: "🆕 Омор ҷамъ мешавад: {n}/{m}", hb_rate: "📊 {p}% гузариш · {n} бозӣ",
+      welcome: "Хуш омадед!", tile_help: "Кумак", tile_stats: "Омор", tile_admin: "Админ",
+      max_access: "Дастрасии MAX", buy: "Харидан",
+      c_ai1: "🎯 Таҳлили бозиҳо", c_ai2: "⚽ Шакл ва хабарҳо", c_ai3: "💰 Арзиш дар хат",
+      c_ex_badge: "{n} барои имрӯз", c_ex1: "🤖 Интихоби ИИ", c_ex2: "💰 Коэф x2–x6", c_ex3: "🔥 Ҳар рӯз нав",
+      hot: "🔥 ХИТ", c_pk1: "📋 Пешгӯиҳои рӯз", c_pk2: "📝 Бо асос", c_pk3: "📊 Омори ростқавлона",
+      c_vk_badge: "{n} ҳоло", c_vk1: "🏦 9 букмекер", c_vk2: "⏱ Ҳар дақиқа", c_vk3: "🧮 Ҳисоби ставка",
+      note: "Таҳлил аст, на кафолати бурд. 18+",
+      st_cap: "гузариши пешгӯиҳои ИИ", st_won: "аз {n} пешгӯӣ {w} гузашт",
+      st_wait: "Ростқавлона ҳисоб мекунем: рақам пас аз {m} бозии анҷомёфта пайдо мешавад (ҳоло {n})",
+      st_played: "бозида шуд", st_win: "гузашт", st_lose: "нагузашт", recent: "Натиҷаҳои охирин",
+      st_none: "Ҳоло бозиҳои анҷомёфта бо пешгӯии ИИ нест.",
+      conf_low: "паст", conf_mid: "миёна", conf_high: "баланд",
+      quota: "Имрӯз таҳлил шуд: <b>{u}/{l}</b>", unlimited: "Бе маҳдудият",
+      ask_h: "🧠 Имконияти бозиро донед", team1: "Даста 1", team2: "Даста 2", shot: "📷 Скриншот",
+      analyze: "Таҳлил кардан", or_pick: "Ё бозиро аз хат интихоб кунед", no_matches: "Ҳоло дар хат бозиҳои наздик нест.",
+      analyzed: "✓ таҳлил шуд", need_teams: "Ҳарду дастаро ворид кунед ё скриншот бор кунед",
+      reading: "Скриншотро мехонам…", found: "Бозӣ ёфт шуд: {a} — {b}",
+      draw: "Мусовӣ", loading: "ИИ бозиро таҳлил мекунад…", loading_sub: "Шакл, вохӯриҳои шахсӣ, хабарҳо ва хат. То як дақиқа.",
+      pick: "🎯 Пешгӯии ИИ", verdict: "🎯 Хулосаи ИИ", confidence: "Боварӣ:",
+      no_line: "Бозӣ дар хати букмекерҳо нест — таҳлил бе коэффисиентҳо.",
+      p_ai: "📊 Имконият аз рӯи ИИ", p_market: "🏦 Имконият аз рӯи коэффисиентҳо",
+      summary: "📋 Мухтасар", factors: "🔎 Омилҳои асосӣ", injuries: "🚑 Ҷароҳатҳо ва таркиб",
+      motivation: "🔥 Ҳавасмандӣ", risks: "⚠️ Хатарҳо",
+      an_foot: "Коэффисиентҳо дар лаҳзаи таҳлил — дар букмекер санҷед. Таҳлил аст, на кафолат. 18+",
+      back_list: "‹ Ба рӯйхати бозиҳо", won: "✅ Гузашт", lost: "❌ Нагузашт", pick_locked: "🔒 Пешгӯӣ дар MAX дастрас аст",
+      pk_note: "Танҳо аз рӯи бозиҳои анҷомёфта ҳисоб мекунем.", open_picks: "🔓 Кушодани пешгӯиҳо — MAX",
+      upcoming: "Бозиҳои наздик", pk_wait: "ИИ пешгӯиҳо омода мекунад — каме дертар биёед.",
+      ex_intro: "Экспресс аз пешгӯиҳои ИИ бо боварии «миёна» ва болотар ба бозиҳои гуногун ҷамъ мешавад, коэф аз 2 то 6. Агар як ставка нагузарад, экспресс мебозад.",
+      open_ex: "🔓 Кушодани экспрессҳо — MAX", ex_wait: "Ҳоло барои экспресс пешгӯӣ кам аст — ИИ дар давоми рӯз бозиҳоро таҳлил мекунад.",
+      ex_n: "Экспресс №{n}", ex_odds: "коэф {k}", hidden: "🔒 пинҳон",
+      h_ai: "🧠 Пешгӯиҳои ИИ", h_ai_t: "Бозиро интихоб кунед ё ду дастаро нависед (ё скриншот) — ИИ шакл, ҷадвал, вохӯриҳо, хабарҳо, ҷароҳатҳо ва коэффисиентҳоро ҷамъ карда, имкониятро бо фоиз ва як ставкаро бо асос медиҳад.",
+      h_st: "📊 Омори ростқавлона", h_st_t: "Ҳар пешгӯӣ нигоҳ дошта шуда, пас аз бозӣ бо ҳисоб санҷида мешавад. Гузариш танҳо аз рӯи бозиҳои анҷомёфта.",
+      h_ex: "📈 Экспрессҳо ва пешгӯиҳои тайёр", h_ex_t: "ИИ ҳар рӯз худаш бозиҳои беҳтаринро таҳлил мекунад. Аз пешгӯиҳои беҳтарин экспрессҳо бо коэф 2–6 ҷамъ мешаванд.",
+      h_lim: "🎟 Маҳдудиятҳо", h_lim_t: "Бе обуна — 1 таҳлили ИИ дар як рӯз, бо MAX — 5. Бозии имрӯз таҳлилшударо дубора кушодан ройгон аст.",
+      h_vk: "⚡ Вилкаҳо", h_vk_t: "Бахши алоҳида: фарқияти коэффисиентҳо дар 9 букмекери литсензиядор, танзимот ⚙️, ҳисобкунак 🧮 ва омор 📊 дар болои экрани «Вилкаҳо».",
+      h_lang: "🌐 Забон", h_support: "🎧 Ба дастгирӣ нависед",
+      h_note: "Хизмат таҳлил аст: ставка қабул намекунад ва бурдро кафолат намедиҳад. 18+",
+    },
+  };
+  function tr(key, vars) {
+    let s = (HL[currentLang] && HL[currentLang][key]) || HL.ru[key] || key;
+    if (vars) for (const k in vars) s = s.split(`{${k}}`).join(vars[k]);
+    return s;
+  }
+  const CONF_KEY = { "низкая": "conf_low", "средняя": "conf_mid", "высокая": "conf_high" };
+
   // Back button target: vilki settings live inside the Вилки section, everything else under home.
   const PARENT = { settings: "vilki" };
   let homeCache = null;
+
+  function applyNavLabels() {
+    const sub = document.querySelector(".brand-text small");
+    if (sub) sub.textContent = tr("brand_sub");
+    const labels = { help: tr("nav_help"), support: tr("nav_support"), sub: "MAX" };
+    document.querySelectorAll(".bn-item").forEach((b) => {
+      const span = b.querySelector("span:last-child");
+      if (span && labels[b.dataset.go]) span.textContent = labels[b.dataset.go];
+    });
+  }
 
   function updateScreenHead(tab) {
     const head = document.getElementById("screen-head");
     if (!head) return;
     head.hidden = tab === "home";
     const title = document.getElementById("screen-title");
-    if (title) title.textContent = SCREEN_TITLES[tab] || "";
+    if (title) title.textContent = tr("t_" + tab);
     // Вилки is its own section: settings, calculator and vilki stats live in its header.
     const actions = document.getElementById("screen-actions");
     if (actions) {
@@ -2361,8 +2519,8 @@ an_news: "News (injuries, form, suspensions)",
         : "";
       actions.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => go(b.dataset.act)));
     }
-    document.querySelectorAll(".bn-item").forEach((b) =>
-      b.classList.toggle("active", b.dataset.go === tab));
+    document.querySelectorAll(".bn-item").forEach((b) => b.classList.toggle("active", b.dataset.go === tab));
+    applyNavLabels();
   }
 
   function go(tab) {
@@ -2374,19 +2532,19 @@ an_news: "News (injuries, form, suspensions)",
     window.scrollTo(0, 0);
   }
 
-  // Support = a direct DM with the admin (their @username comes from /api/home).
+  // Support = a direct DM with an admin (their @username comes from /api/home).
   function openSupport() {
     const admin = homeCache && homeCache.support_username;
     const u = admin || (homeCache && homeCache.bot_username) || "";
     if (u && tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${u}`);
     else if (u) window.open(`https://t.me/${u}`, "_blank");
-    else toast("Поддержка временно недоступна");
+    else toast(tr("support_na"));
   }
 
   function hitBadge(h) {
     if (!h) return "";
-    if (h.total < h.min_total) return `<span class="hb-badge">🆕 Статистика копится: ${h.total}/${h.min_total}</span>`;
-    return `<span class="hb-badge">📊 ${Math.round((h.wins / h.total) * 100)}% проходимость · ${h.total} матчей</span>`;
+    if (h.total < h.min_total) return `<span class="hb-badge">${tr("hb_collect", { n: h.total, m: h.min_total })}</span>`;
+    return `<span class="hb-badge">${tr("hb_rate", { p: Math.round((h.wins / h.total) * 100), n: h.total })}</span>`;
   }
 
   function proCard(key, icon, title, badge, chips, art, locked) {
@@ -2412,19 +2570,19 @@ an_news: "News (injuries, form, suspensions)",
     content.innerHTML = `
       <section class="home">
         <div class="home-row">
-          <h2 class="home-welcome">Добро пожаловать!</h2>
+          <h2 class="home-welcome">${tr("welcome")}</h2>
         </div>
         <div class="tiles tiles-grid${h.is_admin ? "" : " tiles-2"}" id="home-tiles">
-          <button type="button" class="tile art-t-help" data-go="help"><span class="tile-emoji">🤖</span><span class="tile-label">Помощь</span></button>
-          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">🏆</span><span class="tile-label">Статистика</span></button>
-          ${h.is_admin ? '<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">Админ</span></button>' : ""}
+          <button type="button" class="tile art-t-help" data-go="help"><span class="tile-emoji">🤖</span><span class="tile-label">${tr("tile_help")}</span></button>
+          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">🏆</span><span class="tile-label">${tr("tile_stats")}</span></button>
+          ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
         </div>
-        <h2 class="home-pro">MAX-доступ${locked ? ' <button type="button" class="pro-buy" data-go="sub">Оформить</button>' : ""}</h2>
-        ${proCard("ai", "🧠", "ИИ-Прогнозы", hitBadge(h.hit_rate), ["🎯 Разбор матчей" + quota, "⚽ Форма и новости", "💰 Ищем ценность в линии"], "ai", false)}
-        ${proCard("express", "📈", "Экспрессы", h.express_count ? `<span class="hb-badge">${h.express_count} на сегодня</span>` : "", ["🤖 Отбор через ИИ", "💰 Кэф x2–x6", "🔥 Каждый день новые"], "express", locked)}
-        ${proCard("picks", "⚽", "Готовые прогнозы", '<span class="hb-badge hb-hot">🔥 ХИТ</span>', ["📋 Прогнозы дня" + (h.picks_count ? ` · ${h.picks_count}` : ""), "📝 С обоснованием", "📊 Честная статистика"], "picks", locked)}
-        ${proCard("vilki", "⚡", "Вилки", h.vilki_count ? `<span class="hb-badge">${h.vilki_count} сейчас</span>` : "", ["🏦 9 букмекеров", "⏱ Раз в минуту", "🧮 Расчёт ставок"], "vilki", locked)}
-        <p class="home-note">Аналитика, а не гарантия выигрыша. 18+</p>
+        <h2 class="home-pro">${tr("max_access")}${locked ? ` <button type="button" class="pro-buy" data-go="sub">${tr("buy")}</button>` : ""}</h2>
+        ${proCard("ai", "🧠", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
+        ${proCard("express", "📈", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
+        ${proCard("picks", "⚽", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
+        ${proCard("vilki", "⚡", tr("t_vilki"), h.vilki_count ? `<span class="hb-badge">${tr("c_vk_badge", { n: h.vilki_count })}</span>` : "", [tr("c_vk1"), tr("c_vk2"), tr("c_vk3")], "vilki", locked)}
+        <p class="home-note">${tr("note")}</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
   }
@@ -2436,22 +2594,22 @@ an_news: "News (injuries, form, suspensions)",
     const pct = h.total ? Math.round((h.wins / h.total) * 100) : null;
     let html = `<div class="st-hero">
         <div class="st-big">${h.total >= h.min_total && pct != null ? pct + "%" : "—"}</div>
-        <div class="st-cap">проходимость ИИ-прогнозов</div>
-        <div class="ai-sub">${h.total >= h.min_total ? `${h.wins} из ${h.total} прогнозов зашли` : `Считаем честно: цифра появится после ${h.min_total} сыгранных матчей (сейчас ${h.total})`}</div>
+        <div class="st-cap">${tr("st_cap")}</div>
+        <div class="ai-sub">${h.total >= h.min_total ? tr("st_won", { w: h.wins, n: h.total }) : tr("st_wait", { m: h.min_total, n: h.total })}</div>
       </div>
       <div class="st-grid">
-        <div class="st-cell"><b>${h.total}</b><span>сыграно</span></div>
-        <div class="st-cell"><b>${h.wins}</b><span>зашло</span></div>
-        <div class="st-cell"><b>${h.total - h.wins}</b><span>не зашло</span></div>
+        <div class="st-cell"><b>${h.total}</b><span>${tr("st_played")}</span></div>
+        <div class="st-cell"><b>${h.wins}</b><span>${tr("st_win")}</span></div>
+        <div class="st-cell"><b>${h.total - h.wins}</b><span>${tr("st_lose")}</span></div>
       </div>`;
-    html += data.recent.length ? `<h3 class="sec-h">Последние результаты</h3>` + data.recent.map(pickCard).join("")
-      : `<div class="ai-empty">Пока нет сыгранных матчей с прогнозами ИИ.</div>`;
+    html += data.recent.length ? `<h3 class="sec-h">${tr("recent")}</h3>` + data.recent.map(pickCard).join("")
+      : `<div class="ai-empty">${tr("st_none")}</div>`;
     content.innerHTML = html;
   }
 
   function confMeter(c) {
     const n = { "низкая": 1, "средняя": 2, "высокая": 3 }[c] || 1;
-    return `<span class="conf"><span class="conf-bars">${[1, 2, 3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>${esc(c)}</span>`;
+    return `<span class="conf"><span class="conf-bars">${[1, 2, 3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>${esc(tr(CONF_KEY[c] || "conf_low"))}</span>`;
   }
 
   function teamsLine(m) {
@@ -2461,22 +2619,22 @@ an_news: "News (injuries, form, suspensions)",
   async function renderAiMatches() {
     const data = await api("/api/ai/matches");
     const h = homeCache;
-    const quota = h && h.ai_quota.limit != null ? `Сегодня разобрано: <b>${h.ai_quota.used}/${h.ai_quota.limit}</b>` : "Без ограничений";
+    const quota = h && h.ai_quota.limit != null ? tr("quota", { u: h.ai_quota.used, l: h.ai_quota.limit }) : tr("unlimited");
     let html = `<div class="ai-ask">
-        <div class="ai-ask-h">🧠 Узнать шансы на матч</div>
+        <div class="ai-ask-h">${tr("ask_h")}</div>
         <div class="ai-ask-row">
-          <input id="ai-team-a" class="ai-input" placeholder="Команда 1" maxlength="60" autocomplete="off">
+          <input id="ai-team-a" class="ai-input" placeholder="${esc(tr("team1"))}" maxlength="60" autocomplete="off">
           <span class="ai-vs">VS</span>
-          <input id="ai-team-b" class="ai-input" placeholder="Команда 2" maxlength="60" autocomplete="off">
+          <input id="ai-team-b" class="ai-input" placeholder="${esc(tr("team2"))}" maxlength="60" autocomplete="off">
         </div>
         <div class="ai-ask-btns">
-          <label class="btn-ghost ai-shot">📷 Скриншот<input id="ai-shot" type="file" accept="image/*" hidden></label>
-          <button type="button" class="pro-buy ai-go" id="ai-go">Анализировать</button>
+          <label class="btn-ghost ai-shot">${tr("shot")}<input id="ai-shot" type="file" accept="image/*" hidden></label>
+          <button type="button" class="pro-buy ai-go" id="ai-go">${tr("analyze")}</button>
         </div>
         <div class="ai-quota">${quota}</div>
       </div>
-      <h3 class="sec-h">Или выберите матч из линии</h3>`;
-    if (!data.matches.length) html += `<div class="ai-empty">Сейчас нет ближайших матчей в линии.</div>`;
+      <h3 class="sec-h">${tr("or_pick")}</h3>`;
+    if (!data.matches.length) html += `<div class="ai-empty">${tr("no_matches")}</div>`;
     let league = null;
     for (const m of data.matches) {
       if (m.league !== league) {
@@ -2485,7 +2643,7 @@ an_news: "News (injuries, form, suspensions)",
       }
       html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
         <span class="ai-teams">${teamsLine(m)}</span>
-        <span class="ai-meta">🕒 ${esc(m.start_label || "")}${m.analyzed ? ' · <span class="ai-done">✓ разобран</span>' : ""}</span></button>`;
+        <span class="ai-meta">🕒 ${esc(m.start_label || "")}${m.analyzed ? ` · <span class="ai-done">${tr("analyzed")}</span>` : ""}</span></button>`;
     }
     content.innerHTML = html;
     content.querySelectorAll(".ai-match").forEach((b) =>
@@ -2493,7 +2651,7 @@ an_news: "News (injuries, form, suspensions)",
     const ask = () => {
       const a = document.getElementById("ai-team-a").value.trim();
       const b = document.getElementById("ai-team-b").value.trim();
-      if (!a || !b) return toast("Введите обе команды или загрузите скриншот");
+      if (!a || !b) return toast(tr("need_teams"));
       renderAiAnalysis(`/api/ai/analyze?team_a=${encodeURIComponent(a)}&team_b=${encodeURIComponent(b)}`);
     };
     document.getElementById("ai-go").addEventListener("click", ask);
@@ -2526,7 +2684,7 @@ an_news: "News (injuries, form, suspensions)",
   async function readScreenshot(file) {
     haptic("light");
     const btn = document.getElementById("ai-go");
-    if (btn) { btn.disabled = true; btn.textContent = "Читаю скриншот…"; }
+    if (btn) { btn.disabled = true; btn.textContent = tr("reading"); }
     try {
       const image = await imageToJpegBase64(file);
       const r = await api("/api/ai/screenshot", {
@@ -2536,11 +2694,11 @@ an_news: "News (injuries, form, suspensions)",
       });
       document.getElementById("ai-team-a").value = r.team_a;
       document.getElementById("ai-team-b").value = r.team_b;
-      toast(`Нашёл матч: ${r.team_a} — ${r.team_b}`);
+      toast(tr("found", { a: r.team_a, b: r.team_b }));
       renderAiAnalysis(`/api/ai/analyze?team_a=${encodeURIComponent(r.team_a)}&team_b=${encodeURIComponent(r.team_b)}`);
     } catch (e) {
       toast(e.message);
-      if (btn) { btn.disabled = false; btn.textContent = "Анализировать"; }
+      if (btn) { btn.disabled = false; btn.textContent = tr("analyze"); }
     }
   }
 
@@ -2549,12 +2707,12 @@ an_news: "News (injuries, form, suspensions)",
     const row = (name, v) => `<div class="pb-row"><span class="pb-name">${esc(name)}</span>
       <span class="pb-bar"><i style="width:${v}%"></i></span><b class="pb-val">${v}%</b></div>`;
     return `<div class="an-block ${cls || ""}"><div class="an-h">${title}</div>
-      ${row("П1 · " + m.team_a, p.p1)}${row("Ничья", p.x)}${row("П2 · " + m.team_b, p.p2)}</div>`;
+      ${row("П1 · " + m.team_a, p.p1)}${row(tr("draw"), p.x)}${row("П2 · " + m.team_b, p.p2)}</div>`;
   }
 
   async function renderAiAnalysis(url) {
     haptic("light");
-    content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>ИИ анализирует матч…</div><div class="ai-sub">Форма, личные встречи, новости и линия. До минуты.</div></div>`;
+    content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div><div class="ai-sub">${tr("loading_sub")}</div></div>`;
     window.scrollTo(0, 0);
     let data;
     try {
@@ -2569,16 +2727,16 @@ an_news: "News (injuries, form, suspensions)",
     const m = data.match;
     const pickHtml = a.pick
       ? `<div class="an-pick">
-          <div class="an-pick-k">🎯 Прогноз ИИ</div>
+          <div class="an-pick-k">${tr("pick")}</div>
           <div class="an-pick-v">${esc(a.pick.label)} <span class="an-odds">@ ${a.pick.odds.toFixed(2)}</span></div>
-          <div class="an-conf">Уверенность: ${confMeter(a.confidence)}</div>
+          <div class="an-conf">${tr("confidence")} ${confMeter(a.confidence)}</div>
           <div class="an-why">${esc(a.reasoning)}</div>
         </div>`
       : `<div class="an-pick">
-          <div class="an-pick-k">🎯 Вывод ИИ</div>
-          <div class="an-conf">Уверенность: ${confMeter(a.confidence)}</div>
+          <div class="an-pick-k">${tr("verdict")}</div>
+          <div class="an-conf">${tr("confidence")} ${confMeter(a.confidence)}</div>
           <div class="an-why">${esc(a.reasoning)}</div>
-          <div class="ai-sub">Матча нет в линии букмекеров — разбор без коэффициентов.</div>
+          <div class="ai-sub">${tr("no_line")}</div>
         </div>`;
     content.innerHTML = `
       <div class="an-hero">
@@ -2586,24 +2744,24 @@ an_news: "News (injuries, form, suspensions)",
         <div class="an-teams">${teamsLine(m)}</div>
         ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>
-      ${probBlock("📊 Шансы по оценке ИИ", a.probabilities, m, "an-probs")}
+      ${probBlock(tr("p_ai"), a.probabilities, m, "an-probs")}
       ${pickHtml}
-      ${probBlock("🏦 Шансы по коэффициентам букмекеров", a.market, m, "an-probs-market")}
-      <div class="an-block"><div class="an-h">📋 Кратко</div><div>${esc(a.summary)}</div></div>
-      <div class="an-block"><div class="an-h">🔎 Ключевые факторы</div>
+      ${probBlock(tr("p_market"), a.market, m, "an-probs-market")}
+      <div class="an-block"><div class="an-h">${tr("summary")}</div><div>${esc(a.summary)}</div></div>
+      <div class="an-block"><div class="an-h">${tr("factors")}</div>
         ${a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join("")}</div>
-      ${a.injuries ? `<div class="an-block"><div class="an-h">🚑 Травмы и составы</div><div>${esc(a.injuries)}</div></div>` : ""}
-      ${a.motivation ? `<div class="an-block"><div class="an-h">🔥 Мотивация</div><div>${esc(a.motivation)}</div></div>` : ""}
-      <div class="an-block an-risk"><div class="an-h">⚠️ Риски</div><div>${esc(a.risks)}</div></div>
-      <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>Коэффициенты на момент анализа — проверяйте у букмекера. Аналитика, а не гарантия. 18+</p></div>
-      <button type="button" class="btn-ghost" id="an-back">‹ К списку матчей</button>`;
+      ${a.injuries ? `<div class="an-block"><div class="an-h">${tr("injuries")}</div><div>${esc(a.injuries)}</div></div>` : ""}
+      ${a.motivation ? `<div class="an-block"><div class="an-h">${tr("motivation")}</div><div>${esc(a.motivation)}</div></div>` : ""}
+      <div class="an-block an-risk"><div class="an-h">${tr("risks")}</div><div>${esc(a.risks)}</div></div>
+      <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>${tr("an_foot")}</p></div>
+      <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
     document.getElementById("an-back").addEventListener("click", () => renderAiMatches());
   }
 
   function pickCard(p) {
-    const res = p.result === "win" ? '<span class="res win">✅ Зашёл</span>' : p.result === "lose" ? '<span class="res lose">❌ Не зашёл</span>' : "";
+    const res = p.result === "win" ? `<span class="res win">${tr("won")}</span>` : p.result === "lose" ? `<span class="res lose">${tr("lost")}</span>` : "";
     const body = p.locked
-      ? `<div class="pk-locked">🔒 Прогноз доступен в MAX</div>`
+      ? `<div class="pk-locked">${tr("pick_locked")}</div>`
       : `<div class="pk-pick">🎯 ${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span></div>
          <div class="an-conf">${confMeter(p.confidence)}</div>
          ${p.reasoning ? `<div class="pk-why">${esc(p.reasoning)}</div>` : ""}`;
@@ -2616,40 +2774,37 @@ an_news: "News (injuries, form, suspensions)",
   async function renderPicks() {
     const data = await api("/api/ai/picks");
     const h = homeCache ? homeCache.hit_rate : null;
-    let html = `<div class="pk-stat">${hitBadge(h)}<div class="ai-sub">Считаем только по результатам сыгранных матчей.</div></div>`;
-    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть прогнозы — MAX</button>`;
-    html += `<h3 class="sec-h">Ближайшие матчи</h3>`;
-    html += data.upcoming.length ? data.upcoming.map(pickCard).join("") : `<div class="ai-empty">ИИ готовит прогнозы — загляните чуть позже.</div>`;
-    if (data.recent.length) html += `<h3 class="sec-h">Последние результаты</h3>` + data.recent.map(pickCard).join("");
+    let html = `<div class="pk-stat">${hitBadge(h)}<div class="ai-sub">${tr("pk_note")}</div></div>`;
+    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">${tr("open_picks")}</button>`;
+    html += `<h3 class="sec-h">${tr("upcoming")}</h3>`;
+    html += data.upcoming.length ? data.upcoming.map(pickCard).join("") : `<div class="ai-empty">${tr("pk_wait")}</div>`;
+    if (data.recent.length) html += `<h3 class="sec-h">${tr("recent")}</h3>` + data.recent.map(pickCard).join("");
     content.innerHTML = html;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
   }
 
   async function renderExpress() {
     const data = await api("/api/ai/express");
-    let html = `<div class="ai-intro">Экспресс собирается из прогнозов ИИ с уверенностью «средняя» и выше на разные матчи, общий кэф от 2 до 6. Экспресс проигрывает, если не зашла хоть одна ставка.</div>`;
-    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">🔓 Открыть экспрессы — MAX</button>`;
-    if (!data.expresses.length) html += `<div class="ai-empty">Пока мало прогнозов для экспресса — ИИ разбирает матчи в течение дня.</div>`;
+    let html = `<div class="ai-intro">${tr("ex_intro")}</div>`;
+    if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">${tr("open_ex")}</button>`;
+    if (!data.expresses.length) html += `<div class="ai-empty">${tr("ex_wait")}</div>`;
     data.expresses.forEach((e, i) => {
-      html += `<div class="ex-card"><div class="ex-head"><span>Экспресс №${i + 1}</span>${e.total_odds ? `<span class="ex-total">кэф ${e.total_odds.toFixed(2)}</span>` : '<span class="hb-lock">🔒 MAX</span>'}</div>
+      html += `<div class="ex-card"><div class="ex-head"><span>${tr("ex_n", { n: i + 1 })}</span>${e.total_odds ? `<span class="ex-total">${tr("ex_odds", { k: e.total_odds.toFixed(2) })}</span>` : '<span class="hb-lock">🔒 MAX</span>'}</div>
         ${e.legs.map((p) => `<div class="ex-leg"><div class="pk-teams">${esc(p.team_a)} — ${esc(p.team_b)}</div>
-          <div class="ex-pick">${p.locked ? "🔒 скрыто" : `${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>`}</div></div>`).join("")}</div>`;
+          <div class="ex-pick">${p.locked ? tr("hidden") : `${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>`}</div></div>`).join("")}</div>`;
     });
     content.innerHTML = html;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
   }
 
   function renderHelp() {
+    const block = (h, t) => `<div class="an-block"><div class="an-h">${tr(h)}</div><div>${tr(t)}</div></div>`;
     content.innerHTML = `
-      <div class="an-block"><div class="an-h">🧠 ИИ-Прогнозы</div><div>Выберите матч — ИИ соберёт форму команд, таблицу, личные встречи, свежие новости и коэффициенты и предложит одну ставку из реальной линии с объяснением и уровнем уверенности.</div></div>
-      <div class="an-block"><div class="an-h">📊 Честная статистика</div><div>Каждый прогноз сохраняется и после матча сверяется со счётом. Проходимость считается только по сыгранным матчам.</div></div>
-      <div class="an-block"><div class="an-h">📈 Экспрессы и готовые прогнозы</div><div>ИИ каждый день сам разбирает топовые матчи. Из лучших прогнозов собираются экспрессы с кэфом 2–6.</div></div>
-      <div class="an-block"><div class="an-h">🎟 Лимиты</div><div>Без подписки — 1 ИИ-разбор в день, с MAX — 5 в день. Повторно открыть уже разобранный сегодня матч — бесплатно.</div></div>
-      <div class="an-block"><div class="an-h">⚡ Вилки</div><div>Отдельный раздел: расхождения коэффициентов у 9 лицензированных БК, настройки ⚙️, калькулятор 🧮 и статистика 📊 — вверху экрана «Вилки». Уведомления о вилках включаются в боте: «🔍 Поиск вилок» → «Включить уведомления».</div></div>
-      <div class="an-block"><div class="an-h">🌐 Язык</div><div class="lang-row">
+      ${block("h_ai", "h_ai_t")}${block("h_st", "h_st_t")}${block("h_ex", "h_ex_t")}${block("h_lim", "h_lim_t")}${block("h_vk", "h_vk_t")}
+      <div class="an-block"><div class="an-h">${tr("h_lang")}</div><div class="lang-row">
         <button class="pro-chip lang-set" data-lang="ru">🇷🇺 Русский</button><button class="pro-chip lang-set" data-lang="en">🇬🇧 English</button><button class="pro-chip lang-set" data-lang="tg">🇹🇯 Тоҷикӣ</button></div></div>
-      <button type="button" class="pro-buy wide" data-go="support">🎧 Написать в поддержку</button>
-      <p class="home-note">Сервис — аналитика: он не принимает ставки и не гарантирует выигрыш. 18+</p>`;
+      <button type="button" class="pro-buy wide" data-go="support">${tr("h_support")}</button>
+      <p class="home-note">${tr("h_note")}</p>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
     content.querySelectorAll(".lang-set").forEach((b) =>
       b.addEventListener("click", () => {
@@ -2674,6 +2829,7 @@ an_news: "News (injuries, form, suspensions)",
   const screenBack = document.getElementById("screen-back");
   if (screenBack) screenBack.addEventListener("click", () => go(PARENT[currentTab] || "home"));
   renderUserChip();
+  applyNavLabels();
 
   // Endless falling-money backdrop behind the whole app (owner's request, 2026-10-03).
   // One canvas, ~22 emoji sprites, paused while the app is hidden; off for reduced motion.
