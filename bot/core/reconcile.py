@@ -30,6 +30,7 @@ for the same outcome (e.g. every source says "Тотал больше 2.5", not 
 from __future__ import annotations
 
 import dataclasses
+import functools
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -53,6 +54,7 @@ def _transliterate(text: str) -> str:
     return "".join(_CYRILLIC_TO_LATIN.get(ch, ch) for ch in text.lower())
 
 
+@functools.lru_cache(maxsize=65536)
 def normalize_team(name: str) -> str:
     translit = _transliterate(name)
     normalized = re.sub(r"[^\w\s]", " ", translit, flags=re.UNICODE)
@@ -80,6 +82,7 @@ def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
+@functools.lru_cache(maxsize=262144)
 def _pair_similarity(pair1: tuple[str, str], pair2: tuple[str, str]) -> float:
     """Best of "same order" vs "swapped order" match between two (team_a, team_b) pairs,
     scored on the names with age/gender tags removed (see _TAG_RE)."""
@@ -107,28 +110,36 @@ def group_quotes(quotes: list[SourceQuote]) -> list[list[SourceQuote]]:
     where the same bookmaker already sits with a DIFFERENT fixture: a bookmaker lists each
     match once, so two of its fixtures in one cluster can only mean two real matches got
     merged by name similarity (the fake-arb risk described at _TAG_RE)."""
+    # Cluster whole events, not single quotes: one bookmaker's fixture carries dozens of
+    # quotes (1X2, total ladder, handicaps) that always land together, and scoring each of
+    # them separately against every cluster cost ~2 CPU-minutes per cycle on the full line
+    # (measured live 2026-10-02: ~100k quotes) -- long enough to freeze the bot's handlers.
+    events: dict[tuple, list[SourceQuote]] = {}
+    for q in quotes:
+        events.setdefault((q.game, q.start_time_utc, q.bookmaker, q.team_a, q.team_b), []).append(q)
+
     # bucket -> list of [pair, quotes, {bookmaker: (team_a, team_b)}]
     buckets: dict[tuple[str, int], list[list]] = {}
 
-    for q in quotes:
-        bucket_key = (q.game, _time_bucket(q.start_time_utc))
-        pair = (normalize_team(q.team_a), normalize_team(q.team_b))
-        fixture = (q.team_a, q.team_b)
+    for (game, start, bookmaker, team_a, team_b), event_quotes in events.items():
+        bucket_key = (game, _time_bucket(start))
+        pair = (normalize_team(team_a), normalize_team(team_b))
+        fixture = (team_a, team_b)
         clusters = buckets.setdefault(bucket_key, [])
 
         best, best_score = None, NAME_MATCH_THRESHOLD
         for cluster in clusters:
-            owner = cluster[2].get(q.bookmaker)
+            owner = cluster[2].get(bookmaker)
             if owner is not None and owner != fixture:
                 continue
             score = _pair_similarity(pair, cluster[0])
             if score >= best_score:
                 best, best_score = cluster, score
         if best is None:
-            clusters.append([pair, [q], {q.bookmaker: fixture}])
+            clusters.append([pair, list(event_quotes), {bookmaker: fixture}])
         else:
-            best[1].append(q)
-            best[2].setdefault(q.bookmaker, fixture)
+            best[1].extend(event_quotes)
+            best[2].setdefault(bookmaker, fixture)
 
     return [cluster[1] for clusters in buckets.values() for cluster in clusters]
 

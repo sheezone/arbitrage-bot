@@ -320,6 +320,21 @@ async def _fetch_all_quotes(
     return all_quotes
 
 
+def _group_and_evaluate(quotes: list[SourceQuote]) -> list[tuple[list[SourceQuote], list]]:
+    """group_quotes + _evaluate_group for every cluster that has a real arb (runs in a
+    worker thread, see run_monitor_loop)."""
+    out = []
+    for group in group_quotes(quotes):
+        try:
+            results = _evaluate_group(group)
+        except Exception:
+            logger.exception("Failed to evaluate match group")
+            continue
+        if results:
+            out.append((group, results))
+    return out
+
+
 def _evaluate_group(group: list[SourceQuote]) -> list[tuple[str, str, str, str, ArbitrageResult]]:
     """Returns (game, team_a, team_b, market, arb) for every submarket in this match cluster
     that turns out to be a real arbitrage opportunity (usually zero or one, but a match can
@@ -484,7 +499,7 @@ async def _recheck_and_notify_high_profit(
         fresh_by_key: dict[tuple[str, str, str, str], ArbitrageResult] = {}
         try:
             fresh_quotes = await _fetch_all_quotes(sources, games, empty_streaks, licensed_bookmakers_only)
-            for group in group_quotes(fresh_quotes):
+            for group in await asyncio.to_thread(group_quotes, fresh_quotes):
                 try:
                     for game, team_a, team_b, market, arb in _evaluate_group(group):
                         fresh_by_key[(game, team_a, team_b, market)] = arb
@@ -730,16 +745,13 @@ async def run_monitor_loop(
             last_expiry_check = time.time()
 
         all_quotes = await _fetch_all_quotes(sources, games, empty_streaks, licensed_bookmakers_only)
-        groups = group_quotes(all_quotes)
+        # CPU-heavy (seconds on the full line): off the event loop, so the bot's buttons
+        # and the Mini App stay responsive while a cycle is being computed.
+        evaluated = await asyncio.to_thread(_group_and_evaluate, all_quotes)
 
         found: list[MatchSnapshot] = []
         suspicious: list[tuple[str, str, str, str, ArbitrageResult, str, str]] = []
-        for group in groups:
-            try:
-                results = _evaluate_group(group)
-            except Exception:
-                logger.exception("Failed to evaluate match group")
-                continue
+        for group, results in evaluated:
 
             for game, team_a, team_b, market, arb in results:
                 start_time_utc = group[0].start_time_utc
