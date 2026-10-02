@@ -235,24 +235,24 @@ def register_api(
             "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b),
         }
 
-    support_cache: dict[str, str | None] = {}
+    support_cache: dict[str, list[str]] = {}
 
-    async def _support_username() -> str | None:
-        """@username of the first admin who has one -- the Mini App's «Поддержка» opens a
-        DM with them (owner's request, 2026-10-03). Resolved once via getChat, cached."""
-        if "u" in support_cache:
-            return support_cache["u"]
-        name = None
-        for admin_id in sorted(admin_chat_ids):
-            try:
-                chat = await bot.get_chat(admin_id) if bot is not None else None
-            except Exception:
-                chat = None
-            if chat is not None and chat.username:
-                name = chat.username
-                break
-        support_cache["u"] = name
-        return name
+    async def _support_username(chat_id: int) -> str | None:
+        """«Поддержка» opens a DM with an admin. Users are split evenly between the admins
+        that have a @username (owner: "50 на 50"), always the same admin for the same
+        user (chat_id modulo), so a conversation doesn't hop between people."""
+        if "u" not in support_cache:
+            names = []
+            for admin_id in sorted(admin_chat_ids):
+                try:
+                    chat = await bot.get_chat(admin_id) if bot is not None else None
+                except Exception:
+                    chat = None
+                if chat is not None and chat.username:
+                    names.append(chat.username)
+            support_cache["u"] = names
+        names = support_cache["u"]
+        return names[chat_id % len(names)] if names else None
 
     @app.get("/api/home")
     async def get_home(authorization: str | None = Header(default=None)):
@@ -271,7 +271,7 @@ def register_api(
             "express_count": len(build_expresses(picks)),
             "vilki_count": len(state.matches),
             "bot_username": bot_username,
-            "support_username": await _support_username(),
+            "support_username": await _support_username(chat_id),
         }
 
     @app.get("/api/ai/matches")
