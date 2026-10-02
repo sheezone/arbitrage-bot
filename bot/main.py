@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 import socket
 
@@ -227,7 +228,12 @@ async def main() -> None:
         # actually works, rather than relying on the reply-keyboard button alone.
         try:
             await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="🚀 Мини-приложение", web_app=WebAppInfo(url=config.webapp_url))
+                menu_button=MenuButtonWebApp(
+                    text="📡 Матч-Радар",
+                    # ?v= changes on every restart: Telegram clients cache the Mini App page
+                    # by URL, so a new deploy would otherwise keep showing the old version.
+                    web_app=WebAppInfo(url=f"{config.webapp_url}/?v={int(time.time())}"),
+                )
             )
         except TelegramNetworkError:
             logger.warning("set_chat_menu_button failed on startup -- non-critical, continuing without it")
