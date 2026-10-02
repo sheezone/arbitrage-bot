@@ -15,8 +15,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 W, H = 1200, 430
 OUT = Path(__file__).resolve().parent.parent / "bot" / "webapp" / "static" / "img"
-LIME = (198, 244, 50)
-TEAL = (47, 230, 200)
+LIME = (178, 107, 255)   # brand violet (2026-10-03 purple redesign)
+TEAL = (255, 92, 225)    # magenta accent
 
 
 def glow_layer(draw_fn, blur: int) -> Image.Image:
@@ -31,7 +31,7 @@ def add(base: Image.Image, layer: Image.Image, k: float = 1.0) -> Image.Image:
     return ImageChops.add(base, layer)
 
 
-def stadium(seed: int, tint: tuple[int, int, int], pitch_tint=(18, 70, 34)) -> Image.Image:
+def stadium(seed: int, tint: tuple[int, int, int], pitch_tint=(40, 22, 70)) -> Image.Image:
     rnd = random.Random(seed)
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
@@ -57,10 +57,10 @@ def stadium(seed: int, tint: tuple[int, int, int], pitch_tint=(18, 70, 34)) -> I
         y1 = top + (bot - top) * ((i + 1) / 14) ** 1.2
         g = pitch_tint if i % 2 else tuple(int(v * 1.25) for v in pitch_tint)
         pd.rectangle([0, y0, W, y1], fill=g)
-    pd.line([(W * 0.15, H), (W * 0.42, top)], fill=(90, 120, 90), width=2)
-    pd.line([(W * 0.85, H), (W * 0.58, top)], fill=(90, 120, 90), width=2)
-    pd.line([(0, top + 2), (W, top + 2)], fill=(80, 110, 80), width=2)
-    pd.ellipse([W * 0.42, H * 0.78, W * 0.58, H * 0.98], outline=(80, 110, 80), width=2)
+    pd.line([(W * 0.15, H), (W * 0.42, top)], fill=(120, 90, 150), width=2)
+    pd.line([(W * 0.85, H), (W * 0.58, top)], fill=(120, 90, 150), width=2)
+    pd.line([(0, top + 2), (W, top + 2)], fill=(110, 80, 140), width=2)
+    pd.ellipse([W * 0.42, H * 0.78, W * 0.58, H * 0.98], outline=(110, 80, 140), width=2)
     img = Image.composite(pitch, img, Image.new("L", (W, H), 0).point(lambda _: 0))  # keep sky
     mask = Image.new("L", (W, H), 0)
     ImageDraw.Draw(mask).rectangle([0, top, W, H], fill=255)
@@ -115,7 +115,7 @@ def trophy(dd: ImageDraw.ImageDraw, x: float, y: float, s: float, col):
 
 
 def card_express() -> Image.Image:
-    img = stadium(2, (244, 192, 74), pitch_tint=(16, 52, 40))
+    img = stadium(2, (244, 192, 74), pitch_tint=(44, 22, 62))
     gold, light = (214, 160, 40), (255, 222, 120)
     def cups(dd):
         trophy(dd, W * 0.68, H * 0.52, 1.25, gold)
@@ -142,7 +142,7 @@ def card_express() -> Image.Image:
 
 
 def card_picks() -> Image.Image:
-    img = stadium(3, (60, 110, 255), pitch_tint=(14, 40, 60))
+    img = stadium(3, (120, 80, 255), pitch_tint=(30, 20, 72))
     def holo(dd):
         x0, y0, x1, y1 = W * 0.55, H * 0.18, W * 0.96, H * 0.66
         for i in range(9):
@@ -161,7 +161,7 @@ def card_picks() -> Image.Image:
 
 
 def card_vilki() -> Image.Image:
-    img = stadium(4, LIME, pitch_tint=(26, 40, 12))
+    img = stadium(4, LIME, pitch_tint=(46, 18, 66))
     def fork(dd):
         sx, sy = W * 0.6, H * 0.55
         dd.line([(sx - 120, sy), (sx, sy)], fill=LIME, width=8)
