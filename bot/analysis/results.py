@@ -66,8 +66,13 @@ async def settle_pending(repo: Repository, client: httpx.AsyncClient) -> int:
     pending = repo.unsettled_ai_analyses((now - SETTLE_AFTER).isoformat())
     if not pending:
         return 0
-    raw = (await client.get(SCORE_URL, params=SCORE_PARAMS)).json()
-    results = parse_results(raw)
+    # the feed returns one MSK day per request (`date=YYYY-MM-DD`, default today)
+    days = {datetime.fromisoformat(r["start_utc"]).astimezone(MSK).date() for r in pending}
+    days.add(now.astimezone(MSK).date())
+    results = []
+    for day in sorted(days):
+        raw = (await client.get(SCORE_URL, params={**SCORE_PARAMS, "date": day.isoformat()})).json()
+        results += parse_results(raw)
     settled = 0
     for row in pending:
         start = datetime.fromisoformat(row["start_utc"])
