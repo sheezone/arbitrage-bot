@@ -210,9 +210,10 @@ class Repository:
         self._conn.commit()
 
     def ai_hit_rate(self, since_iso: str = "") -> tuple[int, int]:
-        """(wins, settled) over picks settled win/lose since `since_iso` (match start)."""
+        """(hits, settled): how often the AI's predicted WINNER won (owner 2026-10-03: the
+        stats count only who-wins, not totals/handicaps), since `since_iso` (match start)."""
         row = self._conn.execute(
-            "SELECT SUM(result = 'win'), COUNT(*) FROM ai_analyses WHERE result IN ('win','lose') AND start_utc >= ?",
+            "SELECT SUM(winner_result = 'win'), COUNT(*) FROM ai_analyses WHERE winner_result IN ('win','lose') AND start_utc >= ?",
             (since_iso,),
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
@@ -277,7 +278,7 @@ class Repository:
 
     def ai_recent_settled(self, limit: int = 20) -> list[sqlite3.Row]:
         return self._conn.execute(
-            "SELECT * FROM ai_analyses WHERE result IN ('win','lose') ORDER BY start_utc DESC LIMIT ?", (limit,)
+            "SELECT * FROM ai_analyses WHERE winner_result IN ('win','lose') ORDER BY start_utc DESC LIMIT ?", (limit,)
         ).fetchall()
 
     def ai_admin_stats(self, day: str) -> dict:
