@@ -122,3 +122,11 @@ CREATE TABLE IF NOT EXISTS team_logos (
     checked_at TEXT NOT NULL,
     PRIMARY KEY (name, sport)
 );
+
+CREATE TABLE IF NOT EXISTS user_expresses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    express_key TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    found_at TEXT NOT NULL
+);

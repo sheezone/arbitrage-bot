@@ -214,6 +214,19 @@ class Repository:
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
 
+    def save_user_express(self, chat_id: int, key: str, payload: str) -> None:
+        self._conn.execute(
+            "INSERT INTO user_expresses (chat_id, express_key, payload, found_at) VALUES (?, ?, ?, ?)",
+            (chat_id, key, payload, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def user_expresses_since(self, chat_id: int, since_iso: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM user_expresses WHERE chat_id = ? AND found_at >= ? ORDER BY found_at DESC",
+            (chat_id, since_iso),
+        ).fetchall()
+
     def team_logo(self, name: str, sport: str) -> str | None:
         """Crest URL, '' if looked up and not found, None if never looked up."""
         row = self._conn.execute("SELECT url FROM team_logos WHERE name = ? AND sport = ?", (name, sport)).fetchone()

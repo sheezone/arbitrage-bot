@@ -63,7 +63,7 @@ def upcoming_picks(repo: Repository, now: datetime | None = None, hours: int = 4
     return [pick_from_row(r) for r in rows]
 
 
-def build_expresses(picks: list[dict]) -> list[dict]:
+def build_expresses(picks: list[dict], count: int = EXPRESS_COUNT, exclude: frozenset[str] = frozenset()) -> list[dict]:
     legs = [p for p in picks if p["confidence"] in ("средняя", "высокая", "очень высокая")
             and EXPRESS_LEG_ODDS[0] <= p["odds"] <= EXPRESS_LEG_ODDS[1]]
     rank = {"очень высокая": 0, "высокая": 1, "средняя": 2}
@@ -73,7 +73,7 @@ def build_expresses(picks: list[dict]) -> list[dict]:
     for size in (3, 2, 4):
         for combo in combinations(legs, size):
             ids = {p["match_id"] for p in combo}
-            if ids & used or len(ids) < size:
+            if ids & used or len(ids) < size or "|".join(sorted(ids)) in exclude:
                 continue
             total = 1.0
             for p in combo:
@@ -81,7 +81,7 @@ def build_expresses(picks: list[dict]) -> list[dict]:
             if EXPRESS_TOTAL[0] <= total <= EXPRESS_TOTAL[1]:
                 out.append({"legs": list(combo), "total_odds": round(total, 2)})
                 used |= ids
-            if len(out) >= EXPRESS_COUNT:
+            if len(out) >= count:
                 return out
     return out
 

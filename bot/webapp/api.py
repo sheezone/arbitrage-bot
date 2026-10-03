@@ -7,6 +7,7 @@ one is rejected outright rather than falling back to some anonymous/demo mode.""
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -28,7 +29,7 @@ from bot.core.emoji import vi
 from bot.core.arbitrage import calc_stakes
 from bot.analysis.ai import AI_FREE_PER_DAY, AI_PAID_PER_DAY
 from bot.analysis.catalog import SPORTS, FootballMatch, _name_score, find_match, get_catalog, get_full_line, match_by_teams
-from bot.analysis.picks import build_expresses, pick_from_row, upcoming_picks
+from bot.analysis.picks import build_expresses, express_key, pick_from_row, upcoming_picks
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
 from bot.core.subscription import is_subscribed
@@ -419,6 +420,69 @@ def register_api(
         recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(20)]
         return {"pro": pro, "upcoming": upcoming if pro else [_lock(p) for p in upcoming], "recent": recent}
 
+    # «Найти экспресс» (owner 2026-10-03): free -- 1 per 3 days, MAX -- 2 per MSK day,
+    # admins -- unlimited. A found express is the user's to keep (shown in full).
+    FREE_EXPRESS_EVERY = timedelta(days=3)
+    PAID_EXPRESS_PER_DAY = 2
+
+    def _express_quota(user, now) -> dict:
+        if billing.is_admin(user, admin_chat_ids):
+            return {"limit": None, "left": None, "next_at": None, "period": "day"}
+        if billing.has_access(user, now, admin_chat_ids):
+            day_start = now.astimezone(MSK_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+            used = len(repo.user_expresses_since(user.chat_id, day_start.astimezone(timezone.utc).isoformat()))
+            left = max(0, PAID_EXPRESS_PER_DAY - used)
+            return {"limit": PAID_EXPRESS_PER_DAY, "left": left, "period": "day",
+                    "next_at": None if left else (day_start + timedelta(days=1)).isoformat()}
+        found = repo.user_expresses_since(user.chat_id, (now - FREE_EXPRESS_EVERY).isoformat())
+        return {"limit": 1, "left": 0 if found else 1, "period": "3days",
+                "next_at": (datetime.fromisoformat(found[-1]["found_at"]) + FREE_EXPRESS_EVERY).isoformat() if found else None}
+
+    def _my_expresses(chat_id: int, now) -> list[dict]:
+        out = []
+        for row in repo.user_expresses_since(chat_id, (now - timedelta(days=2)).isoformat()):
+            e = json.loads(row["payload"])
+            e["legs"] = [_crests({**p, **_pick_status(p["match_id"])}) for p in e["legs"]]
+            e["found_at"] = row["found_at"]
+            out.append(e)
+        return out
+
+    def _pick_status(match_id: str) -> dict:
+        row = repo.get_ai_analysis(match_id)
+        return {"result": row["result"], "score": row["score"]} if row else {}
+
+    @app.post("/api/ai/express/find")
+    async def post_find_express(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        now = datetime.now(timezone.utc)
+        quota = _express_quota(user, now)
+        if quota["left"] == 0:
+            raise HTTPException(status_code=429, detail=(
+                "Бесплатно — 1 экспресс раз в 3 дня. С MAX — 2 экспресса каждый день."
+                if quota["period"] == "3days" else "Лимит: 2 экспресса в день. Возвращайтесь завтра."))
+        seen = frozenset(r["express_key"] for r in repo.user_expresses_since(chat_id, (now - timedelta(days=2)).isoformat()))
+        found = build_expresses(upcoming_picks(repo, now, hours=24), count=1, exclude=seen)
+        if not found and analyzer is not None:
+            # not enough fresh picks: analyse a few more popular matches right now
+            from bot.analysis.catalog import get_full_line
+            from bot.analysis.picks import popular_to_analyse
+
+            have = {p["match_id"] for p in upcoming_picks(repo, now, hours=24)}
+            for match in popular_to_analyse(await get_full_line(), have, now)[:3]:
+                try:
+                    await analyzer.analyze(match)
+                except Exception:
+                    logger.exception("On-demand analysis failed for %s", match.id)
+            found = build_expresses(upcoming_picks(repo, now, hours=24), count=1, exclude=seen)
+        if not found:
+            raise HTTPException(status_code=424, detail="Сейчас не из чего собрать новый экспресс — попробуйте через час.")
+        express = found[0]
+        repo.save_user_express(chat_id, express_key(express), json.dumps(express, ensure_ascii=False))
+        return {"express": {**express, "legs": [_crests(p) for p in express["legs"]]},
+                "quota": _express_quota(user, now)}
+
     @app.get("/api/ai/express")
     async def get_ai_express(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
@@ -428,7 +492,9 @@ def register_api(
         expresses = [{**e, "legs": [_crests(p) for p in e["legs"]]} for e in build_expresses(upcoming_picks(repo))]
         if not pro:
             expresses = [{**e, "legs": [_lock(p) for p in e["legs"]], "total_odds": None} for e in expresses]
-        return {"pro": pro, "expresses": expresses}
+        now = datetime.now(timezone.utc)
+        return {"pro": pro, "expresses": expresses, "mine": _my_expresses(chat_id, now),
+                "quota": _express_quota(user, now)}
 
     @app.get("/api/me")
     async def get_me(authorization: str | None = Header(default=None)):
