@@ -2616,8 +2616,21 @@ an_news: "News (injuries, form, suspensions)",
     return `<span class="conf conf-l${n}"><span class="conf-bars">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>${esc(tr(CONF_KEY[c] || "conf_low"))}</span>`;
   }
 
+  // Team crest: real logo when we have one, else the country flag, else a monogram
+  // in a colour derived from the name (stable per team).
+  function crest(name, logo, flag) {
+    if (logo) return `<img class="crest" src="${esc(logo)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'crest crest-mono',textContent:'${esc(monogram(name))}'}))">`;
+    if (flag) return `<span class="crest crest-flag">${flag}</span>`;
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return `<span class="crest crest-mono" style="background:hsl(${h},55%,42%)">${esc(monogram(name))}</span>`;
+  }
+  function monogram(name) {
+    const w = String(name).replace(/[^\p{L}\p{N} ]/gu, "").trim().split(/\s+/).filter(Boolean);
+    return ((w[0] || "?")[0] + (w.length > 1 ? w[1][0] : (w[0] || "")[1] || "")).toUpperCase();
+  }
   function teamsLine(m) {
-    return `${m.team_a_flag ? m.team_a_flag + " " : ""}${esc(m.team_a)} — ${m.team_b_flag ? m.team_b_flag + " " : ""}${esc(m.team_b)}`;
+    return `${crest(m.team_a, m.team_a_logo, m.team_a_flag)}${esc(m.team_a)} — ${crest(m.team_b, m.team_b_logo, m.team_b_flag)}${esc(m.team_b)}`;
   }
 
   const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐" };
@@ -2835,7 +2848,7 @@ an_news: "News (injuries, form, suspensions)",
          ${p.reasoning ? `<div class="pk-why">${esc(p.reasoning)}</div>` : ""}`;
     return `<div class="pk-card">
       <div class="pk-top"><span class="pk-league">${esc(p.league)}</span>${res}</div>
-      <div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${esc(p.team_a)} — ${esc(p.team_b)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
+      <div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${teamsLine(p)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
       ${body}</div>`;
   }
 
@@ -2858,7 +2871,7 @@ an_news: "News (injuries, form, suspensions)",
     if (!data.expresses.length) html += `<div class="ai-empty">${tr("ex_wait")}</div>`;
     data.expresses.forEach((e, i) => {
       html += `<div class="ex-card"><div class="ex-head"><span>${tr("ex_n", { n: i + 1 })}</span>${e.total_odds ? `<span class="ex-total">${tr("ex_odds", { k: e.total_odds.toFixed(2) })}</span>` : '<span class="hb-lock">🔒 MAX</span>'}</div>
-        ${e.legs.map((p) => `<div class="ex-leg"><div class="pk-teams">${esc(p.team_a)} — ${esc(p.team_b)}</div>
+        ${e.legs.map((p) => `<div class="ex-leg"><div class="pk-teams">${teamsLine(p)}</div>
           <div class="ex-pick">${p.locked ? tr("hidden") : `${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>`}</div></div>`).join("")}</div>`;
     });
     content.innerHTML = html;

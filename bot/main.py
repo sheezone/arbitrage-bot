@@ -131,6 +131,9 @@ async def main() -> None:
             api_football_key=config.api_football_key, football_data_key=config.football_data_key,
         )
         settle_task = asyncio.create_task(run_settler(repo))
+        from bot.analysis.logos import run_logo_filler
+
+        logos_task = asyncio.create_task(run_logo_filler(analyzer, repo))  # noqa: F841 (lives with the process)
         from bot.analysis.picks import run_daily_picks
 
         picks_task = asyncio.create_task(run_daily_picks(

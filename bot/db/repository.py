@@ -214,6 +214,18 @@ class Repository:
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
 
+    def team_logo(self, name: str, sport: str) -> str | None:
+        """Crest URL, '' if looked up and not found, None if never looked up."""
+        row = self._conn.execute("SELECT url FROM team_logos WHERE name = ? AND sport = ?", (name, sport)).fetchone()
+        return row[0] if row else None
+
+    def save_team_logo(self, name: str, sport: str, url: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO team_logos (name, sport, url, checked_at) VALUES (?, ?, ?, ?)",
+            (name, sport, url, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
     def set_ai_winner_result(self, match_id: str, result: str) -> None:
         self._conn.execute("UPDATE ai_analyses SET winner_result = ? WHERE match_id = ?", (result, match_id))
         self._conn.commit()

@@ -114,3 +114,11 @@ CREATE TABLE IF NOT EXISTS sent_expresses (
     express_key TEXT PRIMARY KEY,
     sent_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS team_logos (
+    name TEXT NOT NULL,
+    sport TEXT NOT NULL,
+    url TEXT NOT NULL,          -- '' = looked up, nothing found
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (name, sport)
+);

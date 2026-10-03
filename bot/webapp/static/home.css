@@ -393,3 +393,11 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .ws-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .ws-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8b3ff0, #ff8cf0); }
 .pk-pred { font-size: 13px; margin-bottom: 4px; color: #e7dcff; }
+
+/* team crests */
+.crest { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 6px;
+  vertical-align: -5px; border-radius: 50%; object-fit: contain; flex: none; }
+img.crest { background: rgba(255, 255, 255, 0.92); padding: 2px; box-sizing: border-box; box-shadow: 0 0 0 1px rgba(178, 107, 255, 0.4); }
+.crest-flag { font-size: 17px; }
+.crest-mono { font-size: 9.5px; font-weight: 800; color: #fff; letter-spacing: -0.3px; background: #5a2fa0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.15); }

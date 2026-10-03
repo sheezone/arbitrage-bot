@@ -230,12 +230,17 @@ def register_api(
             return None, used
         return (AI_PAID_PER_DAY if billing.has_access(user, now, admin_chat_ids) else AI_FREE_PER_DAY), used
 
+    def _crests(d: dict) -> dict:
+        sport = d.get("sport") or "football"
+        return {**d, "team_a_logo": repo.team_logo(d["team_a"], sport) or None,
+                "team_b_logo": repo.team_logo(d["team_b"], sport) or None}
+
     def _match_out(m) -> dict:
-        return {
+        return _crests({
             "id": m.id, "team_a": m.team_a, "team_b": m.team_b, "league": m.league, "sport": m.sport,
             "start_utc": m.start_utc.isoformat(), "start_label": format_match_start(m.start_utc.isoformat()),
             "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b),
-        }
+        })
 
     support_cache: dict[str, list[str]] = {}
 
@@ -410,8 +415,8 @@ def register_api(
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
-        upcoming = upcoming_picks(repo)
-        recent = [pick_from_row(r) for r in repo.ai_recent_settled(20)]
+        upcoming = [_crests(p) for p in upcoming_picks(repo)]
+        recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(20)]
         return {"pro": pro, "upcoming": upcoming if pro else [_lock(p) for p in upcoming], "recent": recent}
 
     @app.get("/api/ai/express")
@@ -420,7 +425,7 @@ def register_api(
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
-        expresses = build_expresses(upcoming_picks(repo))
+        expresses = [{**e, "legs": [_crests(p) for p in e["legs"]]} for e in build_expresses(upcoming_picks(repo))]
         if not pro:
             expresses = [{**e, "legs": [_lock(p) for p in e["legs"]], "total_odds": None} for e in expresses]
         return {"pro": pro, "expresses": expresses}
