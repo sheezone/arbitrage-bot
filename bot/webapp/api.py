@@ -284,6 +284,10 @@ def register_api(
             "vilki_active": user.is_active,
             "vilki_until": user.vilki_until,
             "vilki_run_days": billing.VILKI_RUN_DAYS,
+            "trial_days_left": billing.days_left(user, now)
+            if billing.on_trial(user, now) and not billing.is_admin(user, admin_chat_ids) else 0,
+            "bonus_expresses": repo.bonus_expresses(chat_id),
+            "referral": {"days": billing.REFERRAL_BONUS_DAYS, "expresses": billing.REFERRAL_BONUS_EXPRESSES},
         }
 
     @app.post("/api/vilki/stop")
@@ -458,7 +462,8 @@ def register_api(
         user = _get_user(repo, chat_id)
         now = datetime.now(timezone.utc)
         quota = _express_quota(user, now)
-        if quota["left"] == 0:
+        use_bonus = quota["left"] == 0 and repo.bonus_expresses(chat_id) > 0
+        if quota["left"] == 0 and not use_bonus:
             raise HTTPException(status_code=429, detail=(
                 "Бесплатно — 1 экспресс раз в 3 дня. С MAX — 2 экспресса каждый день."
                 if quota["period"] == "3days" else "Лимит: 2 экспресса в день. Возвращайтесь завтра."))
@@ -479,6 +484,8 @@ def register_api(
         if not found:
             raise HTTPException(status_code=424, detail="Сейчас не из чего собрать новый экспресс — попробуйте через час.")
         express = found[0]
+        if use_bonus:
+            repo.add_bonus_expresses(chat_id, -1)
         repo.save_user_express(chat_id, express_key(express), json.dumps(express, ensure_ascii=False))
         return {"express": {**express, "legs": [_crests(p) for p in express["legs"]]},
                 "quota": _express_quota(user, now)}
@@ -494,6 +501,7 @@ def register_api(
             expresses = [{**e, "legs": [_lock(p) for p in e["legs"]], "total_odds": None} for e in expresses]
         now = datetime.now(timezone.utc)
         return {"pro": pro, "expresses": expresses, "mine": _my_expresses(chat_id, now),
+                "bonus": repo.bonus_expresses(chat_id),
                 "quota": _express_quota(user, now)}
 
     @app.get("/api/me")

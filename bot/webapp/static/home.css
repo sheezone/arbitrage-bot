@@ -407,3 +407,9 @@ img.crest { background: rgba(255, 255, 255, 0.92); padding: 2px; box-sizing: bor
 .exf-btn { font-size: 17px; }
 .exf-btn[disabled] { opacity: 0.55; filter: grayscale(0.4); }
 .ex-mine { border-color: #ff8cf0 !important; box-shadow: 0 0 18px rgba(255, 140, 240, 0.25); }
+
+/* trial banner + invite */
+.trial-banner { margin: 6px 0 12px; padding: 10px 14px; border-radius: 14px; font-weight: 700; font-size: 14px; color: #fff;
+  background: linear-gradient(90deg, #8b3ff0, #d04fd8); box-shadow: 0 4px 0 #4a1a8f, 0 6px 18px rgba(160, 70, 255, 0.45); }
+.invite-box { margin: 14px 0; padding: 12px 14px; border-radius: 16px; background: #170d2a; border: 1px dashed rgba(255, 140, 240, 0.55); }
+.invite-box .ai-sub { margin: 4px 0 10px; }

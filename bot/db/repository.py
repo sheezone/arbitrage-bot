@@ -128,6 +128,9 @@ class Repository:
         ai_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(ai_analyses)")}
         if ai_cols and "sport" not in ai_cols:
             self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN sport TEXT NOT NULL DEFAULT 'football'")
+        if "bonus_expresses" not in columns:
+            # «Найти экспресс» credits earned by inviting friends (+1 per friend)
+            self._conn.execute("ALTER TABLE users ADD COLUMN bonus_expresses INTEGER NOT NULL DEFAULT 0")
         if ai_cols and "winner_result" not in ai_cols:
             # did the AI's predicted winner (argmax of its probabilities) actually win
             self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN winner_result TEXT")
@@ -213,6 +216,14 @@ class Repository:
             (since_iso,),
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
+
+    def bonus_expresses(self, chat_id: int) -> int:
+        row = self._conn.execute("SELECT bonus_expresses FROM users WHERE chat_id = ?", (chat_id,)).fetchone()
+        return int(row[0]) if row else 0
+
+    def add_bonus_expresses(self, chat_id: int, n: int) -> None:
+        self._conn.execute("UPDATE users SET bonus_expresses = MAX(0, bonus_expresses + ?) WHERE chat_id = ?", (n, chat_id))
+        self._conn.commit()
 
     def save_user_express(self, chat_id: int, key: str, payload: str) -> None:
         self._conn.execute(

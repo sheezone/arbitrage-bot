@@ -16,6 +16,8 @@ TRIAL_DAYS = 5
 REFERRED_TRIAL_DAYS = 7
 # Free days credited to the referrer for each new user who starts the bot via their link.
 REFERRAL_BONUS_DAYS = 3
+# ...plus an instant reward: one extra «Найти экспресс» on top of the normal limit.
+REFERRAL_BONUS_EXPRESSES = 1
 
 
 @dataclass(frozen=True)

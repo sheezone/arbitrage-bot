@@ -1278,11 +1278,13 @@ def register_handlers(
         user = repo.get_user(message.chat.id)
         if is_new_user and referred_by is not None:
             repo.grant_bonus_days(referred_by, billing.REFERRAL_BONUS_DAYS)
+            repo.add_bonus_expresses(referred_by, billing.REFERRAL_BONUS_EXPRESSES)
             try:
                 await bot.send_message(
                     referred_by,
                     f"{vi('party')} По вашей ссылке пришёл новый пользователь — "
-                    f"<b>+{billing.REFERRAL_BONUS_DAYS} дня</b> бесплатного доступа начислено!",
+                    f"<b>+{billing.REFERRAL_BONUS_DAYS} дня</b> бесплатного доступа и "
+                    f"<b>+{billing.REFERRAL_BONUS_EXPRESSES} экспресс</b> начислено! 🔥",
                     parse_mode="HTML",
                 )
             except Exception:
