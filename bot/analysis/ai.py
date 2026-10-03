@@ -21,7 +21,7 @@ import logging
 import anthropic
 import httpx
 
-from bot.analysis.catalog import FootballMatch
+from bot.analysis.catalog import FootballMatch, Option
 from bot.db.repository import Repository
 from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.football_stats import get_match_h2h
@@ -73,9 +73,11 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
 - Опирайся только на присланные данные: коэффициенты, форму, таблицу, личные встречи,
   новости. Ничего не выдумывай — ни травм, ни составов, ни цифр. Если каких-то данных
   нет, так и учитывай, и не делай вид, что знаешь больше.
-- Коэффициенты — это мнение рынка с маржой букмекера. Ищи вариант, где, по данным,
-  шанс выше, чем закладывает коэффициент (ценность), а не просто самый вероятный исход.
-  Слишком низкие коэффициенты (< 1.30) не выбирай.
+- Ставка ОБЯЗАНА совпадать с твоим выводом: никогда не ставь на исход, который ты сам
+  оцениваешь ниже другого (если по твоим процентам вероятнее победа первой команды —
+  нельзя ставить на победу второй или на ничью). Подходящие варианты: победа фаворита,
+  фора/тотал, которые следуют из твоего разбора.
+- Коэффициент ставки — от 1.30 до 3.00. Выше 3.00 — только при уверенности «высокая».
 - confidence: «низкая» / «средняя» / «высокая» — честно. «Высокая» только когда
   несколько независимых факторов сходятся.
 - Никаких слов «гарантированно», «100%», «точно зайдёт», «верняк».
@@ -134,6 +136,24 @@ def market_probabilities(match: FootballMatch) -> dict | None:
     return {"p1": p1, "x": x, "p2": 100 - p1 - x}
 
 
+def _consistent_option(match: FootballMatch, result: dict, option: Option | None) -> Option | None:
+    """The pick must agree with the AI's own verdict: no betting on an outcome it rates
+    below the favourite, and no long shots (> 3.00) without high confidence. Otherwise
+    fall back to the favourite's own win/1X2 option (owner's complaint 2026-10-03: the
+    verdict said team A 49% while the "confident bet" was team B @ 4.70)."""
+    p = result.get("probabilities") or {}
+    ranked = sorted((("1", p.get("p1", 0)), ("X", p.get("x", 0)), ("2", p.get("p2", 0))), key=lambda t: -t[1])
+    favourite = ranked[0][0]
+    fav_option = match.option(favourite) or match.option("1" if p.get("p1", 0) >= p.get("p2", 0) else "2")
+    if option is None:
+        return fav_option
+    contradicts = option.kind in ("1x2", "winner") and option.id != favourite
+    long_shot = option.odds > 3.0 and result.get("confidence") != "высокая"
+    if (contradicts or long_shot) and fav_option is not None:
+        return fav_option
+    return option
+
+
 def _normalise(probs: dict) -> dict:
     vals = [max(0, int(probs.get(k, 0))) for k in ("p1", "x", "p2")]
     total = sum(vals) or 1
@@ -178,10 +198,11 @@ class Analyzer:
                 result["pick"] = None
                 self._adhoc[match.id] = result
                 return result
-            option = match.option(result["option_id"])
+            option = _consistent_option(match, result, match.option(result["option_id"]))
             if option is None:
                 logger.warning("AI picked unknown option %s for %s", result["option_id"], match.id)
                 return None
+            result["option_id"] = option.id
             result["pick"] = {"id": option.id, "label": option.label, "odds": option.odds}
             self.repo.save_ai_analysis(
                 match.id, match.team_a, match.team_b, match.league, match.start_utc.isoformat(),

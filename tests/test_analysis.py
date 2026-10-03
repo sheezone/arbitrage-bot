@@ -124,3 +124,20 @@ def test_catalog_two_way_sport_gets_winner_options_and_settles():
     from bot.analysis.ai import market_probabilities
     p = market_probabilities(m)
     assert p["x"] == 0 and p["p1"] + p["p2"] == 100
+
+
+def test_pick_must_agree_with_verdict():
+    from bot.analysis.ai import _consistent_option
+    from bot.analysis.catalog import FootballMatch
+
+    m = FootballMatch("1", "Эркулес", "Реал Хаэн", NOW, "L", [
+        Option("1", "П1", 1.9, "1x2"), Option("X", "Ничья", 3.3, "1x2"), Option("2", "П2", 4.7, "1x2"),
+        Option("TO2.5", "ТБ 2.5", 2.0, "total_over", 2.5)])
+    res = {"probabilities": {"p1": 49, "x": 27, "p2": 24}, "confidence": "низкая"}
+    assert _consistent_option(m, res, m.option("2")).id == "1"          # contradicts verdict
+    assert _consistent_option(m, res, m.option("TO2.5")).id == "TO2.5"  # totals are fine
+    res_hi = {"probabilities": {"p1": 20, "x": 25, "p2": 55}, "confidence": "средняя"}
+    assert _consistent_option(m, res_hi, m.option("2")).id == "2"
+    long = {"probabilities": {"p1": 20, "x": 25, "p2": 55}, "confidence": "средняя"}
+    m2 = FootballMatch("2", "A", "B", NOW, "L", [Option("1", "П1", 5.0, "1x2"), Option("X", "X", 4.0, "1x2"), Option("2", "П2", 3.5, "1x2")])
+    assert _consistent_option(m2, long, m2.option("2")).id == "2"  # favourite itself, even if > 3.00
