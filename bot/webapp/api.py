@@ -470,11 +470,11 @@ def register_api(
             from bot.analysis.picks import popular_to_analyse
 
             have = {p["match_id"] for p in upcoming_picks(repo, now, hours=24)}
-            for match in popular_to_analyse(await get_full_line(), have, now)[:3]:
-                try:
-                    await analyzer.analyze(match)
-                except Exception:
-                    logger.exception("On-demand analysis failed for %s", match.id)
+            # in parallel: the tunnel cuts requests at ~100s
+            todo = popular_to_analyse(await get_full_line(), have, now)[:5]
+            for match, res in zip(todo, await asyncio.gather(*(analyzer.analyze(m) for m in todo), return_exceptions=True)):
+                if isinstance(res, Exception):
+                    logger.warning("On-demand analysis failed for %s: %r", match.id, res)
             found = build_expresses(upcoming_picks(repo, now, hours=24), count=1, exclude=seen)
         if not found:
             raise HTTPException(status_code=424, detail="Сейчас не из чего собрать новый экспресс — попробуйте через час.")
