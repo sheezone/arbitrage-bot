@@ -55,9 +55,10 @@ def upcoming_picks(repo: Repository, now: datetime | None = None, hours: int = 4
 
 
 def build_expresses(picks: list[dict]) -> list[dict]:
-    legs = [p for p in picks if p["confidence"] in ("средняя", "высокая")
+    legs = [p for p in picks if p["confidence"] in ("средняя", "высокая", "очень высокая")
             and EXPRESS_LEG_ODDS[0] <= p["odds"] <= EXPRESS_LEG_ODDS[1]]
-    legs.sort(key=lambda p: (p["confidence"] != "высокая", p["odds"]))
+    rank = {"очень высокая": 0, "высокая": 1, "средняя": 2}
+    legs.sort(key=lambda p: (rank.get(p["confidence"], 3), p["odds"]))
     out: list[dict] = []
     used: set[str] = set()
     for size in (3, 2, 4):

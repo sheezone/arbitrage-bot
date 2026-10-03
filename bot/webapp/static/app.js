@@ -2369,7 +2369,7 @@ an_news: "News (injuries, form, suspensions)",
       st_wait: "Считаем честно: цифра появится после {m} сыгранных матчей (сейчас {n})",
       st_played: "сыграно", st_win: "зашло", st_lose: "не зашло", recent: "Последние результаты",
       st_none: "Пока нет сыгранных матчей с прогнозами ИИ.",
-      conf_low: "низкая", conf_mid: "средняя", conf_high: "высокая",
+      conf_vlow: "очень низкая", conf_low: "низкая", conf_mid: "средняя", conf_high: "высокая", conf_vhigh: "очень высокая",
       quota: "Сегодня разобрано: <b>{u}/{l}</b>", unlimited: "Без ограничений",
       ask_h: "🧠 Узнать шансы на матч", team1: "Команда 1", team2: "Команда 2", shot: "📷 Скриншот",
       analyze: "Анализировать", or_pick: "Или выберите матч из линии", no_matches: "Сейчас нет ближайших матчей в линии.",
@@ -2414,7 +2414,7 @@ an_news: "News (injuries, form, suspensions)",
       st_wait: "Counted honestly: the figure appears after {m} played matches (now {n})",
       st_played: "played", st_win: "won", st_lose: "lost", recent: "Latest results",
       st_none: "No played matches with AI forecasts yet.",
-      conf_low: "low", conf_mid: "medium", conf_high: "high",
+      conf_vlow: "very low", conf_low: "low", conf_mid: "medium", conf_high: "high", conf_vhigh: "very high",
       quota: "Analysed today: <b>{u}/{l}</b>", unlimited: "Unlimited",
       ask_h: "🧠 Get match chances", team1: "Team 1", team2: "Team 2", shot: "📷 Screenshot",
       analyze: "Analyse", or_pick: "Or pick a match from the line", no_matches: "No upcoming matches in the line right now.",
@@ -2459,7 +2459,7 @@ an_news: "News (injuries, form, suspensions)",
       st_wait: "Ростқавлона ҳисоб мекунем: рақам пас аз {m} бозии анҷомёфта пайдо мешавад (ҳоло {n})",
       st_played: "бозида шуд", st_win: "гузашт", st_lose: "нагузашт", recent: "Натиҷаҳои охирин",
       st_none: "Ҳоло бозиҳои анҷомёфта бо пешгӯии ИИ нест.",
-      conf_low: "паст", conf_mid: "миёна", conf_high: "баланд",
+      conf_vlow: "хеле паст", conf_low: "паст", conf_mid: "миёна", conf_high: "баланд", conf_vhigh: "хеле баланд",
       quota: "Имрӯз таҳлил шуд: <b>{u}/{l}</b>", unlimited: "Бе маҳдудият",
       ask_h: "🧠 Имконияти бозиро донед", team1: "Даста 1", team2: "Даста 2", shot: "📷 Скриншот",
       analyze: "Таҳлил кардан", or_pick: "Ё бозиро аз хат интихоб кунед", no_matches: "Ҳоло дар хат бозиҳои наздик нест.",
@@ -2492,7 +2492,8 @@ an_news: "News (injuries, form, suspensions)",
     if (vars) for (const k in vars) s = s.split(`{${k}}`).join(vars[k]);
     return s;
   }
-  const CONF_KEY = { "низкая": "conf_low", "средняя": "conf_mid", "высокая": "conf_high" };
+  const CONF_KEY = { "очень низкая": "conf_vlow", "низкая": "conf_low", "средняя": "conf_mid", "высокая": "conf_high", "очень высокая": "conf_vhigh" };
+  const CONF_LEVEL = { "очень низкая": 1, "низкая": 2, "средняя": 3, "высокая": 4, "очень высокая": 5 };
 
   // Back button target: vilki settings live inside the Вилки section, everything else under home.
   const PARENT = { settings: "vilki" };
@@ -2611,8 +2612,8 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   function confMeter(c) {
-    const n = { "низкая": 1, "средняя": 2, "высокая": 3 }[c] || 1;
-    return `<span class="conf"><span class="conf-bars">${[1, 2, 3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>${esc(tr(CONF_KEY[c] || "conf_low"))}</span>`;
+    const n = CONF_LEVEL[c] || 2;
+    return `<span class="conf conf-l${n}"><span class="conf-bars">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>${esc(tr(CONF_KEY[c] || "conf_low"))}</span>`;
   }
 
   function teamsLine(m) {
@@ -2745,7 +2746,7 @@ an_news: "News (injuries, form, suspensions)",
       : tr("vd_win", { t: esc(top.name), p: top.v });
     const others = outcomes.slice(1).map((o) =>
       o.kind === "draw" ? tr("vd_other_draw", { p: o.v }) : tr("vd_other", { t: esc(o.name), p: o.v })).join("<br>");
-    const sure = a.confidence === "средняя" || a.confidence === "высокая";
+    const sure = (CONF_LEVEL[a.confidence] || 0) >= 3;
     const pick = a.pick
       ? `<div class="vd-pick">🎯 ${tr(sure ? "vd_pick" : "vd_pick_risky")}: <b>${esc(a.pick.label)}</b> @ <b>${a.pick.odds.toFixed(2)}</b> · ${tr("confidence")} ${confMeter(a.confidence)}</div>`
       : "";

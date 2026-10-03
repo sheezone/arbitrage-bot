@@ -376,3 +376,11 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .vd-others { color: var(--hint); font-size: 13px; margin-bottom: 8px; }
 .vd-pick { padding-top: 8px; border-top: 1px solid rgba(178, 107, 255, 0.25); font-size: 14px; }
 .vd-note { margin-top: 8px; font-size: 11.5px; color: #c9b8e6; }
+
+/* 5-level confidence meter: colour shifts from red (very low) to violet (very high) */
+.conf-bars i { width: 11px; }
+.conf-l1 .conf-bars i.on { background: #ff5a7a; box-shadow: 0 0 6px rgba(255, 90, 122, 0.6); }
+.conf-l2 .conf-bars i.on { background: #ff9a5a; box-shadow: 0 0 6px rgba(255, 154, 90, 0.6); }
+.conf-l3 .conf-bars i.on { background: #e6c84a; box-shadow: 0 0 6px rgba(230, 200, 74, 0.6); }
+.conf-l4 .conf-bars i.on { background: #b26bff; }
+.conf-l5 .conf-bars i.on { background: #ff8cf0; box-shadow: 0 0 8px rgba(255, 140, 240, 0.8); }

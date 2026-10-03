@@ -30,7 +30,10 @@ from bot.webapp.team_form import get_team_form as espn_team_form
 
 logger = logging.getLogger(__name__)
 
-CONFIDENCE = ("низкая", "средняя", "высокая")
+# 5 levels (owner, 2026-10-03); "sure" = средняя and up.
+CONFIDENCE = ("очень низкая", "низкая", "средняя", "высокая", "очень высокая")
+SURE_CONFIDENCE = ("средняя", "высокая", "очень высокая")
+HIGH_CONFIDENCE = ("высокая", "очень высокая")
 # Distinct matches a user may open per MSK day (re-opening one already opened is free).
 AI_FREE_PER_DAY = 1
 AI_PAID_PER_DAY = 5
@@ -77,8 +80,9 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   оцениваешь ниже другого (если по твоим процентам вероятнее победа первой команды —
   нельзя ставить на победу второй или на ничью). Подходящие варианты: победа фаворита,
   фора/тотал, которые следуют из твоего разбора.
-- Коэффициент ставки — от 1.30 до 3.00. Выше 3.00 — только при уверенности «высокая».
-- confidence: «низкая» / «средняя» / «высокая» — честно. «Высокая» только когда
+- Коэффициент ставки — от 1.30 до 3.00. Выше 3.00 — только при уверенности «высокая» или «очень высокая».
+- confidence: «очень низкая» / «низкая» / «средняя» / «высокая» / «очень высокая» — честно.
+  «Очень высокая» — редкость: только когда почти все факторы и линия единодушны. «Высокая» только когда
   несколько независимых факторов сходятся.
 - Никаких слов «гарантированно», «100%», «точно зайдёт», «верняк».
 - summary — 2–3 предложения о матче. factors — 3–5 пунктов (Форма, Личные встречи,
@@ -148,7 +152,7 @@ def _consistent_option(match: FootballMatch, result: dict, option: Option | None
     if option is None:
         return fav_option
     contradicts = option.kind in ("1x2", "winner") and option.id != favourite
-    long_shot = option.odds > 3.0 and result.get("confidence") != "высокая"
+    long_shot = option.odds > 3.0 and result.get("confidence") not in HIGH_CONFIDENCE
     if (contradicts or long_shot) and fav_option is not None:
         return fav_option
     return option
