@@ -52,7 +52,7 @@ def _user(
 
 
 def test_referred_user_gets_a_longer_trial():
-    user = _user(trial_started_ago_days=TRIAL_DAYS + 1, referred_by=42)
+    user = _user(trial_started_ago_days=TRIAL_DAYS + 0.5, referred_by=42)
     assert has_access(user, NOW)  # would already be over for a non-referred user
     assert on_trial(user, NOW)
     assert 1 <= days_left(user, NOW) <= REFERRED_TRIAL_DAYS
@@ -175,11 +175,11 @@ def test_every_plan_has_a_usdt_price():
 
 def test_user_stats_buckets_each_user_correctly():
     users = [
-        _user(chat_id=1, trial_started_ago_days=1),  # on trial
+        _user(chat_id=1, trial_started_ago_days=0.5),  # on trial
         _user(chat_id=2, trial_started_ago_days=TRIAL_DAYS + 1, subscription_expires_in_days=10),  # paying
         _user(chat_id=3, trial_started_ago_days=TRIAL_DAYS + 1),  # expired
-        _user(chat_id=4, trial_started_ago_days=1, is_active=False),  # on trial, paused
-        _user(chat_id=5, trial_started_ago_days=1, referred_by=1),  # on trial, referred
+        _user(chat_id=4, trial_started_ago_days=0.5, is_active=False),  # on trial, paused
+        _user(chat_id=5, trial_started_ago_days=0.5, referred_by=1),  # on trial, referred
         _user(chat_id=99, trial_started_ago_days=TRIAL_DAYS + 1),  # admin -- shouldn't count toward the buckets
     ]
     stats = user_stats(users, NOW, admin_chat_ids=frozenset({99}))
@@ -199,3 +199,20 @@ def test_opportunity_key_is_stable_and_distinguishes_different_matches():
 
 def test_free_daily_vilki_limit_is_a_small_positive_number():
     assert 0 < FREE_DAILY_VILKI_LIMIT <= 20
+
+
+import pytest  # noqa: E402
+
+from bot.core import billing as _billing  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _all_trials_on_current_rules(monkeypatch):
+    # tests build trials relative to "now"; judge them all by the current trial length
+    monkeypatch.setattr(_billing, "TRIAL_CHANGED_AT", "2000-01-01T00:00:00+00:00")
+
+
+def test_users_from_before_the_change_keep_old_trial(monkeypatch):
+    monkeypatch.setattr(_billing, "TRIAL_CHANGED_AT", (NOW + timedelta(days=1)).isoformat())
+    user = _user(trial_started_ago_days=3)
+    assert _billing.has_access(user, NOW)

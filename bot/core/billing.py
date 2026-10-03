@@ -9,11 +9,15 @@ from datetime import datetime, timedelta
 
 from bot.db.repository import UserSettings
 
-TRIAL_DAYS = 5
+# Owner 2026-10-03: new users get MAX for 1 day (2 via a friend's link). Users who
+# started before the change keep the old 5/7-day trial they were promised.
+TRIAL_DAYS = 1
+TRIAL_CHANGED_AT = "2026-10-03T03:00:00+00:00"
+OLD_TRIAL_DAYS, OLD_REFERRED_TRIAL_DAYS = 5, 7
 # A user who signed up via someone's referral link gets a longer trial -- extra incentive
 # to actually use a referral link instead of just starting the bot cold. Kept strictly
 # above TRIAL_DAYS so "referred = more" stays true.
-REFERRED_TRIAL_DAYS = 7
+REFERRED_TRIAL_DAYS = 2
 # Free days credited to the referrer for each new user who starts the bot via their link.
 REFERRAL_BONUS_DAYS = 3
 # ...plus an instant reward: one extra «Найти экспресс» on top of the normal limit.
@@ -108,7 +112,10 @@ def referral_commission_rub(payment_amount: float, currency: str) -> float:
 
 
 def _trial_end(user: UserSettings) -> datetime:
-    days = REFERRED_TRIAL_DAYS if user.referred_by is not None else TRIAL_DAYS
+    if datetime.fromisoformat(user.trial_started_at) < datetime.fromisoformat(TRIAL_CHANGED_AT):
+        days = OLD_REFERRED_TRIAL_DAYS if user.referred_by is not None else OLD_TRIAL_DAYS
+    else:
+        days = REFERRED_TRIAL_DAYS if user.referred_by is not None else TRIAL_DAYS
     return datetime.fromisoformat(user.trial_started_at) + timedelta(days=days)
 
 
