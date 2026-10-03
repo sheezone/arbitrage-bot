@@ -14,15 +14,21 @@ from datetime import datetime, timedelta, timezone
 from itertools import combinations
 
 from bot.analysis.ai import Analyzer
-from bot.analysis.catalog import get_catalog
+from bot.analysis.catalog import SPORTS, get_full_line
+from bot.analysis.results import predicted_outcome
 from bot.db.repository import Repository
 
 logger = logging.getLogger(__name__)
 
 MSK = timezone(timedelta(hours=3))
-DAILY_TARGET = 14         # analyses wanted for matches in the next 24h (owner: more express candidates)
-PER_RUN = 4               # model calls per job run (spreads cost/latency over the day)
-RUN_EVERY_S = 2 * 3600
+# Daily auto-analysis of the most popular matches in every sport (owner 2026-10-03):
+# per-sport quota for matches in the next 24h; popularity = top league (football) and
+# market depth (how many lines the bookmaker offers -- big matches get the most).
+SPORT_QUOTA = {"football": 8, "hockey": 4, "basketball": 4, "tennis": 4, "esports": 3,
+               "table_tennis": 2, "volleyball": 3}
+DAILY_TARGET = sum(SPORT_QUOTA.values())
+PER_RUN = 6               # model calls per job run (spreads cost/latency over the day)
+RUN_EVERY_S = 3600
 ACTIVE_HOURS = range(8, 23)
 EXPRESS_LEG_ODDS = (1.3, 2.4)
 EXPRESS_TOTAL = (2.0, 6.0)
@@ -44,6 +50,9 @@ def pick_from_row(row) -> dict:
         "summary": payload.get("summary", ""),
         "reasoning": payload.get("reasoning", ""),
         "result": row["result"],
+        "predicted": predicted_outcome(row["payload"]),
+        "probabilities": payload.get("probabilities"),
+        "winner_result": row["winner_result"] if "winner_result" in row.keys() else None,
         "score": row["score"],
     }
 
@@ -91,7 +100,8 @@ def express_message(express: dict, full: bool) -> str:
     lines = [f"🔥 <b>Ваш экспресс готов!</b> Общий кэф <b>{express['total_odds']:.2f}</b>", ""]
     for i, p in enumerate(express["legs"], 1):
         start = datetime.fromisoformat(p["start_utc"]).astimezone(MSK).strftime("%d.%m %H:%M")
-        lines.append(f"{i}. ⚽ <b>{html.escape(p['team_a'])} — {html.escape(p['team_b'])}</b> · {start} МСК")
+        emoji = SPORTS.get(p.get("sport", "football"), {}).get("emoji", "⚽")
+        lines.append(f"{i}. {emoji} <b>{html.escape(p['team_a'])} — {html.escape(p['team_b'])}</b> · {start} МСК")
         lines.append(f"   🎯 {html.escape(p['label'])} @ <b>{p['odds']:.2f}</b> · уверенность: {html.escape(p['confidence'])}")
     lines += ["", "Экспресс проигрывает, если не зашла хоть одна ставка. Аналитика, а не гарантия. 18+"]
     return "\n".join(lines)
@@ -134,6 +144,20 @@ async def push_new_expresses(repo: Repository, bot, webapp_url: str, admin_chat_
     return sent
 
 
+def popular_to_analyse(matches, have: set[str], now: datetime) -> list:
+    """Most popular not-yet-analysed matches of the next 24h, filling each sport's quota."""
+    soon = [m for m in matches if now < m.start_utc <= now + timedelta(hours=24) and m.options]
+    out = []
+    for sport, quota in SPORT_QUOTA.items():
+        pool = [m for m in soon if m.sport == sport]
+        done = sum(m.id in have for m in pool)
+        pool = [m for m in pool if m.id not in have]
+        pool.sort(key=lambda m: (m.priority, -len(m.options), m.start_utc))
+        out += pool[:max(0, quota - done)]
+    # earliest kick-offs first, so nothing starts before it gets analysed
+    return sorted(out, key=lambda m: m.start_utc)
+
+
 async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp_url: str = "",
                           admin_chat_ids: frozenset[int] = frozenset()) -> None:
     while True:
@@ -141,10 +165,11 @@ async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp
             now = datetime.now(timezone.utc)
             if now.astimezone(MSK).hour in ACTIVE_HOURS:
                 have = {p["match_id"] for p in upcoming_picks(repo, now, hours=24)}
-                if len(have) < DAILY_TARGET:
-                    soon = [m for m in await get_catalog() if m.start_utc <= now + timedelta(hours=24) and m.id not in have]
-                    for match in soon[:min(PER_RUN, DAILY_TARGET - len(have))]:
+                for match in popular_to_analyse(await get_full_line(), have, now)[:PER_RUN]:
+                    try:
                         await analyzer.analyze(match)
+                    except Exception:
+                        logger.exception("Daily analysis failed for %s", match.id)
             if bot is not None:
                 n = await push_new_expresses(repo, bot, webapp_url, admin_chat_ids)
                 if n:

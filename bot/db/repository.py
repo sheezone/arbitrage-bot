@@ -128,6 +128,9 @@ class Repository:
         ai_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(ai_analyses)")}
         if ai_cols and "sport" not in ai_cols:
             self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN sport TEXT NOT NULL DEFAULT 'football'")
+        if ai_cols and "winner_result" not in ai_cols:
+            # did the AI's predicted winner (argmax of its probabilities) actually win
+            self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN winner_result TEXT")
         if "vilki_until" not in columns:
             # Vilka search runs for VILKI_RUN_DAYS after the user presses «Запустить», then
             # switches itself off (owner, 2026-10-03). NULL = no expiry (users who had it
@@ -210,6 +213,25 @@ class Repository:
             (since_iso,),
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
+
+    def set_ai_winner_result(self, match_id: str, result: str) -> None:
+        self._conn.execute("UPDATE ai_analyses SET winner_result = ? WHERE match_id = ?", (result, match_id))
+        self._conn.commit()
+
+    def ai_winner_unscored(self) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM ai_analyses WHERE winner_result IS NULL AND score IS NOT NULL AND score != ''"
+        ).fetchall()
+
+    def ai_winner_rate(self) -> dict:
+        """How often the AI's predicted winner won: overall and per sport."""
+        rows = self._conn.execute(
+            "SELECT sport, SUM(winner_result = 'win'), COUNT(*) FROM ai_analyses "
+            "WHERE winner_result IN ('win','lose') GROUP BY sport"
+        ).fetchall()
+        by_sport = {r[0]: {"wins": int(r[1] or 0), "total": int(r[2])} for r in rows}
+        return {"wins": sum(v["wins"] for v in by_sport.values()),
+                "total": sum(v["total"] for v in by_sport.values()), "by_sport": by_sport}
 
     def ai_analyses_between(self, start_from_iso: str, start_to_iso: str) -> list[sqlite3.Row]:
         return self._conn.execute(

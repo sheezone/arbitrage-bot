@@ -384,3 +384,12 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .conf-l3 .conf-bars i.on { background: #e6c84a; box-shadow: 0 0 6px rgba(230, 200, 74, 0.6); }
 .conf-l4 .conf-bars i.on { background: #b26bff; }
 .conf-l5 .conf-bars i.on { background: #ff8cf0; box-shadow: 0 0 8px rgba(255, 140, 240, 0.8); }
+
+/* winner-prediction accuracy */
+.ws-block { margin: 12px 0; padding: 12px 14px; border-radius: 16px; background: #170d2a; border: 1px solid rgba(178, 107, 255, 0.35); }
+.ws-main { font-size: 15px; margin: 4px 0 8px; }
+.ws-main b { font-size: 22px; color: #d6b0ff; }
+.ws-row { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; font-size: 13px; margin: 4px 0; }
+.ws-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.ws-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8b3ff0, #ff8cf0); }
+.pk-pred { font-size: 13px; margin-bottom: 4px; color: #e7dcff; }

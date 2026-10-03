@@ -268,6 +268,7 @@ def register_api(
             "has_access": billing.has_access(user, now, admin_chat_ids),
             "is_admin": billing.is_admin(user, admin_chat_ids),
             "hit_rate": {"wins": wins, "total": total, "min_total": 20},
+            "winner_rate": repo.ai_winner_rate(),
             "ai_quota": {"limit": limit, "used": len(used)},
             "picks_count": len(picks),
             "express_count": len(build_expresses(picks)),

@@ -9,6 +9,7 @@ matched confidently just stays unsettled rather than being guessed.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -63,6 +64,36 @@ def find_score(team_a: str, team_b: str, start: datetime, results) -> tuple[int,
     return best
 
 
+def predicted_outcome(payload: str) -> str | None:
+    """'1' / 'X' / '2': the outcome the AI rated most likely in its own probabilities."""
+    try:
+        p = json.loads(payload).get("probabilities") or {}
+    except (ValueError, AttributeError):
+        return None
+    ranked = sorted((("1", p.get("p1") or 0), ("X", p.get("x") or 0), ("2", p.get("p2") or 0)), key=lambda t: -t[1])
+    return ranked[0][0] if ranked[0][1] > 0 else None
+
+
+def winner_result(payload: str, score: str) -> str | None:
+    m = re.fullmatch(r"(\d+):(\d+)", score or "")
+    pred = predicted_outcome(payload)
+    if not m or pred is None:
+        return None
+    a, b = int(m.group(1)), int(m.group(2))
+    actual = "1" if a > b else "2" if b > a else "X"
+    return "win" if actual == pred else "lose"
+
+
+def score_winners(repo: Repository) -> int:
+    """Record whether the predicted winner won, for every settled match not yet scored."""
+    n = 0
+    for row in repo.ai_winner_unscored():
+        res = winner_result(row["payload"], row["score"])
+        repo.set_ai_winner_result(row["match_id"], res or "unknown")
+        n += res is not None
+    return n
+
+
 async def settle_pending(repo: Repository, client: httpx.AsyncClient) -> int:
     now = datetime.now(timezone.utc)
     pending = repo.unsettled_ai_analyses((now - SETTLE_AFTER).isoformat())
@@ -102,6 +133,7 @@ async def run_settler(repo: Repository) -> None:
         while True:
             try:
                 n = await settle_pending(repo, client)
+                score_winners(repo)
                 if n:
                     logger.info("AI picks settled: %s", n)
             except Exception:
