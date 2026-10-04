@@ -770,6 +770,16 @@ async def run_monitor_loop(
         except Exception:
             logger.exception("Failed to expire vilka runs")
 
+        if not repo.any_vilki_active():
+            # Nobody has vilka search on right now -- skip the heavy fetch/evaluate
+            # cycle (it hits every bookmaker source and the CPU-bound matcher) and just
+            # clear any stale results so a reopened /api/vilki shows nothing stuck.
+            if state.matches:
+                state.matches = []
+                state.updated_at = time.time()
+            await asyncio.sleep(poll_interval_seconds)
+            continue
+
         all_quotes = await _fetch_all_quotes(sources, games, empty_streaks, licensed_bookmakers_only)
         # CPU-heavy (seconds on the full line): off the event loop, so the bot's buttons
         # and the Mini App stay responsive while a cycle is being computed.

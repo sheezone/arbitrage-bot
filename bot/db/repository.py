@@ -490,6 +490,14 @@ class Repository:
         rows = self._conn.execute("SELECT * FROM users WHERE is_active = 1").fetchall()
         return [_row_to_user(r) for r in rows]
 
+    def any_vilki_active(self) -> bool:
+        """True while at least one user has vilka search switched on -- lets the monitor
+        loop skip its (CPU- and request-heavy) fetch cycle entirely when nobody's
+        looking (owner 2026-10-05: "никто их не ищет -- не запускай поиск, экономь
+        ресурсы"). is_active is exactly this on/off switch (bot/handlers/commands.py's
+        pause button, /api/vilki/start -- not a generic "user exists" flag)."""
+        return self._conn.execute("SELECT 1 FROM users WHERE is_active = 1 LIMIT 1").fetchone() is not None
+
     def get_all_users(self) -> list[UserSettings]:
         """Unlike get_active_users, includes users who paused notifications -- used for
         things that are account-level rather than a notification preference, e.g. the
