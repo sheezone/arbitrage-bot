@@ -211,7 +211,7 @@ class Analyzer:
             self.repo.save_ai_analysis(
                 match.id, match.team_a, match.team_b, match.league, match.start_utc.isoformat(),
                 json.dumps(result, ensure_ascii=False), option.id, option.kind, option.line,
-                option.label, option.odds, result["confidence"], match.sport,
+                option.label, option.odds, result["confidence"], match.sport, match.is_popular,
             )
             return result
 

@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS ai_analyses (
     created_at TEXT NOT NULL,
     result TEXT,
     score TEXT,
-    settled_at TEXT
+    settled_at TEXT,
+    popular INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS ai_usage (

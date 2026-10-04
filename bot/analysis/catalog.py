@@ -93,6 +93,17 @@ class FootballMatch:
     def option(self, option_id: str) -> Option | None:
         return next((o for o in self.options if o.id == option_id), None)
 
+    @property
+    def is_popular(self) -> bool:
+        """Only matches people have actually heard of go into the public hit-rate stats
+        (owner 2026-10-05: "кидай туда где самые популярные события а не какие-то
+        ноунеймы"). Football: a top league. Other sports: enough markets priced that the
+        bookmaker itself treats it as a major event (a reserve/youth/obscure fixture gets
+        a short, thin line)."""
+        if self.sport == "football":
+            return self.priority < len(TOP_LEAGUES)
+        return len(self.options) >= 6
+
 
 def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = HORIZON,
                   limit: int | None = MAX_MATCHES) -> list[FootballMatch]:
