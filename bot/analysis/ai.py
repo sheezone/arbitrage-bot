@@ -101,13 +101,50 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   предложения.
 - Пиши по-русски, коротко и по делу."""
 
-RESEARCH_SYSTEM = """Ты собираешь фактуру перед футбольным матчем. Найди в интернете свежую
-информацию именно об этом матче: травмы и дисквалификации, ожидаемые/подтверждённые
-составы, слова тренеров, турнирную мотивацию (положение, за что борются, ротация перед
-другими турнирами), смену тренера, превью и статистику последних игр. Выпиши только
-факты с короткой пометкой, откуда они (сайт). Никаких прогнозов и ставок. По-русски,
-списком, до 15 пунктов. Если по матчу ничего не нашлось — так и напиши."""
+# Team form + head-to-head come from a real API for football only (bot/webapp/football_data.py,
+# football_stats.py) -- everywhere else, web search is the ONLY source of this, so each
+# sport gets an explicit checklist instead of one football-shaped prompt (owner
+# 2026-10-05: "подтянуть остальные виды спорта до уровня футбола").
+RESEARCH_CHECKLISTS = {
+    "football": ("травмы и дисквалификации, ожидаемые/подтверждённые составы, слова тренеров, "
+                 "турнирную мотивацию (положение, за что борются, ротация перед другими турнирами), "
+                 "смену тренера, превью и статистику последних игр"),
+    "hockey": ("результаты последних 5-7 игр каждой команды, личные встречи в этом сезоне, "
+               "травмы и дисквалификации ключевых игроков, состояние вратарей (ротация, статистика), "
+               "турнирное положение и мотивацию, усталость от календаря (число игр за последние дни)"),
+    "basketball": ("результаты последних 5-7 игр, личные встречи, травмы и статус звёздных игроков "
+                   "(играет/под вопросом/не играет), ротацию состава, турнирное положение, "
+                   "усталость от календаря и травел (back-to-back игры)"),
+    "tennis": ("результаты последних 5-7 матчей каждого игрока, личные встречи и их счёт, "
+               "статистику игрока именно на этом покрытии (хард/грунт/трава), травмы и снятия, "
+               "сколько сетов/времени игрок провёл на корте в предыдущем матче (усталость), "
+               "текущую форму и серии побед/поражений"),
+    "esports": ("результаты последних матчей и турниров каждой команды, личные встречи, "
+                "изменения состава (трансферы, замены игроков), статистику по картам/дисциплинам "
+                "если есть, форму и буткемп перед турниром"),
+    "table_tennis": ("результаты последних матчей, личные встречи, текущую форму и серии, "
+                      "любые травмы или снятия"),
+    "volleyball": ("результаты последних 5-7 игр, личные встречи, травмы ключевых игроков, "
+                    "турнирное положение и мотивацию"),
+}
+
+
+def _research_system(sport: str) -> str:
+    checklist = RESEARCH_CHECKLISTS.get(sport, RESEARCH_CHECKLISTS["football"])
+    return (
+        f"Ты собираешь фактуру перед матчем ({sport}). Найди в интернете свежую информацию именно "
+        f"об этом матче: {checklist}. Выпиши только факты с короткой пометкой, откуда они (сайт). "
+        "Никаких прогнозов и ставок. По-русски, списком, до 15 пунктов. Если по матчу ничего не "
+        "нашлось — так и напиши."
+    )
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 5}
+SELF_CHECK_SYSTEM = ("Ты перепроверяешь чужой спортивный прогноз на завышенную уверенность. "
+                     "Отвечай только честной, при необходимости пониженной уверенностью.")
+SELF_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {"confidence": {"type": "string", "enum": list(CONFIDENCE)}},
+    "required": ["confidence"], "additionalProperties": False,
+}
 
 SCREENSHOT_SCHEMA = {
     "type": "object",
@@ -121,6 +158,19 @@ RESOLVE_SCHEMA = {
     "required": ["match_id"],
     "additionalProperties": False,
 }
+
+
+def _accuracy_note(repo: Repository, sport: str) -> str:
+    rate = repo.ai_winner_rate().get("by_sport", {}).get(sport)
+    if not rate or rate["total"] < 15:
+        return ""
+    pct = round(rate["wins"] / rate["total"] * 100)
+    if pct >= 65:
+        return ""  # calibrated fine, nothing to flag
+    return (f"Справка: в этом виде спорта твои прошлые прогнозы победителя сбывались в {pct}% "
+            f"случаев ({rate['wins']} из {rate['total']}) -- заметно ниже обычного. Будь строже "
+            "с уверенностью «высокая»/«очень высокая» здесь, пока данные это не подтвердят "
+            "железно.\n\n")
 
 
 def market_probabilities(match: FootballMatch) -> dict | None:
@@ -206,6 +256,8 @@ class Analyzer:
             if option is None:
                 logger.warning("AI picked unknown option %s for %s", result["option_id"], match.id)
                 return None
+            if option.odds > 2.5 or result["confidence"] in HIGH_CONFIDENCE:
+                result["confidence"] = await self._self_check(match, result, option) or result["confidence"]
             result["option_id"] = option.id
             result["pick"] = {"id": option.id, "label": option.label, "odds": option.odds}
             self.repo.save_ai_analysis(
@@ -214,6 +266,24 @@ class Analyzer:
                 option.label, option.odds, result["confidence"], match.sport, match.is_popular,
             )
             return result
+
+    async def _self_check(self, match: FootballMatch, result: dict, option: Option) -> str | None:
+        """Second, cold look at an already-built high-stakes verdict (long-shot odds or
+        top confidence) -- catches overconfidence a single pass can miss. Can only lower
+        confidence, never raise it; None/any failure leaves the original untouched."""
+        content = (
+            f"Матч: {match.team_a} — {match.team_b}. Твой вывод: {result['summary']}\n"
+            f"Факторы: {json.dumps(result.get('factors', []), ensure_ascii=False)}\n"
+            f"Твоя ставка: {option.label} @ {option.odds:.2f}, заявленная уверенность: {result['confidence']}.\n"
+            "Трезво перепроверь: данных и правда достаточно для такой уверенности, или это скорее "
+            "предположение? Если сомнения есть -- понизь уверенность на один шаг честно."
+        )
+        checked = await self._json_call(SELF_CHECK_SYSTEM, content, SELF_CHECK_SCHEMA, effort="low")
+        if not checked or checked.get("confidence") not in CONFIDENCE:
+            return None
+        if CONFIDENCE.index(checked["confidence"]) > CONFIDENCE.index(result["confidence"]):
+            return None  # never talk itself into MORE confidence on a second pass
+        return checked["confidence"]
 
     async def _gather(self, match: FootballMatch) -> dict:
         async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Mozilla/5.0"}) as client:
@@ -253,11 +323,14 @@ class Analyzer:
         tool or anything fails -- the analysis then runs on the other data alone."""
         when = f" ({match.start_utc:%d.%m.%Y})" if match.start_utc.year > 2000 else ""
         messages = [{"role": "user", "content": f"Матч: {match.team_a} — {match.team_b}{when}. {match.league}"}]
+        # Non-football sports have no structured form/H2H API behind them (see _gather),
+        # so web search is doing double duty there -- give it a bigger budget.
+        tool = {**WEB_SEARCH_TOOL, "max_uses": 5 if match.sport == "football" else 8}
         try:
             for _ in range(3):  # server tool loops may pause; resume up to twice
                 response = await self.claude.messages.create(
-                    model=self.model, max_tokens=6000, system=RESEARCH_SYSTEM,
-                    messages=messages, tools=[WEB_SEARCH_TOOL], output_config={"effort": "low"},
+                    model=self.model, max_tokens=6000, system=_research_system(match.sport),
+                    messages=messages, tools=[tool], output_config={"effort": "low"},
                 )
                 if response.stop_reason != "pause_turn":
                     break
@@ -273,6 +346,13 @@ class Analyzer:
         options = "\n".join(f"- id={o.id}: {o.label} @ {o.odds:.2f}" for o in match.options)
         line = (f"Доступные ставки (выбери одну по id):\n{options}\n\n" if options
                 else "Матча нет в линии букмекеров: коэффициентов нет, option_id оставь пустым.\n\n")
+        market = market_probabilities(match)
+        market_line = (f"Рынок (коэффициенты без маржи букмекера) закладывает: "
+                       f"П1 {market['p1']}%" + (f", ничья {market['x']}%" if market['x'] else "")
+                       + f", П2 {market['p2']}%. Это ориентир, а не готовый ответ -- "
+                       "отклоняйся от него только когда собранные данные это реально обосновывают.\n\n"
+                       if market else "")
+        accuracy_line = _accuracy_note(self.repo, match.sport)
         when = f"Начало (UTC): {match.start_utc:%Y-%m-%d %H:%M}\n" if match.start_utc.year > 2000 else ""
         from bot.analysis.catalog import SPORTS
 
@@ -280,7 +360,7 @@ class Analyzer:
         content = (
             f"Вид спорта: {sport_name}\n"
             f"Матч: {match.team_a} — {match.team_b}\nТурнир: {match.league or 'неизвестен'}\n"
-            f"{when}\n{line}"
+            f"{when}\n{line}{market_line}{accuracy_line}"
             f"Форма и таблица {match.team_a}: {json.dumps(data['form_a'], ensure_ascii=False, default=str)}\n"
             f"Форма и таблица {match.team_b}: {json.dumps(data['form_b'], ensure_ascii=False, default=str)}\n"
             f"Личные встречи: {json.dumps(data['h2h'], ensure_ascii=False, default=str)}\n"
