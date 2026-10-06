@@ -150,3 +150,11 @@ CREATE TABLE IF NOT EXISTS ai_bets (
     payout REAL,
     settled_at TEXT
 );
+
+-- last seen live score per Fonbet event, for «ГООООЛ!» channel posts (bot/core/goal_alerts.py)
+CREATE TABLE IF NOT EXISTS goal_alerts (
+    event_id TEXT PRIMARY KEY,
+    score1 INTEGER NOT NULL,
+    score2 INTEGER NOT NULL,
+    updated_at TEXT NOT NULL
+);

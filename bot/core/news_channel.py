@@ -64,7 +64,7 @@ RSS_FEEDS = {
     "Soccer.ru": "https://www.soccer.ru/rss.xml",
 }
 # Public channels readable via the t.me/s/ web preview: full post text + photo.
-TELEGRAM_CHANNELS = ("goalmasterlive", "sportsru", "championat", "sportexpress")
+TELEGRAM_CHANNELS = ("goalmasterlive", "sportsru", "championat", "sportexpress", "championsleague365")
 
 PICK_SCHEMA = {
     "type": "object",

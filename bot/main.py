@@ -224,6 +224,14 @@ async def main() -> None:
             ).run()
         )
 
+    goals_task: asyncio.Task | None = None
+    if config.news_chat_id:
+        from bot.core.goal_alerts import run_goal_alerts
+
+        goals_task = asyncio.create_task(  # noqa: F841 (lives with the process)
+            run_goal_alerts(bot, repo, config.news_chat_id, config.required_channel_username)
+        )
+
     try:
         await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
     except TelegramNetworkError:

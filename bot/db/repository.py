@@ -306,6 +306,17 @@ class Repository:
             (chat_id, since_iso),
         ).fetchall()
 
+    def goal_score(self, event_id: str) -> tuple[int, int] | None:
+        row = self._conn.execute("SELECT score1, score2 FROM goal_alerts WHERE event_id = ?", (event_id,)).fetchone()
+        return (row[0], row[1]) if row else None
+
+    def set_goal_score(self, event_id: str, s1: int, s2: int) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO goal_alerts (event_id, score1, score2, updated_at) VALUES (?, ?, ?, ?)",
+            (event_id, s1, s2, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
     def team_logo(self, name: str, sport: str) -> str | None:
         """Crest URL, '' if looked up and not found, None if never looked up."""
         row = self._conn.execute("SELECT url FROM team_logos WHERE name = ? AND sport = ?", (name, sport)).fetchone()
