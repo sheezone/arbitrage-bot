@@ -84,6 +84,25 @@ def winner_result(payload: str, score: str) -> str | None:
     return "win" if actual == pred else "lose"
 
 
+async def settle_ai_bets(repo: Repository) -> int:
+    """Settles the AI's own virtual bets once their match has a final score -- same
+    GIVE_UP_AFTER window as the public hit-rate settlement, reusing whatever
+    ai_analyses.result already worked out for that match_id (win/lose/unknown)."""
+    now = datetime.now(timezone.utc)
+    n = 0
+    for bet in repo.pending_ai_bets((now - SETTLE_AFTER).isoformat()):
+        row = repo.get_ai_analysis(bet["match_id"])
+        if row is None or row["result"] not in ("win", "lose"):
+            if now - datetime.fromisoformat(bet["start_utc"]) > GIVE_UP_AFTER:
+                repo.settle_ai_bet(bet["match_id"], "lose", 0.0)  # abandoned stake, not a win
+                n += 1
+            continue
+        payout = bet["stake"] * bet["odds"] if row["result"] == "win" else 0.0
+        repo.settle_ai_bet(bet["match_id"], row["result"], payout)
+        n += 1
+    return n
+
+
 def score_winners(repo: Repository) -> int:
     """Record whether the predicted winner won, for every settled match not yet scored."""
     n = 0
@@ -134,6 +153,7 @@ async def run_settler(repo: Repository) -> None:
             try:
                 n = await settle_pending(repo, client)
                 score_winners(repo)
+                await settle_ai_bets(repo)
                 if n:
                     logger.info("AI picks settled: %s", n)
             except Exception:

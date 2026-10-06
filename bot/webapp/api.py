@@ -799,6 +799,24 @@ def register_api(
             "daily_limit": billing.FREE_DAILY_VILKI_LIMIT if not billing.has_access(user, now, admin_chat_ids) else None,
         }
 
+    @app.get("/api/admin/ai_bankroll")
+    async def get_ai_bankroll(authorization: str | None = Header(default=None)):
+        """Admin-only: the AI's own virtual 10 000-rub bankroll (owner 2026-10-06) --
+        it stakes on its own confident picks, this just reports how that's going."""
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        if not billing.is_admin(user, admin_chat_ids):
+            raise HTTPException(status_code=403, detail="Только для администраторов")
+        now = datetime.now(timezone.utc)
+        week_start = (now.astimezone(MSK_TZ) - timedelta(days=now.astimezone(MSK_TZ).weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        summary = repo.ai_bankroll_summary(week_start.astimezone(timezone.utc).isoformat())
+        bets = [{**_crests({"team_a": b["team_a"], "team_b": b["team_b"], "sport": b["sport"]}),
+                 "league": b["league"], "label": b["label"], "odds": b["odds"], "confidence": b["confidence"],
+                 "stake": b["stake"], "result": b["result"], "payout": b["payout"], "placed_at": b["placed_at"]}
+                for b in repo.ai_bets_since((now - timedelta(days=14)).isoformat())]
+        return {**summary, "week_start": week_start.isoformat(), "bets": bets}
+
     @app.get("/api/admin/stats")
     async def get_admin_stats(authorization: str | None = Header(default=None)):
         """Admin-only aggregate view -- 403 for anyone not in admin_chat_ids, same check

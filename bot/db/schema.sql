@@ -131,3 +131,22 @@ CREATE TABLE IF NOT EXISTS user_expresses (
     payload TEXT NOT NULL,
     found_at TEXT NOT NULL
 );
+
+-- The AI's own virtual bankroll (owner 2026-10-06): it stakes real-sized virtual money
+-- on its own confident picks and the app shows how that's going. One row per bet.
+CREATE TABLE IF NOT EXISTS ai_bets (
+    match_id TEXT PRIMARY KEY,
+    team_a TEXT NOT NULL,
+    team_b TEXT NOT NULL,
+    sport TEXT NOT NULL,
+    league TEXT NOT NULL,
+    label TEXT NOT NULL,
+    odds REAL NOT NULL,
+    confidence TEXT NOT NULL,
+    stake REAL NOT NULL,
+    placed_at TEXT NOT NULL,
+    start_utc TEXT NOT NULL,
+    result TEXT,            -- 'win' | 'lose' | NULL while pending
+    payout REAL,
+    settled_at TEXT
+);

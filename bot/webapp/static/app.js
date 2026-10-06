@@ -2125,6 +2125,36 @@ an_news: "News (injuries, form, suspensions)",
     }
   }
 
+  // AI's own virtual bankroll: it stakes virtual money on its own confident picks,
+  // goal is to grow it as much as possible -- admin-only, for fun/curiosity.
+  async function renderAiBankroll() {
+    const s = await api("/api/admin/ai_bankroll");
+    const profit = s.balance - s.start_bankroll;
+    const weekSign = s.week_profit >= 0 ? "+" : "";
+    const totalSign = profit >= 0 ? "+" : "";
+    const rows = s.bets.map((b) => {
+      const sign = b.result === "win" ? "win" : b.result === "lose" ? "lose" : "";
+      const pnl = b.result ? `${b.payout - b.stake >= 0 ? "+" : ""}${Math.round(b.payout - b.stake)} ₽` : `⏳ ${Math.round(b.stake)} ₽`;
+      return `<div class="pk-card"><div class="pk-top"><span class="pk-league">${esc(b.league)}</span>${b.result ? `<span class="res ${sign}">${pnl}</span>` : `<span class="hb-badge">${pnl}</span>`}</div>
+        <div class="pk-teams">${SPORT_EMOJI[b.sport] || ""} ${teamsLine(b)}</div>
+        <div class="pk-pick">🎯 ${esc(b.label)} <span class="an-odds">@ ${Number(b.odds).toFixed(2)}</span></div>
+        <div class="an-conf">${confMeter(b.confidence)}</div></div>`;
+    }).join("");
+    content.innerHTML = `
+      <div class="st-hero">
+        <div class="st-big">${Math.round(s.balance).toLocaleString("ru-RU")} ₽</div>
+        <div class="st-cap">Баланс (старт — ${Math.round(s.start_bankroll).toLocaleString("ru-RU")} ₽)</div>
+        <div class="ai-sub">${totalSign}${Math.round(profit).toLocaleString("ru-RU")} ₽ всего · ${s.bets_settled} ставок, ${s.wins}/${s.losses}</div>
+      </div>
+      <div class="ws-block"><div class="an-h">📅 За эту неделю</div>
+        <div class="ws-main"><b>${weekSign}${Math.round(s.week_profit).toLocaleString("ru-RU")} ₽</b> · ${s.week_bets} ставок</div></div>
+      ${s.pending_bets ? `<div class="ai-sub">⏳ В игре: ${s.pending_bets} ставок на ${Math.round(s.pending_stake).toLocaleString("ru-RU")} ₽</div>` : ""}
+      <h3 class="sec-h">Лента ставок</h3>
+      ${rows || `<div class="ai-empty">Пока ни одной ставки</div>`}
+      <button type="button" class="btn-ghost wide" id="bank-back">← К админке</button>`;
+    document.getElementById("bank-back").addEventListener("click", renderAdmin);
+  }
+
   async function renderAdmin() {
     const s = await api("/api/admin/stats");
 
@@ -2160,6 +2190,7 @@ an_news: "News (injuries, form, suspensions)",
       : `<div class="news-empty">${t("admin_no_users")}</div>`;
 
     content.innerHTML = `
+      <button type="button" class="pro-buy wide" id="admin-bank-btn" style="margin-bottom:10px">🤖 ИИ-банк — виртуальные 10 000 ₽</button>
       <div class="section-title">${t("admin_users")}</div>
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_total")}</div></div>
@@ -2190,6 +2221,7 @@ an_news: "News (injuries, form, suspensions)",
     content.querySelectorAll(".stat-value").forEach((el) => {
       animateValue(el, parseFloat(el.dataset.v) || 0, el.dataset.suf, Number(el.dataset.dec));
     });
+     wireAdminBankBtn();
   }
 
   // ---------- Subscription gate ----------
@@ -2954,6 +2986,11 @@ an_news: "News (injuries, form, suspensions)",
         const item = document.querySelector(`.lang-menu-item[data-lang="${b.dataset.lang}"]`);
         if (item) item.click();
       }));
+  }
+
+  function wireAdminBankBtn() {
+    const b = document.getElementById("admin-bank-btn");
+    if (b) b.addEventListener("click", () => { haptic("light"); renderAiBankroll(); });
   }
 
   // Vilka search runs VILKI_RUN_DAYS after «Запустить», then switches itself off.

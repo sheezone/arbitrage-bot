@@ -265,6 +265,9 @@ class Analyzer:
                 json.dumps(result, ensure_ascii=False), option.id, option.kind, option.line,
                 option.label, option.odds, result["confidence"], match.sport, match.is_popular,
             )
+            from bot.analysis.bankroll import place_bet
+
+            place_bet(self.repo, match, option, result["confidence"])
             return result
 
     async def _self_check(self, match: FootballMatch, result: dict, option: Option) -> str | None:

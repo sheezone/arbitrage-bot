@@ -224,6 +224,67 @@ class Repository:
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
 
+    # -- AI's own virtual bankroll --------------------------------------------------
+    def ai_bankroll_balance(self) -> float:
+        from bot.analysis.bankroll import START_BANKROLL
+
+        row = self._conn.execute(
+            "SELECT SUM(payout - stake) FROM ai_bets WHERE result IS NOT NULL"
+        ).fetchone()
+        return START_BANKROLL + (row[0] or 0.0)
+
+    def ai_bet_exists(self, match_id: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM ai_bets WHERE match_id = ?", (match_id,)).fetchone() is not None
+
+    def place_ai_bet(self, match_id: str, team_a: str, team_b: str, sport: str, league: str,
+                     label: str, odds: float, confidence: str, stake: float, start_utc: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO ai_bets (match_id, team_a, team_b, sport, league, label, odds, "
+            "confidence, stake, placed_at, start_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (match_id, team_a, team_b, sport, league, label, odds, confidence, stake,
+             datetime.now(timezone.utc).isoformat(), start_utc),
+        )
+        self._conn.commit()
+
+    def pending_ai_bets(self, started_before_iso: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM ai_bets WHERE result IS NULL AND start_utc < ?", (started_before_iso,)
+        ).fetchall()
+
+    def settle_ai_bet(self, match_id: str, result: str, payout: float) -> None:
+        self._conn.execute(
+            "UPDATE ai_bets SET result = ?, payout = ?, settled_at = ? WHERE match_id = ?",
+            (result, payout, datetime.now(timezone.utc).isoformat(), match_id),
+        )
+        self._conn.commit()
+
+    def ai_bets_since(self, since_iso: str, limit: int = 100) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM ai_bets WHERE placed_at >= ? ORDER BY placed_at DESC LIMIT ?", (since_iso, limit)
+        ).fetchall()
+
+    def ai_bankroll_summary(self, week_start_iso: str) -> dict:
+        from bot.analysis.bankroll import START_BANKROLL
+
+        settled = self._conn.execute("SELECT SUM(payout - stake), COUNT(*) FROM ai_bets WHERE result IS NOT NULL").fetchone()
+        week = self._conn.execute(
+            "SELECT SUM(payout - stake), COUNT(*) FROM ai_bets WHERE result IS NOT NULL AND placed_at >= ?",
+            (week_start_iso,),
+        ).fetchone()
+        wins = self._conn.execute("SELECT COUNT(*) FROM ai_bets WHERE result = 'win'").fetchone()[0]
+        pending = self._conn.execute("SELECT COUNT(*), SUM(stake) FROM ai_bets WHERE result IS NULL").fetchone()
+        return {
+            "balance": round(START_BANKROLL + (settled[0] or 0.0), 2),
+            "start_bankroll": START_BANKROLL,
+            "bets_settled": settled[1] or 0,
+            "wins": wins,
+            "losses": (settled[1] or 0) - wins,
+            "week_profit": round(week[0] or 0.0, 2),
+            "week_bets": week[1] or 0,
+            "pending_bets": pending[0] or 0,
+            "pending_stake": round(pending[1] or 0.0, 2),
+        }
+
     def bonus_expresses(self, chat_id: int) -> int:
         row = self._conn.execute("SELECT bonus_expresses FROM users WHERE chat_id = ?", (chat_id,)).fetchone()
         return int(row[0]) if row else 0
