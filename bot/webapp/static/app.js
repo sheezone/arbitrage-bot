@@ -2605,6 +2605,7 @@ an_news: "News (injuries, form, suspensions)",
     const quota = h.ai_quota.limit == null ? "" : ` · ${h.ai_quota.used}/${h.ai_quota.limit}`;
     content.innerHTML = `
       <section class="home">
+        <div class="ticker" id="home-ticker" hidden><div class="ticker-track" id="ticker-track"></div></div>
         <div class="home-row">
           <h2 class="home-welcome">${tr("welcome")}</h2>
         </div>
@@ -2620,7 +2621,23 @@ an_news: "News (injuries, form, suspensions)",
         ${proCard("vilki", "⚡", tr("t_vilki"), h.vilki_count ? `<span class="hb-badge">${tr("c_vk_badge", { n: h.vilki_count })}</span>` : "", [tr("c_vk1"), tr("c_vk2"), tr("c_vk3")], "vilki", locked)}
         <p class="home-note">${tr("note")}</p>
       </section>`;
-    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));    loadTicker();
+  }
+
+  // Running news strip on the home screen: live scores, AI favourites, headlines.
+  async function loadTicker() {
+    const box = document.getElementById("home-ticker");
+    if (!box) return;
+    try {
+      const data = await api("/api/ticker");
+      if (!data.items || !data.items.length) return;
+      const row = data.items.map((i) => `<span class="tk-item tk-${i.kind}">${esc(i.text)}</span>`).join('<span class="tk-sep">•</span>');
+      const track = document.getElementById("ticker-track");
+      track.innerHTML = `<div class="tk-row">${row}<span class="tk-sep">•</span></div><div class="tk-row" aria-hidden="true">${row}<span class="tk-sep">•</span></div>`;
+      box.hidden = false;
+      const w = track.firstElementChild.scrollWidth;
+      track.style.animationDuration = `${Math.max(25, w / 45)}s`;
+    } catch (e) { /* ticker is decoration -- stay hidden on any error */ }
   }
 
   async function renderAiStats() {

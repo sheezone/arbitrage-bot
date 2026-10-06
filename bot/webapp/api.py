@@ -290,6 +290,54 @@ def register_api(
             "referral": {"days": billing.REFERRAL_BONUS_DAYS, "expresses": billing.REFERRAL_BONUS_EXPRESSES},
         }
 
+    ticker_cache: dict[str, object] = {"at": 0.0, "items": []}
+
+    async def _ticker_items() -> list[dict]:
+        """Home-screen news ticker (owner 2026-10-07): live scores of top matches, the
+        AI's most confident picks of the day among popular matches, and the latest
+        football headlines the news channel published. Cached for a minute."""
+        import time as _time
+
+        if _time.time() - ticker_cache["at"] < 60:
+            return ticker_cache["items"]  # type: ignore[return-value]
+        items: list[dict] = []
+        try:
+            from bot.core.goal_alerts import live_top_matches
+            from bot.providers import fonbet
+
+            async with httpx.AsyncClient(base_url=fonbet.BASE_URL, timeout=20, headers={"User-Agent": "Mozilla/5.0"}) as c:
+                raw = (await c.get(fonbet.EVENTS_PATH, params={"lang": "ru", "scopeMarket": fonbet.SCOPE_MARKET})).json()
+            for m in live_top_matches(raw)[:8]:
+                minute = f" {m['minute']}'" if m["minute"] and 0 < m["minute"] <= 130 else ""
+                items.append({"kind": "live", "text": f"🔴 LIVE{minute} · {m['team_a']} {m['s1']}:{m['s2']} {m['team_b']}"})
+        except Exception:
+            logger.warning("ticker: live scores unavailable", exc_info=True)
+        rank = {"очень высокая": 0, "высокая": 1, "средняя": 2}
+        picks = [p for p in upcoming_picks(repo, hours=24) if p["confidence"] in rank and p.get("probabilities")]
+        picks.sort(key=lambda p: (rank[p["confidence"]], p["start_utc"]))
+        for p in picks[:6]:
+            pr, who = p["probabilities"], p["predicted"]
+            fav = (f"{p['team_a']} {pr['p1']}%" if who == "1" else f"{p['team_b']} {pr['p2']}%" if who == "2"
+                   else f"ничья {pr['x']}%")
+            emoji = SPORTS.get(p.get("sport", "football"), {}).get("emoji", "⚽")
+            items.append({"kind": "pick", "text": f"🧠 ИИ: {emoji} {p['team_a']} — {p['team_b']} · фаворит {fav}"})
+        for title in repo.recent_news_titles(6):
+            items.append({"kind": "news", "text": f"📰 {title}"})
+        # interleave kinds so the strip doesn't read as three blocks
+        by = {k: [i for i in items if i["kind"] == k] for k in ("live", "pick", "news")}
+        mixed = []
+        while any(by.values()):
+            for k in ("live", "pick", "news"):
+                if by[k]:
+                    mixed.append(by[k].pop(0))
+        ticker_cache.update(at=_time.time(), items=mixed)
+        return mixed
+
+    @app.get("/api/ticker")
+    async def get_ticker(authorization: str | None = Header(default=None)):
+        _auth(authorization)
+        return {"items": await _ticker_items()}
+
     @app.post("/api/vilki/stop")
     async def post_vilki_stop(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
