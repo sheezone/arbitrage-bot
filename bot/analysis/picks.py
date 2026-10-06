@@ -25,7 +25,7 @@ MSK = timezone(timedelta(hours=3))
 # per-sport quota for matches in the next 24h; popularity = top league (football) and
 # market depth (how many lines the bookmaker offers -- big matches get the most).
 SPORT_QUOTA = {"football": 8, "hockey": 4, "basketball": 4, "tennis": 4, "esports": 3,
-               "table_tennis": 2, "volleyball": 3}
+               "table_tennis": 2, "volleyball": 3, "mma": 3, "boxing": 2}
 DAILY_TARGET = sum(SPORT_QUOTA.values())
 PER_RUN = 6               # model calls per job run (spreads cost/latency over the day)
 RUN_EVERY_S = 3600
@@ -158,8 +158,53 @@ def popular_to_analyse(matches, have: set[str], now: datetime) -> list:
     return sorted(out, key=lambda m: m.start_utc)
 
 
+FIGHT_HIGHLIGHT_SPORTS = ("mma", "boxing")
+FIGHT_HIGHLIGHT_EVERY = timedelta(days=3)  # owner 2026-10-07: "редко пость самую интересную инфу"
+
+
+def fight_highlight_message(pick: dict) -> str:
+    import html
+
+    emoji = SPORTS.get(pick["sport"], {}).get("emoji", "🥊")
+    start = datetime.fromisoformat(pick["start_utc"]).astimezone(MSK).strftime("%d.%m %H:%M")
+    lines = [
+        f"{emoji} <b>Большой бой на подходе!</b>", "",
+        f"<b>{html.escape(pick['team_a'])} — {html.escape(pick['team_b'])}</b>",
+        f"🏆 {html.escape(pick['league'])} · {start} МСК",
+    ]
+    if pick.get("summary"):
+        lines += ["", html.escape(pick["summary"])]
+    lines += ["", f"🧠 Прогноз ИИ: {html.escape(pick['label'])} · уверенность {pick['confidence']}",
+              "", "⚠️ Это только анализ ИИ, а не гарантия результата. 18+"]
+    return "\n".join(lines)
+
+
+async def post_fight_highlight(repo: Repository, bot, chat_id: int, now: datetime) -> bool:
+    """Rarely (at most once every FIGHT_HIGHLIGHT_EVERY) posts the single most confident
+    upcoming MMA/boxing pick -- among popular (is_popular) matches -- to the news
+    channel, so a big UFC/boxing card gets a heads-up there without turning the channel
+    into a combat-sports feed."""
+    if repo.fight_highlights_since((now - FIGHT_HIGHLIGHT_EVERY).isoformat()):
+        return False
+    rank = {"очень высокая": 0, "высокая": 1, "средняя": 2}
+    candidates = [p for p in upcoming_picks(repo, now, hours=72)
+                 if p["sport"] in FIGHT_HIGHLIGHT_SPORTS and p["confidence"] in rank
+                 and not repo.fight_highlight_posted(p["match_id"])]
+    if not candidates:
+        return False
+    candidates.sort(key=lambda p: (rank[p["confidence"]], p["start_utc"]))
+    pick = candidates[0]
+    try:
+        await bot.send_message(chat_id, fight_highlight_message(pick), parse_mode="HTML")
+    except Exception:
+        logger.exception("Fight highlight post failed")
+        return False
+    repo.mark_fight_highlight_posted(pick["match_id"])
+    return True
+
+
 async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp_url: str = "",
-                          admin_chat_ids: frozenset[int] = frozenset()) -> None:
+                          admin_chat_ids: frozenset[int] = frozenset(), news_chat_id: int | None = None) -> None:
     while True:
         try:
             now = datetime.now(timezone.utc)
@@ -174,6 +219,8 @@ async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp
                 n = await push_new_expresses(repo, bot, webapp_url, admin_chat_ids)
                 if n:
                     logger.info("Express pushed to %s chats", n)
+                if news_chat_id is not None and await post_fight_highlight(repo, bot, news_chat_id, now):
+                    logger.info("Fight highlight posted to the channel")
         except Exception:
             logger.exception("Daily AI picks run failed")
         await asyncio.sleep(RUN_EVERY_S)

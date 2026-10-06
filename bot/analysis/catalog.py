@@ -41,6 +41,8 @@ SPORTS: dict[str, dict] = {
     "esports":      {"parent": 29086, "draw": False, "totals": None,           "hcp": None, "emoji": "🎮", "name": "Киберспорт"},
     "table_tennis": {"parent": 3088,  "draw": False, "totals": None,           "hcp": None, "emoji": "🏓", "name": "Настольный теннис"},
     "volleyball":   {"parent": 9,     "draw": False, "totals": None,           "hcp": None, "emoji": "🏐", "name": "Волейбол"},
+    "mma":          {"parent": 37145, "draw": False, "totals": None,           "hcp": None, "emoji": "🥋", "name": "Единоборства"},
+    "boxing":       {"parent": 1436,  "draw": False, "totals": None,           "hcp": None, "emoji": "🥊", "name": "Бокс"},
 }
 PARENT_TO_SPORT = {v["parent"]: k for k, v in SPORTS.items()}
 CATALOG_TTL = 300
@@ -69,6 +71,8 @@ TOP_TOURNAMENT_KEYWORDS = {
     "volleyball": ("Суперлига", "Серия A1", "PlusLiga", "Чемпионат мира", "Чемпионат Европы",
                    "Лига чемпионов", "Лига наций"),
     "table_tennis": ("Чемпионат мира", "Чемпионат Европы", "WTT", "Лига чемпионов"),
+    "mma": ("UFC", "Bellator", "PFL"),
+    "boxing": ("Титульные бои", "Чемпионат мира"),
 }
 
 

@@ -306,6 +306,19 @@ class Repository:
             (chat_id, since_iso),
         ).fetchall()
 
+    def fight_highlight_posted(self, match_id: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM fight_highlights WHERE match_id = ?", (match_id,)).fetchone() is not None
+
+    def mark_fight_highlight_posted(self, match_id: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO fight_highlights (match_id, posted_at) VALUES (?, ?)",
+            (match_id, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def fight_highlights_since(self, since_iso: str) -> int:
+        return self._conn.execute("SELECT COUNT(*) FROM fight_highlights WHERE posted_at >= ?", (since_iso,)).fetchone()[0]
+
     def goal_score(self, event_id: str) -> tuple[int, int] | None:
         row = self._conn.execute("SELECT score1, score2 FROM goal_alerts WHERE event_id = ?", (event_id,)).fetchone()
         return (row[0], row[1]) if row else None

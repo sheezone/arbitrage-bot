@@ -158,3 +158,10 @@ CREATE TABLE IF NOT EXISTS goal_alerts (
     score2 INTEGER NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- rare "big fight" highlight posts in the news channel (bot/analysis/picks.py), so the
+-- football autoposter's own rate/dedup bookkeeping (news_posts) stays untouched
+CREATE TABLE IF NOT EXISTS fight_highlights (
+    match_id TEXT PRIMARY KEY,
+    posted_at TEXT NOT NULL
+);

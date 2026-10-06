@@ -138,6 +138,7 @@ async def main() -> None:
 
         picks_task = asyncio.create_task(run_daily_picks(
             analyzer, repo, bot, config.webapp_url, config.admin_chat_ids,
+            news_chat_id=config.news_chat_id,
         ))
     # AI analysis lives in the Mini App only now (app-first bot, 2026-10-03); the chat-bot
     # AI screens (bot/handlers/analysis.py) are no longer registered.

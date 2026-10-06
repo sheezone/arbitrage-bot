@@ -2392,7 +2392,7 @@ an_news: "News (injuries, form, suspensions)",
       hb_collect: "🆕 Статистика копится: {n}/{m}", hb_rate: "📊 {p}% проходимость · {n} матчей",
       welcome: "Добро пожаловать!", tile_help: "Помощь", tile_stats: "Статистика", tile_admin: "Админ",
       max_access: "MAX-доступ", buy: "Оформить",
-      c_ai1: "🎯 Разбор матчей", c_ai2: "⚽🏀🎾 7 видов спорта", c_ai3: "💰 Ищем ценность в линии",
+      c_ai1: "🎯 Разбор матчей", c_ai2: "⚽🏀🥊 9 видов спорта", c_ai3: "💰 Ищем ценность в линии",
       c_ex_badge: "{n} на сегодня", c_ex1: "🤖 Отбор через ИИ", c_ex2: "💰 Кэф x2–x6", c_ex3: "🔥 Каждый день новые",
       hot: "🔥 ХИТ", c_pk1: "📋 Прогнозы дня", c_pk2: "📝 С обоснованием", c_pk3: "📊 Честная статистика",
       c_vk_badge: "{n} сейчас", c_vk1: "🏦 9 букмекеров", c_vk2: "⏱ Раз в минуту", c_vk3: "🧮 Расчёт ставок",
@@ -2437,7 +2437,7 @@ an_news: "News (injuries, form, suspensions)",
       hb_collect: "🆕 Collecting stats: {n}/{m}", hb_rate: "📊 {p}% hit rate · {n} matches",
       welcome: "Welcome!", tile_help: "Help", tile_stats: "Statistics", tile_admin: "Admin",
       max_access: "MAX access", buy: "Get MAX",
-      c_ai1: "🎯 Match analysis", c_ai2: "⚽🏀🎾 7 sports", c_ai3: "💰 Value in the line",
+      c_ai1: "🎯 Match analysis", c_ai2: "⚽🏀🥊 9 sports", c_ai3: "💰 Value in the line",
       c_ex_badge: "{n} today", c_ex1: "🤖 Picked by AI", c_ex2: "💰 Odds x2–x6", c_ex3: "🔥 New every day",
       hot: "🔥 HOT", c_pk1: "📋 Picks of the day", c_pk2: "📝 With reasoning", c_pk3: "📊 Honest stats",
       c_vk_badge: "{n} now", c_vk1: "🏦 9 bookmakers", c_vk2: "⏱ Every minute", c_vk3: "🧮 Stake calculator",
@@ -2482,7 +2482,7 @@ an_news: "News (injuries, form, suspensions)",
       hb_collect: "🆕 Омор ҷамъ мешавад: {n}/{m}", hb_rate: "📊 {p}% гузариш · {n} бозӣ",
       welcome: "Хуш омадед!", tile_help: "Кумак", tile_stats: "Омор", tile_admin: "Админ",
       max_access: "Дастрасии MAX", buy: "Харидан",
-      c_ai1: "🎯 Таҳлили бозиҳо", c_ai2: "⚽🏀🎾 7 намуди варзиш", c_ai3: "💰 Арзиш дар хат",
+      c_ai1: "🎯 Таҳлили бозиҳо", c_ai2: "⚽🏀🥊 9 намуди варзиш", c_ai3: "💰 Арзиш дар хат",
       c_ex_badge: "{n} барои имрӯз", c_ex1: "🤖 Интихоби ИИ", c_ex2: "💰 Коэф x2–x6", c_ex3: "🔥 Ҳар рӯз нав",
       hot: "🔥 ХИТ", c_pk1: "📋 Пешгӯиҳои рӯз", c_pk2: "📝 Бо асос", c_pk3: "📊 Омори ростқавлона",
       c_vk_badge: "{n} ҳоло", c_vk1: "🏦 9 букмекер", c_vk2: "⏱ Ҳар дақиқа", c_vk3: "🧮 Ҳисоби ставка",
@@ -2682,7 +2682,7 @@ an_news: "News (injuries, form, suspensions)",
     return `${crest(m.team_a, m.team_a_logo, m.team_a_flag)}${esc(m.team_a)} — ${crest(m.team_b, m.team_b_logo, m.team_b_flag)}${esc(m.team_b)}`;
   }
 
-  const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐" };
+  const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐", mma: "🥋", boxing: "🥊" };
   let aiSport = "";
   try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
   let aiGame = "";  // esports discipline (CS, Dota 2, LoL...), only when aiSport === "esports"
