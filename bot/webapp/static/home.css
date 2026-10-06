@@ -455,3 +455,5 @@ body {
 }
 .ai-league { background: linear-gradient(90deg, rgba(178, 107, 255, 0.22), transparent 80%); border-radius: 8px; padding: 4px 8px; }
 .ai-input { background: linear-gradient(180deg, #1d1236, #140c26) !important; }
+
+.tiles-grid.tiles-1 { grid-template-columns: 1fr; }

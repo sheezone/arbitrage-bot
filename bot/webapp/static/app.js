@@ -2609,8 +2609,7 @@ an_news: "News (injuries, form, suspensions)",
           <h2 class="home-welcome">${tr("welcome")}</h2>
         </div>
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
-        <div class="tiles tiles-grid${h.is_admin ? "" : " tiles-2"}" id="home-tiles">
-          <button type="button" class="tile art-t-help" data-go="help"><span class="tile-emoji">🤖</span><span class="tile-label">${tr("tile_help")}</span></button>
+        <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
           <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">🏆</span><span class="tile-label">${tr("tile_stats")}</span></button>
           ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
         </div>
