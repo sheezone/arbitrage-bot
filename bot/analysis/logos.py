@@ -66,9 +66,9 @@ async def _sportsdb(client: httpx.AsyncClient, english: str, sport: str) -> str:
         return ""
     finally:
         await asyncio.sleep(2.1)  # free key: 30 requests/min
-    want = CREST_SPORTS[sport]
+    want = CREST_SPORTS[sport].casefold()
     for t in teams:
-        if t.get("strSport") == want and t.get("strBadge"):
+        if (t.get("strSport") or "").casefold() == want and t.get("strBadge"):
             return t["strBadge"] + "/tiny"  # 250px variant, plenty for a 22px crest
     return ""
 
