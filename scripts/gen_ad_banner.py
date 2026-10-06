@@ -150,6 +150,14 @@ def main():
         d.ellipse([x0, (430 + i * 44) * S + 14 * S, x0 + 10 * S, (430 + i * 44) * S + 24 * S], fill=BLIP)
         d.text((x0 + 26 * S, (430 + i * 44) * S), line, font=sub, fill=LILAC)
 
+    chip = ImageFont.truetype(SEMI, 20 * S)
+    x, y = x0, 582 * S
+    for name in ("Футбол", "Баскетбол", "Хоккей", "Теннис"):
+        x += pill(d, x, y, name, chip, (32, 16, 60), (95, 55, 170), WHITE) + 9 * S
+    x, y = x0, 636 * S
+    for name in ("Киберспорт", "Бокс", "MMA", "Волейбол", "Наст. теннис"):
+        x += pill(d, x, y, name, chip, (32, 16, 60), (95, 55, 170), WHITE) + 9 * S
+
     img = img.resize((W // S, H // S), Image.LANCZOS)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     img.save(OUT)
