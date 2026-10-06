@@ -2583,10 +2583,26 @@ an_news: "News (injuries, form, suspensions)",
     return `<span class="hb-badge">${tr("hb_rate", { p: Math.round((h.wins / h.total) * 100), n: h.total })}</span>`;
   }
 
-  function proCard(key, icon, title, badge, chips, art, locked) {
+  const ICONS = {
+    brain: '<path d="M9 4.5a2.5 2.5 0 0 0-2.5 2.5v.2A2.5 2.5 0 0 0 5 9.5v1A2.5 2.5 0 0 0 6.5 13a2.5 2.5 0 0 0 2.5 2.5M9 4.5a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 9 18.5M9 4.5V18.5M9 8h2.5M9 12H6M9 15.5H6.5"/><path d="M15 4.5a2.5 2.5 0 0 1 2.5 2.5v.2A2.5 2.5 0 0 1 19 9.5v1a2.5 2.5 0 0 1-1.5 2.5 2.5 2.5 0 0 1-2.5 2.5M15 4.5a2.5 2.5 0 0 0-2.5 2.5v9a2.5 2.5 0 0 0 2.5 2.5M15 4.5V18.5M15 8h-2.5M15 12h3M15 15.5h2.5"/>',
+    trending: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 6h6v6"/>',
+    target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>',
+    bolt: '<path d="M12.5 3 5 14h6l-1 7 8-11h-6l0.5-7z" stroke-linejoin="round"/>',
+    trophy: '<path d="M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 5H4.5A1.5 1.5 0 0 0 3 6.5v1A3.5 3.5 0 0 0 6.5 11H7"/><path d="M17 5h2.5A1.5 1.5 0 0 1 21 6.5v1A3.5 3.5 0 0 1 17.5 11H17"/><path d="M12 13v3.5"/><path d="M8.5 20.5h7"/><path d="M9.5 16.8c0 1.8 1 2.9 2.5 2.9s2.5-1.1 2.5-2.9"/>',
+    wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5l-6 6a1.8 1.8 0 0 0 2.5 2.5l6-6a4 4 0 0 0 5-5.4l-2.8 2.8-2.1-2.1 2.8-2.8z"/>',
+    headset: '<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/><path d="M19 19v.5A2.5 2.5 0 0 1 16.5 22H13"/>',
+    gem: '<path d="M4.5 9 8 4h8l3.5 5L12 20.5 4.5 9z"/><path d="M4.5 9h15M8 4l1.8 5-1.8 0L8 4zM16 4l-1.8 5 1.8 0L16 4zM9.8 9 12 20.5 14.2 9"/>',
+    chip: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 4v2.3M15 4v2.3M9 17.7V20M15 17.7V20M4 9h2.3M4 15h2.3M17.7 9H20M17.7 15H20"/><rect x="8.3" y="8.3" width="7.4" height="7.4" rx="1"/>',
+  };
+  function icon(name, size) {
+    const s = size || 22;
+    return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
+  }
+
+  function proCard(key, iconName, title, badge, chips, art, locked) {
     // Locked (no subscription) -> the card opens the in-app payment screen directly.
     return `<button type="button" class="pro-card" data-go="${locked ? "sub" : key}">
-      <div class="pro-head"><span class="pro-icon">${icon}</span><span class="pro-title">${esc(title)}</span>${badge}${locked ? '<span class="hb-lock">🔒 MAX</span>' : ""}</div>
+      <div class="pro-head"><span class="pro-icon">${icon(iconName)}</span><span class="pro-title">${esc(title)}</span>${badge}${locked ? '<span class="hb-lock">🔒 MAX</span>' : ""}</div>
       <div class="pro-art art-${art}">
         <div class="pro-chips">${chips.map((c) => `<span class="pro-chip">${esc(c)}</span>`).join("")}</div>
       </div>
@@ -2611,14 +2627,14 @@ an_news: "News (injuries, form, suspensions)",
         </div>
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
         <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
-          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">🏆</span><span class="tile-label">${tr("tile_stats")}</span></button>
-          ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">🛠</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
+          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">${icon("trophy", 34)}</span><span class="tile-label">${tr("tile_stats")}</span></button>
+          ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">${icon("wrench", 34)}</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
         </div>
         <h2 class="home-pro">${tr("max_access")}${locked ? ` <button type="button" class="pro-buy" data-go="sub">${tr("buy")}</button>` : ""}</h2>
-        ${proCard("ai", "🧠", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
-        ${proCard("express", "📈", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
-        ${proCard("picks", "⚽", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
-        ${proCard("vilki", "⚡", tr("t_vilki"), h.vilki_count ? `<span class="hb-badge">${tr("c_vk_badge", { n: h.vilki_count })}</span>` : "", [tr("c_vk1"), tr("c_vk2"), tr("c_vk3")], "vilki", locked)}
+        ${proCard("ai", "brain", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
+        ${proCard("express", "trending", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
+        ${proCard("picks", "target", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
+        ${proCard("vilki", "bolt", tr("t_vilki"), h.vilki_count ? `<span class="hb-badge">${tr("c_vk_badge", { n: h.vilki_count })}</span>` : "", [tr("c_vk1"), tr("c_vk2"), tr("c_vk3")], "vilki", locked)}
         <p class="home-note">${tr("note")}</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));    loadTicker();
@@ -3086,6 +3102,7 @@ an_news: "News (injuries, form, suspensions)",
     }
     go(PARENT[currentTab] || "home");
   });
+  document.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = icon(el.dataset.icon, 22); });
   renderUserChip();
   applyNavLabels();
 

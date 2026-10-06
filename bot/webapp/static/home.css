@@ -473,3 +473,8 @@ body {
 .tk-sep { color: #b26bff; padding: 0 12px; }
 @keyframes tk-run { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; } }
+
+/* line-art icons (owner 2026-10-07: replace cartoon emoji with a serious icon set) */
+.pro-icon svg, .tile-emoji svg, .bn-ico svg { display: block; color: #e4cfff; filter: drop-shadow(0 0 5px rgba(178, 107, 255, 0.55)); }
+.bn-item.active .bn-ico svg, .bn-max .bn-ico svg { color: #fff; }
+.tile-emoji svg { width: 34px; height: 34px; }
