@@ -138,6 +138,12 @@ def _research_system(sport: str) -> str:
         "нашлось — так и напиши."
     )
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 5}
+HLTV_SYSTEM = ("Ты собираешь статистику перед матчем Counter-Strike 2 только с сайта hltv.org. Найди: "
+               "место обеих команд в рейтинге HLTV, результаты их последних 5-10 матчей, личные встречи, "
+               "маппул и винрейт по картам (какие карты пикают/банят), текущий состав и замены/стендины, "
+               "рейтинг ключевых игроков (Rating 3.0) за последние месяцы, формат матча (Bo1/Bo3). "
+               "Только факты с цифрами, без прогнозов. По-русски, списком, до 15 пунктов. Если на HLTV "
+               "ничего не нашлось — так и напиши.")
 SELF_CHECK_SYSTEM = ("Ты перепроверяешь чужой спортивный прогноз на завышенную уверенность. "
                      "Отвечай только честной, при необходимости пониженной уверенностью.")
 SELF_CHECK_SCHEMA = {
@@ -317,10 +323,18 @@ class Analyzer:
             else:
                 form_a = form_b = h2h_data = None
                 headlines = await news()
-        research = await self._research(match)
+        if match.sport == "esports" and match.league.startswith("Counter-Strike"):
+            # CS2: HLTV is the reference source (ranking, map pool, recent results, H2H).
+            # hltv.org is behind Cloudflare bot protection for direct requests, so it's
+            # read through the web search tool restricted to that domain (owner 2026-10-06).
+            general, hltv = await asyncio.gather(self._research(match), self._research(
+                match, HLTV_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 6, "allowed_domains": ["hltv.org"]}))
+            research = f"{general}\n\nДанные HLTV:\n{hltv}" if hltv else general
+        else:
+            research = await self._research(match)
         return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines, "research": research}
 
-    async def _research(self, match: FootballMatch) -> str:
+    async def _research(self, match: FootballMatch, system: str | None = None, tool: dict | None = None) -> str:
         """Fresh facts from the web (injuries, lineups, motivation, previews) via the
         server-side web search tool. Best effort: "" if the gateway doesn't support the
         tool or anything fails -- the analysis then runs on the other data alone."""
@@ -328,11 +342,12 @@ class Analyzer:
         messages = [{"role": "user", "content": f"Матч: {match.team_a} — {match.team_b}{when}. {match.league}"}]
         # Non-football sports have no structured form/H2H API behind them (see _gather),
         # so web search is doing double duty there -- give it a bigger budget.
-        tool = {**WEB_SEARCH_TOOL, "max_uses": 5 if match.sport == "football" else 8}
+        tool = tool or {**WEB_SEARCH_TOOL, "max_uses": 5 if match.sport == "football" else 8}
+        system = system or _research_system(match.sport)
         try:
             for _ in range(3):  # server tool loops may pause; resume up to twice
                 response = await self.claude.messages.create(
-                    model=self.model, max_tokens=6000, system=_research_system(match.sport),
+                    model=self.model, max_tokens=6000, system=system,
                     messages=messages, tools=[tool], output_config={"effort": "low"},
                 )
                 if response.stop_reason != "pause_turn":
