@@ -150,23 +150,6 @@ def main():
         d.ellipse([x0, (430 + i * 44) * S + 14 * S, x0 + 10 * S, (430 + i * 44) * S + 24 * S], fill=BLIP)
         d.text((x0 + 26 * S, (430 + i * 44) * S), line, font=sub, fill=LILAC)
 
-    cta_font = ImageFont.truetype(BOLD, 28 * S)
-    cta_text = "ОТКРЫТЬ МАТЧ РАДАР"
-    cb = d.textbbox((0, 0), cta_text, font=cta_font)
-    px, py = 34 * S, 16 * S
-    cta_y = 580 * S
-    cta_box = [x0, cta_y, x0 + cb[2] + 2 * px, cta_y + cb[3] + 2 * py]
-    cta_grad = layer()
-    cgd = ImageDraw.Draw(cta_grad)
-    for x in range(int(cta_box[0]), int(cta_box[2]) + 1):
-        t = (x - cta_box[0]) / max(1, cta_box[2] - cta_box[0])
-        cgd.line([(x, 0), (x, H)], fill=(int(200 - 40 * t), int(100 + 10 * t), 255))
-    cta_mask = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(cta_mask).rounded_rectangle(cta_box, radius=int((cta_box[3] - cta_box[1]) / 2), fill=255)
-    img = Image.composite(cta_grad, img, cta_mask)
-    d = ImageDraw.Draw(img)
-    d.text((x0 + px - cb[0], cta_y + py - cb[1]), cta_text, font=cta_font, fill=(20, 8, 40))
-
     img = img.resize((W // S, H // S), Image.LANCZOS)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     img.save(OUT)
