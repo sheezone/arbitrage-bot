@@ -2669,9 +2669,13 @@ an_news: "News (injuries, form, suspensions)",
   const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐" };
   let aiSport = "";
   try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
+  let aiGame = "";  // esports discipline (CS, Dota 2, LoL...), only when aiSport === "esports"
+  const GAME_SHORT = { "Counter-Strike": "CS2", "Dota 2": "Dota 2", "LoL": "LoL", "Valorant": "Valorant",
+    "Mobile Legends": "MLBB", "Rainbow Six Siege": "R6", "KoG": "HoK", "StarCraft II": "SC2" };
 
   async function renderAiMatches() {
-    const data = await api(`/api/ai/matches${aiSport ? `?sport=${encodeURIComponent(aiSport)}` : ""}`);
+    const q = aiSport ? `?sport=${encodeURIComponent(aiSport)}${aiSport === "esports" && aiGame ? `&game=${encodeURIComponent(aiGame)}` : ""}` : "";
+    const data = await api(`/api/ai/matches${q}`);
     const h = homeCache;
     const quota = h && h.ai_quota.limit != null ? tr("quota", { u: h.ai_quota.used, l: h.ai_quota.limit }) : tr("unlimited");
     let html = `<div class="ai-ask">
@@ -2691,7 +2695,11 @@ an_news: "News (injuries, form, suspensions)",
       <div class="sport-chips">
         <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
         ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sp.emoji}</button>`).join("")}
-      </div>`;
+      </div>
+      ${aiSport === "esports" && (data.games || []).length ? `<div class="sport-chips game-chips">
+        <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
+        ${data.games.map((g) => `<button type="button" class="game-chip${aiGame === g.name ? " on" : ""}" data-game="${esc(g.name)}">${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small></button>`).join("")}
+      </div>` : ""}`;
     if (!data.matches.length) html += `<div class="ai-empty">${tr("no_matches")}</div>`;
     let league = null;
     for (const m of data.matches) {
@@ -2707,7 +2715,14 @@ an_news: "News (injuries, form, suspensions)",
     content.querySelectorAll(".sport-chip").forEach((b) =>
       b.addEventListener("click", () => {
         aiSport = b.dataset.sport;
+        aiGame = "";
         try { localStorage.setItem("ai_sport", aiSport); } catch (e) { /* ignore */ }
+        haptic("light");
+        renderAiMatches();
+      }));
+    content.querySelectorAll(".game-chip").forEach((b) =>
+      b.addEventListener("click", () => {
+        aiGame = b.dataset.game;
         haptic("light");
         renderAiMatches();
       }));

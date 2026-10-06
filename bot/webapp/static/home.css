@@ -413,3 +413,11 @@ img.crest { background: rgba(255, 255, 255, 0.92); padding: 2px; box-sizing: bor
   background: linear-gradient(90deg, #8b3ff0, #d04fd8); box-shadow: 0 4px 0 #4a1a8f, 0 6px 18px rgba(160, 70, 255, 0.45); }
 .invite-box { margin: 14px 0; padding: 12px 14px; border-radius: 16px; background: #170d2a; border: 1px dashed rgba(255, 140, 240, 0.55); }
 .invite-box .ai-sub { margin: 4px 0 10px; }
+
+/* esports discipline chips (CS2, Dota 2, LoL...) under the sport chips */
+.game-chips { margin-top: -4px; }
+.game-chip { flex: none; height: 32px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #e7dcff;
+  background: #1c1233; border: 1px solid rgba(178, 107, 255, 0.3); cursor: pointer; }
+.game-chip small { opacity: 0.6; font-weight: 600; }
+.game-chip.on { color: #fff; background: linear-gradient(180deg, #b47cff, #7a34e0); border-color: transparent;
+  box-shadow: 0 2px 0 #4f1aa0, 0 4px 10px rgba(140, 60, 255, 0.4); }

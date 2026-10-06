@@ -219,11 +219,29 @@ async def get_full_line() -> list[FootballMatch]:
     return matches
 
 
-async def get_catalog(sport: str | None = None) -> list[FootballMatch]:
+def esports_game(league: str) -> str:
+    """Discipline of an esports match from its Fonbet league ("Counter-Strike. ESL Pro
+    League. Bo3" -> "Counter-Strike")."""
+    return league.split(".")[0].strip()
+
+
+async def esports_games() -> list[tuple[str, int]]:
+    """Disciplines in the current esports line, most matches first."""
+    soon = datetime.now(timezone.utc) + HORIZON
+    counts: dict[str, int] = {}
+    for m in await get_full_line():
+        if m.sport == "esports" and m.start_utc <= soon:
+            g = esports_game(m.league)
+            counts[g] = counts.get(g, 0) + 1
+    return sorted(counts.items(), key=lambda kv: -kv[1])
+
+
+async def get_catalog(sport: str | None = None, game: str | None = None) -> list[FootballMatch]:
     """The browsable list: next HORIZON only, MAX_MATCHES at most (per sport when one is
     given; "all" keeps football's top leagues first, then everything by kick-off)."""
     soon = datetime.now(timezone.utc) + HORIZON
-    pool = [m for m in await get_full_line() if m.start_utc <= soon and (sport is None or m.sport == sport)]
+    pool = [m for m in await get_full_line() if m.start_utc <= soon and (sport is None or m.sport == sport)
+            and (not game or esports_game(m.league) == game)]
     return pool[:MAX_MATCHES]
 
 
