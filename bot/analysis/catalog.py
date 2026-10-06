@@ -41,10 +41,13 @@ SPORTS: dict[str, dict] = {
     "esports":      {"parent": 29086, "draw": False, "totals": None,           "hcp": None, "emoji": "🎮", "name": "Киберспорт"},
     "table_tennis": {"parent": 3088,  "draw": False, "totals": None,           "hcp": None, "emoji": "🏓", "name": "Настольный теннис"},
     "volleyball":   {"parent": 9,     "draw": False, "totals": None,           "hcp": None, "emoji": "🏐", "name": "Волейбол"},
-    "mma":          {"parent": 37145, "draw": False, "totals": None,           "hcp": None, "emoji": "🥋", "name": "Единоборства"},
-    "boxing":       {"parent": 1436,  "draw": False, "totals": None,           "hcp": None, "emoji": "🥊", "name": "Бокс"},
+    # MMA + boxing share one tab in the app (owner 2026-10-07: "объедени в единоборства,
+    # нажимаешь и выбираешь бокс, там UFC и т.д.") -- two Fonbet top-level sports folded
+    # into one here, split back out by discipline (see combat_discipline/combat_disciplines).
+    "combat":       {"parents": (37145, 1436), "draw": False, "totals": None, "hcp": None, "emoji": "🥊", "name": "Единоборства"},
 }
-PARENT_TO_SPORT = {v["parent"]: k for k, v in SPORTS.items()}
+PARENT_TO_SPORT = {p: k for k, v in SPORTS.items() for p in (v["parents"] if "parents" in v else (v["parent"],))}
+COMBAT_ORG_KEYWORDS = ("UFC", "Bellator", "PFL", "ACA", "KSW", "Fight Nights", "Contender Series", "Oktagon")
 CATALOG_TTL = 300
 HORIZON = timedelta(hours=48)      # the browsable top list
 LOOKUP_HORIZON = timedelta(days=7)  # matches a user can find by name/screenshot
@@ -71,9 +74,10 @@ TOP_TOURNAMENT_KEYWORDS = {
     "volleyball": ("Суперлига", "Серия A1", "PlusLiga", "Чемпионат мира", "Чемпионат Европы",
                    "Лига чемпионов", "Лига наций"),
     "table_tennis": ("Чемпионат мира", "Чемпионат Европы", "WTT", "Лига чемпионов"),
-    "mma": ("UFC", "Bellator", "PFL"),
-    "boxing": ("Титульные бои", "Чемпионат мира"),
 }
+# Combat is popular by discipline rather than a league prefix: the big MMA orgs, or a
+# title/world-title boxing bout.
+COMBAT_TOP = ("UFC", "Bellator", "PFL", "Титульные бои", "Чемпионат мира")
 
 
 @dataclass(frozen=True)
@@ -94,6 +98,7 @@ class FootballMatch:
     league: str
     options: list[Option] = field(default_factory=list)
     sport: str = "football"
+    discipline: str = ""  # combat only: "UFC" / "Бокс" / "MMA" (see combat_discipline)
 
     @property
     def priority(self) -> int:
@@ -125,6 +130,8 @@ class FootballMatch:
             if "Челленджер" in self.league or "125K" in self.league or self.league.endswith("Пары"):
                 return False
             return self.league.startswith(("ATP.", "WTA."))
+        if self.sport == "combat":
+            return any(kw in self.league for kw in COMBAT_TOP)
         return any(kw in self.league for kw in TOP_TOURNAMENT_KEYWORDS.get(self.sport, ()))
 
 
@@ -132,7 +139,7 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
                   limit: int | None = MAX_MATCHES) -> list[FootballMatch]:
     now = now or datetime.now(timezone.utc)
     segments = {
-        s["id"]: (s.get("name") or "", PARENT_TO_SPORT[s.get("parentId")])
+        s["id"]: (s.get("name") or "", PARENT_TO_SPORT[s.get("parentId")], s.get("parentId"))
         for s in raw.get("sports", [])
         if s.get("kind") == "segment" and s.get("parentId") in PARENT_TO_SPORT
         and not any(w in (s.get("name") or "") for w in SKIP_SEGMENT_WORDS)
@@ -152,12 +159,13 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
         if not (now < start <= now + horizon):
             continue
         f = factors.get(ev.get("id"), {})
-        league, sport = segments[ev["sportId"]]
+        league, sport, parent_id = segments[ev["sportId"]]
         cfg = SPORTS[sport]
         w1, wx, w2 = (f.get(k, {}).get("v") for k in (TEAM1_WIN_FACTOR, DRAW_FACTOR, TEAM2_WIN_FACTOR))
         if not w1 or not w2 or (cfg["draw"] and not wx):
             continue
-        m = FootballMatch(str(ev["id"]), a, b, start, league, sport=sport)
+        discipline = combat_discipline(league, parent_id) if sport == "combat" else ""
+        m = FootballMatch(str(ev["id"]), a, b, start, league, sport=sport, discipline=discipline)
         if cfg["draw"]:
             m.options += [
                 Option("1", f"П1 ({a})", float(w1), "1x2"),
@@ -229,6 +237,28 @@ def esports_game(league: str) -> str:
     return league.split(".")[0].strip()
 
 
+def combat_discipline(league: str, parent_id: int) -> str:
+    """Sub-tab for a combined MMA+boxing match: a big MMA org by name, else "Бокс"/"MMA"
+    by which Fonbet top-level sport it actually came from (parent_id 1436 = boxing,
+    37145 = mix-fights) -- Fonbet's own league text doesn't reliably say "MMA" vs "ММА"
+    vs a promotion name, so the org keyword is checked first and the origin is the
+    fallback, not a text guess."""
+    for org in ("UFC", "Bellator", "PFL"):
+        if org in league:
+            return org
+    return "Бокс" if parent_id == 1436 else "MMA"
+
+
+async def combat_disciplines() -> list[tuple[str, int]]:
+    """Disciplines in the current combat line, most matches first."""
+    soon = datetime.now(timezone.utc) + HORIZON
+    counts: dict[str, int] = {}
+    for m in await get_full_line():
+        if m.sport == "combat" and m.start_utc <= soon:
+            counts[m.discipline] = counts.get(m.discipline, 0) + 1
+    return sorted(counts.items(), key=lambda kv: -kv[1])
+
+
 async def esports_games() -> list[tuple[str, int]]:
     """Disciplines in the current esports line, most matches first."""
     soon = datetime.now(timezone.utc) + HORIZON
@@ -245,7 +275,7 @@ async def get_catalog(sport: str | None = None, game: str | None = None) -> list
     given; "all" keeps football's top leagues first, then everything by kick-off)."""
     soon = datetime.now(timezone.utc) + HORIZON
     pool = [m for m in await get_full_line() if m.start_utc <= soon and (sport is None or m.sport == sport)
-            and (not game or esports_game(m.league) == game)]
+            and (not game or (esports_game(m.league) if sport == "esports" else m.discipline) == game)]
     return pool[:MAX_MATCHES]
 
 

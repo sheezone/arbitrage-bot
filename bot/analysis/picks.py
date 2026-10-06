@@ -25,7 +25,7 @@ MSK = timezone(timedelta(hours=3))
 # per-sport quota for matches in the next 24h; popularity = top league (football) and
 # market depth (how many lines the bookmaker offers -- big matches get the most).
 SPORT_QUOTA = {"football": 8, "hockey": 4, "basketball": 4, "tennis": 4, "esports": 3,
-               "table_tennis": 2, "volleyball": 3, "mma": 3, "boxing": 2}
+               "table_tennis": 2, "volleyball": 3, "combat": 4}
 DAILY_TARGET = sum(SPORT_QUOTA.values())
 PER_RUN = 6               # model calls per job run (spreads cost/latency over the day)
 RUN_EVERY_S = 3600
@@ -158,7 +158,7 @@ def popular_to_analyse(matches, have: set[str], now: datetime) -> list:
     return sorted(out, key=lambda m: m.start_utc)
 
 
-FIGHT_HIGHLIGHT_SPORTS = ("mma", "boxing")
+FIGHT_HIGHLIGHT_SPORTS = ("combat",)
 FIGHT_HIGHLIGHT_EVERY = timedelta(days=3)  # owner 2026-10-07: "редко пость самую интересную инфу"
 
 

@@ -2605,7 +2605,7 @@ an_news: "News (injuries, form, suspensions)",
     cards: '<rect x="3" y="6" width="12" height="15" rx="2" transform="rotate(-8 3 6)"/><rect x="9" y="4" width="12" height="15" rx="2"/>',
   };
   const SPORT_ICON_NAME = { football: "football", hockey: "hockey", basketball: "basketball", tennis: "tennis",
-    esports: "gamepad", table_tennis: "table_tennis", volleyball: "volleyball", mma: "fist", boxing: "glove" };
+    esports: "gamepad", table_tennis: "table_tennis", volleyball: "volleyball", combat: "glove" };
   function sportIcon(key, size) { return icon(SPORT_ICON_NAME[key] || "trophy", size || 15); }
   function icon(name, size) {
     const s = size || 22;
@@ -2713,17 +2713,18 @@ an_news: "News (injuries, form, suspensions)",
 
   const SPORT_EMOJI = { football: sportIcon("football"), hockey: sportIcon("hockey"), basketball: sportIcon("basketball"),
     tennis: sportIcon("tennis"), esports: sportIcon("esports"), table_tennis: sportIcon("table_tennis"),
-    volleyball: sportIcon("volleyball"), mma: sportIcon("mma"), boxing: sportIcon("boxing") };
+    volleyball: sportIcon("volleyball"), combat: sportIcon("combat") };
   let aiSport = "";
   try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
-  let aiGame = "";  // esports discipline (CS, Dota 2, LoL...), only when aiSport === "esports"
+  let aiGame = "";  // sub-discipline: esports game (CS2, Dota 2...) or combat org (UFC, Бокс...)
   const GAME_SHORT = { "Counter-Strike": "CS2", "Dota 2": "Dota 2", "LoL": "LoL", "Valorant": "Valorant",
     "Mobile Legends": "MLBB", "Rainbow Six Siege": "R6", "KoG": "HoK", "StarCraft II": "SC2" };
 
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
   async function renderAiMatches() {
     aiInAnalysis = false;
-    const q = aiSport ? `?sport=${encodeURIComponent(aiSport)}${aiSport === "esports" && aiGame ? `&game=${encodeURIComponent(aiGame)}` : ""}` : "";
+    const hasSubTabs = aiSport === "esports" || aiSport === "combat";
+    const q = aiSport ? `?sport=${encodeURIComponent(aiSport)}${hasSubTabs && aiGame ? `&game=${encodeURIComponent(aiGame)}` : ""}` : "";
     const data = await api(`/api/ai/matches${q}`);
     const h = homeCache;
     const quota = h && h.ai_quota.limit != null ? tr("quota", { u: h.ai_quota.used, l: h.ai_quota.limit }) : tr("unlimited");
@@ -2745,7 +2746,7 @@ an_news: "News (injuries, form, suspensions)",
         <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
         ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sportIcon(sp.key, 20)}</button>`).join("")}
       </div>
-      ${aiSport === "esports" && (data.games || []).length ? `<div class="sport-chips game-chips">
+      ${hasSubTabs && (data.games || []).length ? `<div class="sport-chips game-chips">
         <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
         ${data.games.map((g) => `<button type="button" class="game-chip${aiGame === g.name ? " on" : ""}" data-game="${esc(g.name)}">${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small></button>`).join("")}
       </div>` : ""}`;
