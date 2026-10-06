@@ -478,3 +478,8 @@ body {
 .pro-icon svg, .tile-emoji svg, .bn-ico svg { display: block; color: #e4cfff; filter: drop-shadow(0 0 5px rgba(178, 107, 255, 0.55)); }
 .bn-item.active .bn-ico svg, .bn-max .bn-ico svg { color: #fff; }
 .tile-emoji svg { width: 34px; height: 34px; }
+
+/* sport-chip SVG icons: centered, purple, glowing like the rest of the icon set */
+.sport-chip { display: inline-flex; align-items: center; justify-content: center; }
+.sport-chip svg { color: #e4cfff; filter: drop-shadow(0 0 4px rgba(178, 107, 255, 0.5)); }
+.sport-chip.on svg { color: #fff; }

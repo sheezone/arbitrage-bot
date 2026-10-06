@@ -2593,7 +2593,20 @@ an_news: "News (injuries, form, suspensions)",
     headset: '<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/><path d="M19 19v.5A2.5 2.5 0 0 1 16.5 22H13"/>',
     gem: '<path d="M4.5 9 8 4h8l3.5 5L12 20.5 4.5 9z"/><path d="M4.5 9h15M8 4l1.8 5-1.8 0L8 4zM16 4l-1.8 5 1.8 0L16 4zM9.8 9 12 20.5 14.2 9"/>',
     chip: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 4v2.3M15 4v2.3M9 17.7V20M15 17.7V20M4 9h2.3M4 15h2.3M17.7 9H20M17.7 15H20"/><rect x="8.3" y="8.3" width="7.4" height="7.4" rx="1"/>',
+    football: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.3 15.7 10 14.3 14.3H9.7L8.3 10 12 7.3z"/><path d="M12 7.3V3.8M15.7 10l3.4-1.5M14.3 14.3l2.3 3.1M9.7 14.3l-2.3 3.1M8.3 10 4.9 8.5"/>',
+    hockey: '<ellipse cx="12" cy="18.5" rx="4.5" ry="1.7"/><path d="M15 4 8 16"/><path d="M8 16h3.2"/>',
+    basketball: '<circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5v17M6 5.3c2.4 2.6 2.4 11.8 0 13.4M18 5.3c-2.4 2.6-2.4 11.8 0 13.4"/>',
+    tennis: '<circle cx="12" cy="12" r="8.5"/><path d="M5.3 7c3 1 3 9 0 10M18.7 7c-3 1-3 9 0 10"/>',
+    gamepad: '<rect x="2.5" y="8" width="19" height="10" rx="5"/><path d="M7 11v4M5 13h4"/><circle cx="16" cy="11.5" r="1"/><circle cx="18.5" cy="14" r="1"/>',
+    table_tennis: '<circle cx="9" cy="9" r="5.3"/><circle cx="9" cy="9" r="1" fill="currentColor"/><path d="M12.7 12.7 19 19M16.3 15.5l3-3"/>',
+    volleyball: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5c3 2.2 3 15.3 0 17M4 9.3c3.6-1.3 11.4-1.3 16.6 1M3.4 14.7C7 16 16.3 15.3 20.4 12"/>',
+    fist: '<path d="M8 11V7.3a1.7 1.7 0 0 1 3.3 0M11.3 11V6.7a1.7 1.7 0 0 1 3.4 0M14.7 11V7.3a1.7 1.7 0 0 1 3.3 0V14a5.5 5.5 0 0 1-5.5 5.5h-2A5.5 5.5 0 0 1 5 14v-2a1.7 1.7 0 0 1 3-1.1"/>',
+    glove: '<path d="M7.5 10.5V7a1.6 1.6 0 0 1 3.2 0v3M10.7 10V6.3a1.6 1.6 0 0 1 3.2 0V10M13.9 10.3V7a1.6 1.6 0 0 1 3.2 0v6.5c0 3.6-2.5 6.3-6 6.3h-.6c-3 0-5-1.6-5.9-4.2L3 11.3a1.4 1.4 0 0 1 2.5-1.2L7 12.5"/>',
+    cards: '<rect x="3" y="6" width="12" height="15" rx="2" transform="rotate(-8 3 6)"/><rect x="9" y="4" width="12" height="15" rx="2"/>',
   };
+  const SPORT_ICON_NAME = { football: "football", hockey: "hockey", basketball: "basketball", tennis: "tennis",
+    esports: "gamepad", table_tennis: "table_tennis", volleyball: "volleyball", mma: "fist", boxing: "glove" };
+  function sportIcon(key, size) { return icon(SPORT_ICON_NAME[key] || "trophy", size || 15); }
   function icon(name, size) {
     const s = size || 22;
     return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
@@ -2698,7 +2711,9 @@ an_news: "News (injuries, form, suspensions)",
     return `${crest(m.team_a, m.team_a_logo, m.team_a_flag)}${esc(m.team_a)} — ${crest(m.team_b, m.team_b_logo, m.team_b_flag)}${esc(m.team_b)}`;
   }
 
-  const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐", mma: "🥋", boxing: "🥊" };
+  const SPORT_EMOJI = { football: sportIcon("football"), hockey: sportIcon("hockey"), basketball: sportIcon("basketball"),
+    tennis: sportIcon("tennis"), esports: sportIcon("esports"), table_tennis: sportIcon("table_tennis"),
+    volleyball: sportIcon("volleyball"), mma: sportIcon("mma"), boxing: sportIcon("boxing") };
   let aiSport = "";
   try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
   let aiGame = "";  // esports discipline (CS, Dota 2, LoL...), only when aiSport === "esports"
@@ -2728,7 +2743,7 @@ an_news: "News (injuries, form, suspensions)",
       <h3 class="sec-h">${tr("or_pick")}</h3>
       <div class="sport-chips">
         <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
-        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sp.emoji}</button>`).join("")}
+        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sportIcon(sp.key, 20)}</button>`).join("")}
       </div>
       ${aiSport === "esports" && (data.games || []).length ? `<div class="sport-chips game-chips">
         <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
@@ -2739,7 +2754,7 @@ an_news: "News (injuries, form, suspensions)",
     for (const m of data.matches) {
       if (m.league !== league) {
         league = m.league;
-        html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(league)}</div>`;
+        html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || icon("trophy", 15)} ${esc(league)}</div>`;
       }
       html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
         <span class="ai-teams">${teamsLine(m)}</span>
@@ -2909,7 +2924,7 @@ an_news: "News (injuries, form, suspensions)",
     if (!w || !w.total) return "";
     const pct = Math.round((w.wins / w.total) * 100);
     const rows = Object.entries(w.by_sport || {}).sort((a, b) => b[1].total - a[1].total).map(([k, v]) =>
-      `<div class="ws-row"><span>${SPORT_EMOJI[k] || "🏆"}</span><span class="ws-bar"><i style="width:${Math.round((v.wins / v.total) * 100)}%"></i></span><b>${v.wins}/${v.total}</b></div>`).join("");
+      `<div class="ws-row"><span>${SPORT_EMOJI[k] || icon("trophy", 15)}</span><span class="ws-bar"><i style="width:${Math.round((v.wins / v.total) * 100)}%"></i></span><b>${v.wins}/${v.total}</b></div>`).join("");
     return `<div class="ws-block"><div class="an-h">${tr("ws_title")}</div>
       <div class="ws-main"><b>${pct}%</b> · ${tr("ws_sub", { w: w.wins, n: w.total })}</div>${rows}</div>`;
   }
