@@ -2672,7 +2672,9 @@ an_news: "News (injuries, form, suspensions)",
   const GAME_SHORT = { "Counter-Strike": "CS2", "Dota 2": "Dota 2", "LoL": "LoL", "Valorant": "Valorant",
     "Mobile Legends": "MLBB", "Rainbow Six Siege": "R6", "KoG": "HoK", "StarCraft II": "SC2" };
 
+  let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
   async function renderAiMatches() {
+    aiInAnalysis = false;
     const q = aiSport ? `?sport=${encodeURIComponent(aiSport)}${aiSport === "esports" && aiGame ? `&game=${encodeURIComponent(aiGame)}` : ""}` : "";
     const data = await api(`/api/ai/matches${q}`);
     const h = homeCache;
@@ -2820,6 +2822,7 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   async function renderAiAnalysis(url) {
+    aiInAnalysis = true;
     haptic("light");
     content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div><div class="ai-sub">${tr("loading_sub")}</div></div>`;
     window.scrollTo(0, 0);
@@ -3057,7 +3060,15 @@ an_news: "News (injuries, form, suspensions)",
   const brand = document.querySelector(".brand");
   if (brand) brand.addEventListener("click", () => go("home"));
   const screenBack = document.getElementById("screen-back");
-  if (screenBack) screenBack.addEventListener("click", () => go(PARENT[currentTab] || "home"));
+  if (screenBack) screenBack.addEventListener("click", () => {
+    if (currentTab === "ai" && aiInAnalysis) {
+      haptic("light");
+      renderAiMatches().catch((e) => toast(e.message));
+      window.scrollTo(0, 0);
+      return;
+    }
+    go(PARENT[currentTab] || "home");
+  });
   renderUserChip();
   applyNavLabels();
 
