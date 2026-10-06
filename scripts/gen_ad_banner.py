@@ -129,7 +129,7 @@ def main():
 
     # hero stat, gradient
     stat_font = ImageFont.truetype(BOLD, 118 * S)
-    stat = "77%"
+    stat = "83%"
     b = d.textbbox((0, 0), stat, font=stat_font)
     mask = Image.new("L", (W, H), 0)
     ImageDraw.Draw(mask).text((x0, 270 * S), stat, font=stat_font, fill=255)
