@@ -60,6 +60,16 @@ TOP_LEAGUES = (
     "Англия. Чемпионшип", "Бельгия. Премьер-Лига", "Шотландия. Премьер-Лига",
     "США. MLS", "Бразилия. Серия А", "Аргентина. Премьер-Лига",
 )
+# Tournament-tier keywords for sports where Fonbet prices every match the same (just a
+# bare winner line) regardless of fame, so market size can't tell a big one apart --
+# esports, volleyball, table tennis (see FootballMatch.is_popular).
+TOP_TOURNAMENT_KEYWORDS = {
+    "esports": ("ESL Pro League", "Major", "IEM", "BLAST", "PGL", "Champions", "EMEA Masters",
+                "Worlds", "The International", "LCK", "LPL", "LCS", "LEC", "VCT", "Six Invitational"),
+    "volleyball": ("Суперлига", "Серия A1", "PlusLiga", "Чемпионат мира", "Чемпионат Европы",
+                   "Лига чемпионов", "Лига наций"),
+    "table_tennis": ("Чемпионат мира", "Чемпионат Европы", "WTT", "Лига чемпионов"),
+}
 
 
 @dataclass(frozen=True)
@@ -97,12 +107,21 @@ class FootballMatch:
     def is_popular(self) -> bool:
         """Only matches people have actually heard of go into the public hit-rate stats
         (owner 2026-10-05: "кидай туда где самые популярные события а не какие-то
-        ноунеймы"). Football: a top league. Other sports: enough markets priced that the
-        bookmaker itself treats it as a major event (a reserve/youth/obscure fixture gets
-        a short, thin line)."""
+        ноунеймы", then 2026-10-06: a market-size cut-off doesn't actually work for
+        esports/tennis/volleyball/table_tennis -- Fonbet prices ALL of them with just a
+        bare winner line (2 options, fame or not: owner saw real CS2/basketball wins
+        missing from stats because of this), so those sports are judged by tournament
+        tier instead. Basketball's line really does vary with how big the match is, so
+        it keeps the market-size rule."""
         if self.sport == "football":
             return self.priority < len(TOP_LEAGUES)
-        return len(self.options) >= 6
+        if self.sport == "basketball":
+            return len(self.options) >= 6
+        if self.sport == "tennis":
+            if "Челленджер" in self.league or "125K" in self.league or self.league.endswith("Пары"):
+                return False
+            return self.league.startswith(("ATP.", "WTA."))
+        return any(kw in self.league for kw in TOP_TOURNAMENT_KEYWORDS.get(self.sport, ()))
 
 
 def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = HORIZON,
