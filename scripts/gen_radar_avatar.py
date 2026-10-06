@@ -1,4 +1,4 @@
-"""Матч-Радар avatar (channel / bot photo): purple radar -- tick-marked outer dial, many
+"""Матч Радар avatar (channel / bot photo): purple radar -- tick-marked outer dial, many
 thin rings, crosshair + diagonals, a soft fading sweep and glowing blips.
 Run: python scripts/gen_radar_avatar.py -> bot/assets/radar_avatar.png (1024x1024)."""
 from __future__ import annotations

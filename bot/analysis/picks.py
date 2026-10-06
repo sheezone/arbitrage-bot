@@ -122,7 +122,7 @@ async def push_new_expresses(repo: Repository, bot, webapp_url: str, admin_chat_
         return 0
     day_start = now.astimezone(MSK).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
     teaser_today = repo.expresses_sent_since(day_start.isoformat()) == 0
-    button = [[InlineKeyboardButton(text="📡 Открыть в Матч-Радаре", web_app=WebAppInfo(url=webapp_url))]] if webapp_url else []
+    button = [[InlineKeyboardButton(text="📡 Открыть в Матч Радаре", web_app=WebAppInfo(url=webapp_url))]] if webapp_url else []
     sent = 0
     for express in fresh:
         repo.mark_express_sent(express_key(express))

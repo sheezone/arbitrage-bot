@@ -1178,7 +1178,7 @@ def register_handlers(
                 return
         ref = f"https://t.me/{bot_username}?start={chat_id}" if bot_username else ""
         text = (
-            "📡 <b>Матч-Радар</b> — ИИ-аналитика футбольных матчей\n\n"
+            "📡 <b>Матч Радар</b> — ИИ-аналитика футбольных матчей\n\n"
             "🧠 Шансы в процентах на любой матч — по названиям или скриншоту\n"
             "📋 Готовые прогнозы и 📈 экспрессы каждый день\n"
             "⚡ Вилки у 9 лицензированных букмекеров\n\n"
@@ -1188,7 +1188,7 @@ def register_handlers(
         )
         rows = []
         if webapp_url:
-            rows.append([InlineKeyboardButton(text="📡 Открыть Матч-Радар", web_app=WebAppInfo(url=webapp_url))])
+            rows.append([InlineKeyboardButton(text="📡 Открыть Матч Радар", web_app=WebAppInfo(url=webapp_url))])
         support = await _support_url(bot, chat_id)
         if support:
             rows.append([InlineKeyboardButton(text="🎧 Поддержка", url=support)])
@@ -1578,7 +1578,7 @@ def register_handlers(
             await callback.message.edit_text(
                 f"🟢 Поиск вилок запущен до {until_txt} МСК. Новые вилки будут приходить сюда.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-                    text="📡 Открыть Матч-Радар", web_app=WebAppInfo(url=webapp_url))]]) if webapp_url else None,
+                    text="📡 Открыть Матч Радар", web_app=WebAppInfo(url=webapp_url))]]) if webapp_url else None,
             )
         except Exception:
             pass

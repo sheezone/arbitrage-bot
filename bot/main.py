@@ -62,7 +62,7 @@ def _open_app_markup(_language: str = "ru"):
     url = os.environ.get("WEBAPP_URL", "").rstrip("/")
     if not url:
         return None
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📡 Открыть Матч-Радар", web_app=WebAppInfo(url=url))]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📡 Открыть Матч Радар", web_app=WebAppInfo(url=url))]])
 
 
 async def main() -> None:
@@ -240,7 +240,7 @@ async def main() -> None:
         try:
             await bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
-                    text="📡 Матч-Радар",
+                    text="📡 Матч Радар",
                     # ?v= changes on every restart: Telegram clients cache the Mini App page
                     # by URL, so a new deploy would otherwise keep showing the old version.
                     web_app=WebAppInfo(url=f"{config.webapp_url}/?v={int(time.time())}"),

@@ -1,4 +1,4 @@
-"""Channel announcement banner for the Матч-Радар relaunch post (owner 2026-10-06).
+"""Channel announcement banner for the Матч Радар relaunch post (owner 2026-10-06).
 Layout: glowing radar on the right, clean text column on the left (no overlap), sport
 "pills" row and a CTA pill at the bottom. Rendered at 2x and downscaled for smooth edges.
 Run: python scripts/gen_update_banner.py -> bot/assets/update_banner.png (1280x720)."""
@@ -123,7 +123,7 @@ def main():
          (60, 25, 110), (178, 107, 255), (230, 205, 255))
 
     title = ImageFont.truetype(BOLD, 92 * S)
-    d.text((x0, 150 * S), "МАТЧ-РАДАР", font=title, fill=WHITE)
+    d.text((x0, 150 * S), "МАТЧ РАДАР", font=title, fill=WHITE)
     # gradient second line
     grad_font = ImageFont.truetype(BOLD, 54 * S)
     text = "ИИ-аналитика спорта"
