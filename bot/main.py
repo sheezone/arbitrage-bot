@@ -129,6 +129,7 @@ async def main() -> None:
         analyzer = Analyzer(
             repo, config.anthropic_api_key, model=config.news_model,
             api_football_key=config.api_football_key, football_data_key=config.football_data_key,
+            bot=bot, admin_chat_ids=config.admin_chat_ids,
         )
         settle_task = asyncio.create_task(run_settler(repo))
         from bot.analysis.logos import run_logo_filler
@@ -222,6 +223,7 @@ async def main() -> None:
                 posts_per_day=config.news_posts_per_day,
                 channel_username=config.required_channel_username,
                 bot_username=me.username or "",
+                admin_chat_ids=config.admin_chat_ids,
             ).run()
         )
 

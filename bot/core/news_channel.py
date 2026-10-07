@@ -253,8 +253,10 @@ def build_caption(post: dict, channel_username: str, bot_username: str) -> str:
 
 class NewsPoster:
     def __init__(self, bot: Bot, repo: Repository, chat_id: int, api_key: str, *, model: str,
-                 posts_per_day: int, channel_username: str, bot_username: str):
+                 posts_per_day: int, channel_username: str, bot_username: str,
+                 admin_chat_ids: frozenset[int] = frozenset()):
         self.bot, self.repo, self.chat_id = bot, repo, chat_id
+        self.admin_chat_ids = admin_chat_ids
         self.model = model
         self.posts_per_day = posts_per_day
         self.channel_username, self.bot_username = channel_username, bot_username
@@ -273,6 +275,9 @@ class NewsPoster:
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
         )
+        from bot.analysis.token_budget import record as _record_token_usage
+
+        await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
         if response.stop_reason in ("refusal", "max_tokens"):
             logger.warning("News: Claude stopped with %s", response.stop_reason)
             return None

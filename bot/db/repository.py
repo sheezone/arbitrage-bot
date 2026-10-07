@@ -319,6 +319,35 @@ class Repository:
     def fight_highlights_since(self, since_iso: str) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM fight_highlights WHERE posted_at >= ?", (since_iso,)).fetchone()[0]
 
+    def add_ai_token_usage(self, n: int) -> int:
+        self._conn.execute(
+            "INSERT INTO ai_token_usage (id, total) VALUES (1, ?) "
+            "ON CONFLICT(id) DO UPDATE SET total = total + excluded.total",
+            (n,),
+        )
+        self._conn.commit()
+        row = self._conn.execute("SELECT total FROM ai_token_usage WHERE id = 1").fetchone()
+        return int(row[0]) if row else n
+
+    def ai_token_usage(self) -> int:
+        row = self._conn.execute("SELECT total FROM ai_token_usage WHERE id = 1").fetchone()
+        return int(row[0]) if row else 0
+
+    def reset_ai_token_usage(self) -> None:
+        self._conn.execute("INSERT OR REPLACE INTO ai_token_usage (id, total) VALUES (1, 0)")
+        self._conn.execute("DELETE FROM ai_budget_alerts")
+        self._conn.commit()
+
+    def alert_sent(self, key: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM ai_budget_alerts WHERE key = ?", (key,)).fetchone() is not None
+
+    def mark_alert_sent(self, key: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO ai_budget_alerts (key, sent_at) VALUES (?, ?)",
+            (key, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
     def goal_score(self, event_id: str) -> tuple[int, int] | None:
         row = self._conn.execute("SELECT score1, score2 FROM goal_alerts WHERE event_id = ?", (event_id,)).fetchone()
         return (row[0], row[1]) if row else None

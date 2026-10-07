@@ -228,11 +228,13 @@ def _normalise(probs: dict) -> dict:
 
 class Analyzer:
     def __init__(self, repo: Repository, api_key: str, *, model: str, api_football_key: str = "",
-                 football_data_key: str = ""):
+                 football_data_key: str = "", bot=None, admin_chat_ids: frozenset[int] = frozenset()):
         self.repo = repo
         self.model = model
         self.api_football_key = api_football_key
         self.football_data_key = football_data_key
+        self.bot = bot
+        self.admin_chat_ids = admin_chat_ids
         self.claude = anthropic.AsyncAnthropic(api_key=api_key)
         self._locks: dict[str, asyncio.Lock] = {}
         # analyses of matches not in the line (no pick to settle): memory only
@@ -358,6 +360,9 @@ class Analyzer:
                 if response.stop_reason != "pause_turn":
                     break
                 messages = messages + [{"role": "assistant", "content": response.content}]
+            from bot.analysis.token_budget import record as _record_token_usage
+
+            await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
             if response.stop_reason == "refusal":
                 return ""
             return "\n".join(b.text for b in response.content if b.type == "text").strip()[:6000]
@@ -402,6 +407,9 @@ class Analyzer:
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
         )
+        from bot.analysis.token_budget import record as _record_token_usage
+
+        await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
         if response.stop_reason in ("refusal", "max_tokens"):
             logger.warning("AI call stopped: %s", response.stop_reason)
             return None

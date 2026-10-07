@@ -165,3 +165,7 @@ CREATE TABLE IF NOT EXISTS fight_highlights (
     match_id TEXT PRIMARY KEY,
     posted_at TEXT NOT NULL
 );
+
+-- cumulative AI token spend against the reseller key's budget (bot/analysis/token_budget.py)
+CREATE TABLE IF NOT EXISTS ai_token_usage (id INTEGER PRIMARY KEY CHECK (id = 1), total INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS ai_budget_alerts (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL);
