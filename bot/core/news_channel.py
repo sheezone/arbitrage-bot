@@ -241,7 +241,7 @@ def build_caption(post: dict, channel_username: str, bot_username: str) -> str:
     if channel_username:
         footer.append(f'⚽️ <a href="https://t.me/{channel_username}">Подписаться</a>')
     if bot_username:
-        footer.append(f'<a href="https://t.me/{bot_username}">Бот вилок</a>')
+        footer.append(f'<a href="https://t.me/{bot_username}">Матч Радар</a>')
     text = "\n\n".join(parts)
     tail = ("\n\n" + " · ".join(footer)) if footer else ""
     visible_tail = len(re.sub(r"<[^>]+>", "", tail))

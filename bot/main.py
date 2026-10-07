@@ -227,13 +227,9 @@ async def main() -> None:
             ).run()
         )
 
-    goals_task: asyncio.Task | None = None
-    if config.news_chat_id:
-        from bot.core.goal_alerts import run_goal_alerts
-
-        goals_task = asyncio.create_task(  # noqa: F841 (lives with the process)
-            run_goal_alerts(bot, repo, config.news_chat_id, config.required_channel_username)
-        )
+    # «ГООООЛ!» channel posts were tried 2026-10-07 and the owner didn't want them
+    # (bot/core/goal_alerts.py kept around unregistered rather than deleted, in case
+    # that changes later).
 
     try:
         await bot.set_my_commands([BotCommand(command="start", description="Запуск бота / показать меню")])
