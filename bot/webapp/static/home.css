@@ -483,3 +483,7 @@ body {
 .sport-chip { display: inline-flex; align-items: center; justify-content: center; }
 .sport-chip svg { color: #e4cfff; filter: drop-shadow(0 0 4px rgba(178, 107, 255, 0.5)); }
 .sport-chip.on svg { color: #fff; }
+
+/* pick cards in "Готовые прогнозы" open the full разбор on tap */
+.pk-clickable { cursor: pointer; }
+.pk-clickable:active { transform: translateY(2px); }

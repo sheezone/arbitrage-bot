@@ -419,6 +419,32 @@ def register_api(
         return {"match": out, "analysis": result, "in_line": in_line,
                 "hit_rate": {"wins": wins, "total": total, "min_total": 20}}
 
+    @app.get("/api/ai/picks/view")
+    async def get_ai_pick_view(match_id: str, authorization: str | None = Header(default=None)):
+        """Reopens an already-computed разбор from «Готовые прогнозы» in full (owner
+        2026-10-09: tapping a pick card did nothing -- it only ever showed the one-line
+        reasoning). Unlike /api/ai/analysis this never touches the live catalog or the
+        AI: every pick shown there was already analysed by the daily job, so this is
+        just reading ai_analyses back -- free, and works for matches that have since
+        kicked off and dropped out of the line (settled/"recent" picks)."""
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        _get_user(repo, chat_id)
+        _log(chat_id, "ai_analysis")
+        row = repo.get_ai_analysis(match_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Разбор не найден")
+        analysis = json.loads(row["payload"])
+        out = _crests({
+            "id": row["match_id"], "team_a": row["team_a"], "team_b": row["team_b"], "league": row["league"],
+            "sport": row["sport"] if "sport" in row.keys() else "football",
+            "start_utc": row["start_utc"], "start_label": format_match_start(row["start_utc"]),
+            "team_a_flag": get_team_flag(row["team_a"]), "team_b_flag": get_team_flag(row["team_b"]),
+        })
+        wins, total = repo.ai_hit_rate()
+        return {"match": out, "analysis": analysis, "in_line": bool(analysis.get("pick")),
+                "hit_rate": {"wins": wins, "total": total, "min_total": 20}}
+
     @app.get("/api/ai/analysis")
     async def get_ai_analysis(match_id: str, authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)

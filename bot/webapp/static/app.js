@@ -2721,6 +2721,7 @@ an_news: "News (injuries, form, suspensions)",
     "Mobile Legends": "MLBB", "Rainbow Six Siege": "R6", "KoG": "HoK", "StarCraft II": "SC2" };
 
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
+  let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
   async function renderAiMatches() {
     aiInAnalysis = false;
     const hasSubTabs = aiSport === "esports" || aiSport === "combat";
@@ -2870,8 +2871,9 @@ an_news: "News (injuries, form, suspensions)",
     </div>`;
   }
 
-  async function renderAiAnalysis(url) {
+  async function renderAiAnalysis(url, returnTo) {
     aiInAnalysis = true;
+    analysisReturnTo = returnTo || renderAiMatches;
     haptic("light");
     content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div><div class="ai-sub">${tr("loading_sub")}</div></div>`;
     window.scrollTo(0, 0);
@@ -2881,7 +2883,7 @@ an_news: "News (injuries, form, suspensions)",
     } catch (e) {
       toast(e.message);
       if (e.status === 429 && homeCache && !homeCache.has_access) return switchTab("sub");
-      return renderAiMatches();
+      return analysisReturnTo();
     }
     if (homeCache) homeCache.ai_quota.used = Math.max(homeCache.ai_quota.used, 1);
     const a = data.analysis;
@@ -2917,7 +2919,7 @@ an_news: "News (injuries, form, suspensions)",
       ${verdictBlock(a, m)}
       <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>${tr("an_foot")}</p></div>
       <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
-    document.getElementById("an-back").addEventListener("click", () => renderAiMatches());
+    document.getElementById("an-back").addEventListener("click", () => analysisReturnTo());
   }
 
   // "Who wins" accuracy: the AI's own favourite (highest %) vs the final score.
@@ -2946,13 +2948,18 @@ an_news: "News (injuries, form, suspensions)",
       : `${predictedLine(p)}<div class="pk-pick">🎯 ${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span></div>
          <div class="an-conf">${confMeter(p.confidence)}</div>
          ${p.reasoning ? `<div class="pk-why">${esc(p.reasoning)}</div>` : ""}`;
-    return `<div class="pk-card">
+    // Openable (full разбор on tap) whenever we actually have a match_id and the
+    // pick isn't paywall-hidden -- owner 2026-10-09: "нажимаешь на события а они
+    // полностью не открываются" (the card only ever showed the one-line reasoning).
+    const openable = !p.locked && p.match_id;
+    return `<div class="pk-card${openable ? " pk-clickable" : ""}"${openable ? ` data-id="${esc(p.match_id)}"` : ""}>
       <div class="pk-top"><span class="pk-league">${esc(p.league)}</span>${res}</div>
       <div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${teamsLine(p)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
       ${body}</div>`;
   }
 
   async function renderPicks() {
+    aiInAnalysis = false;
     const data = await api("/api/ai/picks");
     const h = homeCache ? homeCache.hit_rate : null;
     let html = `<div class="pk-stat">${hitBadge(h)}<div class="ai-sub">${tr("pk_note")}</div></div>`;
@@ -2962,6 +2969,10 @@ an_news: "News (injuries, form, suspensions)",
     if (data.recent.length) html += `<h3 class="sec-h">${tr("recent")}</h3>` + data.recent.map(pickCard).join("");
     content.innerHTML = html;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+    content.querySelectorAll(".pk-clickable").forEach((el) => el.addEventListener("click", () => {
+      haptic("light");
+      renderAiAnalysis(`/api/ai/picks/view?match_id=${encodeURIComponent(el.dataset.id)}`, renderPicks);
+    }));
   }
 
   function exCard(e, title, mine) {
@@ -3145,9 +3156,9 @@ an_news: "News (injuries, form, suspensions)",
   if (brand) brand.addEventListener("click", () => go("home"));
   const screenBack = document.getElementById("screen-back");
   if (screenBack) screenBack.addEventListener("click", () => {
-    if (currentTab === "ai" && aiInAnalysis) {
+    if (aiInAnalysis && analysisReturnTo) {
       haptic("light");
-      renderAiMatches().catch((e) => toast(e.message));
+      analysisReturnTo().catch((e) => toast(e.message));
       window.scrollTo(0, 0);
       return;
     }
