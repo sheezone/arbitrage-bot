@@ -169,3 +169,13 @@ CREATE TABLE IF NOT EXISTS fight_highlights (
 -- cumulative AI token spend against the reseller key's budget (bot/analysis/token_budget.py)
 CREATE TABLE IF NOT EXISTS ai_token_usage (id INTEGER PRIMARY KEY CHECK (id = 1), total INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS ai_budget_alerts (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL);
+
+-- what people actually do in the app, for the admin "активность" screen (owner
+-- 2026-10-09). Admins are never logged here (filtered at write time).
+CREATE TABLE IF NOT EXISTS user_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_user_activity_created ON user_activity (created_at);

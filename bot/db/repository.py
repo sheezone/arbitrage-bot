@@ -319,6 +319,43 @@ class Repository:
     def fight_highlights_since(self, since_iso: str) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM fight_highlights WHERE posted_at >= ?", (since_iso,)).fetchone()[0]
 
+    def log_activity(self, chat_id: int, action: str) -> None:
+        self._conn.execute(
+            "INSERT INTO user_activity (chat_id, action, created_at) VALUES (?, ?, ?)",
+            (chat_id, action, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def activity_summary(self, since_iso: str, exclude_chat_ids: frozenset[int] = frozenset()) -> dict:
+        """Admin "активность" screen (owner 2026-10-09): who actually used the app
+        today and what they did most, admins excluded entirely."""
+        exclude = exclude_chat_ids or frozenset({0})  # NOT IN () is invalid SQL, keep a harmless id
+        qmarks = ",".join("?" * len(exclude))
+        rows = self._conn.execute(
+            f"SELECT action, COUNT(*), COUNT(DISTINCT chat_id) FROM user_activity "
+            f"WHERE created_at >= ? AND chat_id NOT IN ({qmarks}) GROUP BY action ORDER BY COUNT(*) DESC",
+            (since_iso, *exclude),
+        ).fetchall()
+        active_users = self._conn.execute(
+            f"SELECT COUNT(DISTINCT chat_id) FROM user_activity WHERE created_at >= ? AND chat_id NOT IN ({qmarks})",
+            (since_iso, *exclude),
+        ).fetchone()[0]
+        return {
+            "active_users": active_users,
+            "actions": [{"action": r[0], "count": r[1], "users": r[2]} for r in rows],
+            "total_actions": sum(r[1] for r in rows),
+        }
+
+    def recent_active_users(self, since_iso: str, exclude_chat_ids: frozenset[int] = frozenset(), limit: int = 30) -> list[sqlite3.Row]:
+        exclude = exclude_chat_ids or frozenset({0})
+        qmarks = ",".join("?" * len(exclude))
+        return self._conn.execute(
+            f"SELECT chat_id, COUNT(*) AS n, MAX(created_at) AS last_at, GROUP_CONCAT(DISTINCT action) AS actions "
+            f"FROM user_activity WHERE created_at >= ? AND chat_id NOT IN ({qmarks}) "
+            f"GROUP BY chat_id ORDER BY last_at DESC LIMIT ?",
+            (since_iso, *exclude, limit),
+        ).fetchall()
+
     def add_ai_token_usage(self, n: int) -> int:
         self._conn.execute(
             "INSERT INTO ai_token_usage (id, total) VALUES (1, ?) "

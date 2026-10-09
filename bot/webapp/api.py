@@ -231,6 +231,16 @@ def register_api(
             return None, used
         return (AI_PAID_PER_DAY if billing.has_access(user, now, admin_chat_ids) else AI_FREE_PER_DAY), used
 
+    def _log(chat_id: int, action: str) -> None:
+        # Admin "активность" screen (owner 2026-10-09): admins themselves are never
+        # logged, so their own testing/poking around never pollutes the numbers.
+        if chat_id in admin_chat_ids:
+            return
+        try:
+            repo.log_activity(chat_id, action)
+        except Exception:
+            logger.exception("Activity log failed for %s/%s", chat_id, action)
+
     def _crests(d: dict) -> dict:
         sport = d.get("sport") or "football"
         return {**d, "team_a_logo": repo.team_logo(d["team_a"], sport) or None,
@@ -266,6 +276,7 @@ def register_api(
     async def get_home(authorization: str | None = Header(default=None)):
         chat_id = _auth(authorization)
         user = _get_user(repo, chat_id)
+        _log(chat_id, "open_app")
         now = datetime.now(timezone.utc)
         wins, total = repo.ai_hit_rate()
         limit, used = _ai_quota(user, now)
@@ -361,6 +372,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         _get_user(repo, chat_id)
+        _log(chat_id, "ai_matches")
         try:
             matches = await get_catalog(sport if sport in SPORTS else None, game if sport in ("esports", "combat") else None)
             if sport == "esports":
@@ -412,6 +424,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
+        _log(chat_id, "ai_analysis")
         match = await find_match(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="Матч уже начался или пропал из линии")
@@ -425,6 +438,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
+        _log(chat_id, "ai_analysis")
         team_a, team_b = team_a.strip()[:60], team_b.strip()[:60]
         if not team_a or not team_b or team_a.lower() == team_b.lower():
             raise HTTPException(status_code=400, detail="Введите две разные команды")
@@ -454,6 +468,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         _get_user(repo, chat_id)
+        _log(chat_id, "ai_screenshot")
         if analyzer is None:
             raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
         if body.media_type not in ("image/jpeg", "image/png", "image/webp") or len(body.image) > 6_000_000:
@@ -475,6 +490,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
+        _log(chat_id, "picks")
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
         upcoming = [_crests(p) for p in upcoming_picks(repo)]
         recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(20)]
@@ -516,6 +532,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
+        _log(chat_id, "express_find")
         now = datetime.now(timezone.utc)
         quota = _express_quota(user, now)
         use_bonus = quota["left"] == 0 and repo.bonus_expresses(chat_id) > 0
@@ -551,6 +568,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         user = _get_user(repo, chat_id)
+        _log(chat_id, "express")
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
         expresses = [{**e, "legs": [_crests(p) for p in e["legs"]]} for e in build_expresses(upcoming_picks(repo))]
         if not pro:
@@ -571,6 +589,7 @@ def register_api(
         chat_id = _auth(authorization)
         await _require_subscribed(chat_id)
         _get_user(repo, chat_id)  # ensures the row exists
+        _log(chat_id, "settings")
 
         if body.bankroll is not None:
             if body.bankroll <= 0:
@@ -872,6 +891,33 @@ def register_api(
                  "stake": b["stake"], "result": b["result"], "payout": b["payout"], "placed_at": b["placed_at"]}
                 for b in repo.ai_bets_since((now - timedelta(days=14)).isoformat())]
         return {**summary, "week_start": week_start.isoformat(), "bets": bets}
+
+    ACTION_LABELS = {
+        "open_app": "Открыл приложение", "ai_matches": "Листал матчи ИИ", "ai_analysis": "Разбор матча",
+        "ai_screenshot": "Разбор по скриншоту", "picks": "Готовые прогнозы", "express": "Экспрессы",
+        "express_find": "Искал экспресс", "settings": "Настройки",
+    }
+
+    @app.get("/api/admin/activity")
+    async def get_admin_activity(authorization: str | None = Header(default=None)):
+        """Admin-only: who actually used the app today and what they did most (owner
+        2026-10-09) -- admins are excluded everywhere here, both as viewers and as
+        logged activity (bot/webapp/api.py's _log never writes for an admin chat_id)."""
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        if not billing.is_admin(user, admin_chat_ids):
+            raise HTTPException(status_code=403, detail="Только для администраторов")
+        now = datetime.now(timezone.utc)
+        day_start = now.astimezone(MSK_TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        summary = repo.activity_summary(day_start.isoformat(), admin_chat_ids)
+        recent = repo.recent_active_users(day_start.isoformat(), admin_chat_ids, limit=30)
+        return {
+            "active_users": summary["active_users"],
+            "total_actions": summary["total_actions"],
+            "actions": [{**a, "label": ACTION_LABELS.get(a["action"], a["action"])} for a in summary["actions"]],
+            "users": [{"chat_id": r["chat_id"], "count": r["n"], "last_at": r["last_at"],
+                      "actions": r["actions"].split(",") if r["actions"] else []} for r in recent],
+        }
 
     @app.get("/api/admin/stats")
     async def get_admin_stats(authorization: str | None = Header(default=None)):

@@ -2191,6 +2191,7 @@ an_news: "News (injuries, form, suspensions)",
 
     content.innerHTML = `
       <button type="button" class="pro-buy wide" id="admin-bank-btn" style="margin-bottom:10px">🤖 ИИ-банк — виртуальные 10 000 ₽</button>
+      <button type="button" class="btn-ghost wide" id="admin-activity-btn" style="margin-bottom:10px">📊 Активность за сегодня</button>
       <div class="section-title">${t("admin_users")}</div>
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_total")}</div></div>
@@ -3056,7 +3057,42 @@ an_news: "News (injuries, form, suspensions)",
   function wireAdminBankBtn() {
     const b = document.getElementById("admin-bank-btn");
     if (b) b.addEventListener("click", () => { haptic("light"); renderAiBankroll(); });
+    const a = document.getElementById("admin-activity-btn");
+    if (a) a.addEventListener("click", () => { haptic("light"); renderAdminActivity(); });
   }
+
+  // Who actually used the app today and what they did most, admins excluded entirely
+  // both as viewers and from the numbers themselves (owner 2026-10-09).
+  async function renderAdminActivity() {
+    const s = await api("/api/admin/activity");
+    const maxCount = Math.max(1, ...s.actions.map((a) => a.count));
+    const actionRows = s.actions.length
+      ? s.actions.map((a) => `<div class="ws-row"><span>${esc(a.label)}</span><span class="ws-bar"><i style="width:${Math.round((a.count / maxCount) * 100)}%"></i></span><b>${a.count}</b></div>`).join("")
+      : `<div class="news-empty">Сегодня действий ещё не было</div>`;
+    const userRows = s.users.length
+      ? s.users.map((u) => {
+          const time = u.last_at ? new Date(u.last_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
+          const acts = u.actions.map((a) => ACTION_LABELS_RU[a] || a).join(", ");
+          return `<div class="admin-user-row"><div class="admin-user-top"><span>${u.chat_id}</span><span>${time}</span></div>
+            <div class="admin-user-period">${u.count}× · ${esc(acts)}</div></div>`;
+        }).join("")
+      : `<div class="news-empty">Никто ещё не заходил сегодня</div>`;
+    content.innerHTML = `
+      <div class="st-hero">
+        <div class="st-big">${s.active_users}</div>
+        <div class="st-cap">Активных пользователей сегодня (без админов)</div>
+        <div class="ai-sub">Всего действий: ${s.total_actions}</div>
+      </div>
+      <h3 class="sec-h">Что делали чаще всего</h3>
+      ${actionRows}
+      <h3 class="sec-h">Последние активные (до 30)</h3>
+      ${userRows}
+      <button type="button" class="btn-ghost wide" id="activity-back">← К админке</button>`;
+    document.getElementById("activity-back").addEventListener("click", renderAdmin);
+  }
+  const ACTION_LABELS_RU = { open_app: "Открыл приложение", ai_matches: "Листал матчи ИИ", ai_analysis: "Разбор матча",
+    ai_screenshot: "Разбор по скриншоту", picks: "Готовые прогнозы", express: "Экспрессы",
+    express_find: "Искал экспресс", settings: "Настройки" };
 
   // Vilka search runs VILKI_RUN_DAYS after «Запустить», then switches itself off.
   async function vilkiRunBanner() {
