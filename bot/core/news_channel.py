@@ -94,22 +94,45 @@ PICK_SYSTEM = """Ты — главный редактор популярного
 не бери. Если достойных нет — верни index = -1."""
 
 WRITE_SYSTEM = """Ты пишешь посты для русскоязычного Telegram-канала о футболе. Стиль —
-живой, короткий, цепляющий, как у топовых футбольных каналов.
+живой, цепляющий, как у топовых футбольных каналов, но С КОНКРЕТИКОЙ, а не пустым
+тизером.
 
 Правила:
-- Только факты из присланного материала. Ничего не выдумывай: ни цифр, ни цитат, ни
-  подробностей. Цитаты можно приводить только дословно из материала.
+- Только факты из присланного материала (включая результаты веб-поиска, если они
+  есть). Ничего не выдумывай: ни цифр, ни цитат, ни подробностей. Цитаты можно
+  приводить только дословно из материала.
+- ГЛАВНОЕ: пост обязан отвечать на свой же заголовок. Если заголовок в духе «Холанд
+  высказался о...» — в тексте ОБЯЗАНА быть сама цитата или пересказ того, что именно
+  он сказал. Пост-анонс без самой новости («подробности в источнике», «что скажете?»
+  на пустом месте) — это брак, а не пост. Если в материале нет конкретики (только
+  заголовок без содержания, "скоро подробности" и т.п.) и веб-поиск её не нашёл —
+  skip = true, лучше не постить вообще, чем постить пустышку.
 - Пиши своими словами, не копируй фразы исходника целиком (кроме цитат).
-- headline — одна яркая фраза-заголовок (без эмодзи), до 120 символов.
+- headline — одна яркая фраза-заголовок (без эмодзи), до 120 символов. Заголовок не
+  обещает того, чего нет в тексте поста.
 - emoji — один подходящий эмодзи для начала поста (💥, 🔥, ⚡️, 😳, 🗣, ✍️, 🏆, 🚨 ...).
-- paragraphs — 1–3 коротких абзаца, всего не больше 550 символов.
+- paragraphs — 1–4 абзаца, всего не больше 900 символов. Пиши столько, сколько есть
+  реальных фактов — короткий пост с конкретикой лучше длинного с водой, но и резать
+  по живому реальные подробности (кто, что сказал, цифры, даты) не надо.
 - Никогда не называй, откуда новость: ни СМИ, ни сайты, ни Telegram-каналы, ни
   инсайдеров, ни журналистов. Если это слух, а не подтверждённый факт, так и подай
   («по слухам», «сообщается», «по информации СМИ») — но без названий.
-- question — короткий вопрос к подписчикам для вовлечения («Верим?», «Кто прав?») или
-  пустая строка, если он неуместен.
+- question — короткий вопрос к подписчикам для вовлечения, но только если в посте
+  реально есть что обсуждать (конкретное решение, цифра, цитата). Если спросить
+  буквально не о чем — пустая строка, не подставляй вопрос ради вопроса.
 - Без хэштегов, без ссылок, без призывов делать ставки.
-- skip = true, если материал пустой, о ставках/прогнозах или не о футболе."""
+- skip = true, если материал пустой, не о футболе, о ставках/прогнозах, или не
+  содержит ничего конкретнее заголовка."""
+
+RESEARCH_SYSTEM = """Ты собираешь подробности к футбольной новости для поста в Telegram.
+Дан заголовок и короткий тизер без подробностей. Найди в интернете, что именно
+произошло: цитаты, цифры, детали, реакцию участников. Выпиши только факты с короткой
+пометкой источника (сайт), до 10 пунктов. Если по этой конкретной новости в интернете
+ничего, кроме того же тизера, не нашлось — так и напиши."""
+NEWS_WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 4}
+# A teaser this short almost never carries the actual news (quote/numbers/what happened) --
+# worth spending a search call to find out what the headline is actually about.
+THIN_SUMMARY_CHARS = 220
 
 
 @dataclass
@@ -289,6 +312,30 @@ class NewsPoster:
         base = window_minutes / max(1, self.posts_per_day)
         return timedelta(minutes=base * random.uniform(0.8, 1.15))
 
+    async def _research(self, item: "NewsItem") -> str:
+        """Fills in the actual substance behind a thin teaser headline (owner
+        2026-10-09: "холанд высказался -- а что он высказался?") via the server-side
+        web search tool. Best effort: "" on any failure, same as ai.py's _research."""
+        messages = [{"role": "user", "content": f"Заголовок: {item.title}\nТизер: {item.summary}"}]
+        try:
+            for _ in range(3):
+                response = await self.claude.messages.create(
+                    model=self.model, max_tokens=4000, system=RESEARCH_SYSTEM,
+                    messages=messages, tools=[NEWS_WEB_SEARCH_TOOL], output_config={"effort": "low"},
+                )
+                if response.stop_reason != "pause_turn":
+                    break
+                messages = messages + [{"role": "assistant", "content": response.content}]
+            from bot.analysis.token_budget import record as _record_token_usage
+
+            await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
+            if response.stop_reason == "refusal":
+                return ""
+            return "\n".join(b.text for b in response.content if b.type == "text").strip()[:4000]
+        except Exception:
+            logger.warning("News research unavailable for %s", item.url, exc_info=True)
+            return ""
+
     async def post_one(self) -> bool:
         # photo posts only, and only clean (unbranded) photos -- see with_clean_photos
         items = [i for i in with_clean_photos(await gather_items(self.http)) if not self.repo.news_already_posted(i.url)]
@@ -310,6 +357,12 @@ class NewsPoster:
         related = related_texts(item, items)
         if related:
             material += "\n\nТа же история в других СМИ:\n" + "\n".join(related)
+        # Thin teaser ("X высказался о Y") with no real content anywhere we already
+        # have -- go find out what actually happened before writing the post.
+        if len(item.summary) < THIN_SUMMARY_CHARS and sum(len(r) for r in related) < THIN_SUMMARY_CHARS:
+            research = await self._research(item)
+            if research:
+                material += "\n\nНайдено в интернете:\n" + research
         post = await self._ask(WRITE_SYSTEM, material, POST_SCHEMA)
         self.repo.record_news_post(item.url, item.title)
         if not post or post["skip"]:
