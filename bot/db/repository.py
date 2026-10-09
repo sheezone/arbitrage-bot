@@ -213,15 +213,15 @@ class Repository:
         )
         self._conn.commit()
 
-    # A pick counts toward the public stats as a hit/miss by one of two measures,
-    # whichever fits the kind of pick the AI actually made (owner 2026-10-09: "если
-    # сыграло одно из двух событий -- либо победа, либо тотал который ты
-    # проанализировал"): for a win/1X2 pick, whether the predicted winner actually won
-    # (winner_result); for a totals pick, whether that over/under itself hit (result).
-    # Handicap picks have neither measure and stay out of the stats, same as before.
+    # A pick counts as a hit if EITHER of the two things the AI predicted came true
+    # (owner 2026-10-09, after "если одна из двух событий в матче стоит галочка --
+    # значит прогноз зашёл": a card can show both "ЦСКА 86%" (winner_result) and a
+    # totals bet (result) -- if either one actually hit, the card is a win overall,
+    # even when the other one missed). Only counts as a miss when at least one of the
+    # two was actually settled and neither hit; NULL (unsettled) if neither resolved.
     _STAT_HIT_SQL = (
-        "CASE WHEN option_kind IN ('1x2','winner') THEN winner_result "
-        "WHEN option_kind IN ('total_over','total_under') THEN result END"
+        "CASE WHEN winner_result = 'win' OR result = 'win' THEN 'win' "
+        "WHEN winner_result = 'lose' OR result = 'lose' THEN 'lose' END"
     )
 
     def ai_hit_rate(self, since_iso: str = "") -> tuple[int, int]:

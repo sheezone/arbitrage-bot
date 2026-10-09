@@ -35,6 +35,14 @@ EXPRESS_TOTAL = (2.0, 6.0)
 EXPRESS_COUNT = 3
 
 
+def _stat_hit(winner_result: str | None, result: str | None) -> str | None:
+    if winner_result == "win" or result == "win":
+        return "win"
+    if winner_result == "lose" or result == "lose":
+        return "lose"
+    return None
+
+
 def pick_from_row(row) -> dict:
     payload = json.loads(row["payload"])
     return {
@@ -53,12 +61,11 @@ def pick_from_row(row) -> dict:
         "predicted": predicted_outcome(row["payload"]),
         "probabilities": payload.get("probabilities"),
         "winner_result": row["winner_result"] if "winner_result" in row.keys() else None,
-        # What actually counts as a hit for THIS pick (owner 2026-10-09): a win/1X2
-        # pick is judged by the predicted winner, a totals pick by the total itself --
-        # matches Repository._STAT_HIT_SQL, so the app shows the same verdict it's
-        # counted by in the public stats.
-        "stat_result": (row["winner_result"] if row["option_kind"] in ("1x2", "winner") else row["result"])
-                       if "winner_result" in row.keys() else row["result"],
+        # What the card's badge shows (owner 2026-10-09: "если одна из двух событий в
+        # матче стоит галочка -- значит прогноз зашёл") -- a hit if EITHER the
+        # predicted winner won OR the pick itself (e.g. a total) hit, matching
+        # Repository._STAT_HIT_SQL so the app shows the same verdict it's counted by.
+        "stat_result": _stat_hit(row["winner_result"] if "winner_result" in row.keys() else None, row["result"]),
         "score": row["score"],
     }
 
