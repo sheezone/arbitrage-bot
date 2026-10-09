@@ -213,13 +213,24 @@ class Repository:
         )
         self._conn.commit()
 
+    # A pick counts toward the public stats as a hit/miss by one of two measures,
+    # whichever fits the kind of pick the AI actually made (owner 2026-10-09: "если
+    # сыграло одно из двух событий -- либо победа, либо тотал который ты
+    # проанализировал"): for a win/1X2 pick, whether the predicted winner actually won
+    # (winner_result); for a totals pick, whether that over/under itself hit (result).
+    # Handicap picks have neither measure and stay out of the stats, same as before.
+    _STAT_HIT_SQL = (
+        "CASE WHEN option_kind IN ('1x2','winner') THEN winner_result "
+        "WHEN option_kind IN ('total_over','total_under') THEN result END"
+    )
+
     def ai_hit_rate(self, since_iso: str = "") -> tuple[int, int]:
-        """(hits, settled): how often the AI's predicted WINNER won, among POPULAR matches
-        only (owner 2026-10-05: no noname fixtures in the public stats) -- counts who-wins,
-        not totals/handicaps, since `since_iso` (match start)."""
+        """(hits, settled) among POPULAR matches only (owner 2026-10-05: no noname
+        fixtures in the public stats), since `since_iso` (match start)."""
+        hit = self._STAT_HIT_SQL
         row = self._conn.execute(
-            "SELECT SUM(winner_result = 'win'), COUNT(*) FROM ai_analyses "
-            "WHERE winner_result IN ('win','lose') AND popular = 1 AND start_utc >= ?",
+            f"SELECT SUM({hit} = 'win'), COUNT(*) FROM ai_analyses "
+            f"WHERE {hit} IN ('win','lose') AND popular = 1 AND start_utc >= ?",
             (since_iso,),
         ).fetchone()
         return int(row[0] or 0), int(row[1] or 0)
@@ -418,10 +429,13 @@ class Repository:
         ).fetchall()
 
     def ai_winner_rate(self) -> dict:
-        """How often the AI's predicted winner won: overall and per sport (popular matches only)."""
+        """Hit rate overall and per sport (popular matches only) -- see _STAT_HIT_SQL
+        for what counts as a hit (win pick -> predicted winner; totals pick -> the
+        total itself)."""
+        hit = self._STAT_HIT_SQL
         rows = self._conn.execute(
-            "SELECT sport, SUM(winner_result = 'win'), COUNT(*) FROM ai_analyses "
-            "WHERE winner_result IN ('win','lose') AND popular = 1 GROUP BY sport"
+            f"SELECT sport, SUM({hit} = 'win'), COUNT(*) FROM ai_analyses "
+            f"WHERE {hit} IN ('win','lose') AND popular = 1 GROUP BY sport"
         ).fetchall()
         by_sport = {r[0]: {"wins": int(r[1] or 0), "total": int(r[2])} for r in rows}
         return {"wins": sum(v["wins"] for v in by_sport.values()),
@@ -434,9 +448,10 @@ class Repository:
         ).fetchall()
 
     def ai_recent_settled(self, limit: int = 20) -> list[sqlite3.Row]:
+        hit = self._STAT_HIT_SQL
         return self._conn.execute(
-            "SELECT * FROM ai_analyses WHERE winner_result IN ('win','lose') AND popular = 1 "
-            "ORDER BY start_utc DESC LIMIT ?", (limit,)
+            f"SELECT * FROM ai_analyses WHERE {hit} IN ('win','lose') AND popular = 1 "
+            f"ORDER BY start_utc DESC LIMIT ?", (limit,)
         ).fetchall()
 
     def ai_admin_stats(self, day: str) -> dict:

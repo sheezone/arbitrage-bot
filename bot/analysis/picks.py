@@ -53,6 +53,12 @@ def pick_from_row(row) -> dict:
         "predicted": predicted_outcome(row["payload"]),
         "probabilities": payload.get("probabilities"),
         "winner_result": row["winner_result"] if "winner_result" in row.keys() else None,
+        # What actually counts as a hit for THIS pick (owner 2026-10-09): a win/1X2
+        # pick is judged by the predicted winner, a totals pick by the total itself --
+        # matches Repository._STAT_HIT_SQL, so the app shows the same verdict it's
+        # counted by in the public stats.
+        "stat_result": (row["winner_result"] if row["option_kind"] in ("1x2", "winner") else row["result"])
+                       if "winner_result" in row.keys() else row["result"],
         "score": row["score"],
     }
 

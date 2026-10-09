@@ -2939,7 +2939,7 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   function pickCard(p) {
-    const r = p.winner_result || p.result;  // the badge = did the predicted winner win
+    const r = p.stat_result;  // win pick -> predicted winner; totals pick -> the total itself
     const res = r === "win" ? `<span class="res win">${tr("won")}</span>` : r === "lose" ? `<span class="res lose">${tr("lost")}</span>` : "";
     const body = p.locked
       ? `<div class="pk-locked">${tr("pick_locked")}</div>`
