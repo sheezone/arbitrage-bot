@@ -2647,7 +2647,6 @@ an_news: "News (injuries, form, suspensions)",
         ${proCard("ai", "brain", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
         ${proCard("express", "trending", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
         ${proCard("picks", "target", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
-        ${proCard("vilki", "bolt", tr("t_vilki"), h.vilki_count ? `<span class="hb-badge">${tr("c_vk_badge", { n: h.vilki_count })}</span>` : "", [tr("c_vk1"), tr("c_vk2"), tr("c_vk3")], "vilki", locked)}
         <p class="home-note">${tr("note")}</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));    loadTicker();
@@ -3041,7 +3040,7 @@ an_news: "News (injuries, form, suspensions)",
   function renderHelp() {
     const block = (h, t) => `<div class="an-block"><div class="an-h">${tr(h)}</div><div>${tr(t)}</div></div>`;
     content.innerHTML = `
-      ${block("h_ai", "h_ai_t")}${block("h_st", "h_st_t")}${block("h_ex", "h_ex_t")}${block("h_lim", "h_lim_t")}${block("h_vk", "h_vk_t")}
+      ${block("h_ai", "h_ai_t")}${block("h_st", "h_st_t")}${block("h_ex", "h_ex_t")}${block("h_lim", "h_lim_t")}
       <div class="an-block"><div class="an-h">${tr("h_lang")}</div><div class="lang-row">
         <button class="pro-chip lang-set" data-lang="ru">🇷🇺 Русский</button><button class="pro-chip lang-set" data-lang="en">🇬🇧 English</button><button class="pro-chip lang-set" data-lang="tg">🇹🇯 Тоҷикӣ</button></div></div>
       <button type="button" class="pro-buy wide" data-go="support">${tr("h_support")}</button>
