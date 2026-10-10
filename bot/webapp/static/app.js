@@ -2192,6 +2192,7 @@ an_news: "News (injuries, form, suspensions)",
     content.innerHTML = `
       <button type="button" class="pro-buy wide" id="admin-bank-btn" style="margin-bottom:10px">🤖 ИИ-банк — виртуальные 10 000 ₽</button>
       <button type="button" class="btn-ghost wide" id="admin-activity-btn" style="margin-bottom:10px">📊 Активность за сегодня</button>
+      <button type="button" class="btn-ghost wide" id="admin-expresses-btn" style="margin-bottom:10px">📈 Прошлые экспрессы</button>
       <div class="section-title">${t("admin_users")}</div>
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_total")}</div></div>
@@ -3070,6 +3071,37 @@ an_news: "News (injuries, form, suspensions)",
     if (b) b.addEventListener("click", () => { haptic("light"); renderAiBankroll(); });
     const a = document.getElementById("admin-activity-btn");
     if (a) a.addEventListener("click", () => { haptic("light"); renderAdminActivity(); });
+    const x = document.getElementById("admin-expresses-btn");
+    if (x) x.addEventListener("click", () => { haptic("light"); renderAdminExpresses(); });
+  }
+
+  // Past expresses: the daily auto-built ones pushed to everyone, and the ones
+  // individual users found with «Найти экспресс» (owner 2026-10-10).
+  async function renderAdminExpresses() {
+    const s = await api("/api/admin/expresses");
+    const legRow = (p) => `<div class="ex-leg"><div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${teamsLine(p)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
+      <div class="ex-pick">${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>${p.result === "win" ? " ✅" : p.result === "lose" ? " ❌" : ""}</div></div>`;
+    const dailyCards = s.daily.length
+      ? s.daily.map((e) => {
+          const time = new Date(e.sent_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+          return `<div class="ex-card"><div class="ex-head"><span>${time}</span><span class="ex-total">@ ${e.total_odds.toFixed(2)}</span></div>
+            ${e.legs.map(legRow).join("")}</div>`;
+        }).join("")
+      : `<div class="news-empty">Пока ничего не рассылалось</div>`;
+    const foundCards = s.found.length
+      ? s.found.map((e) => {
+          const time = new Date(e.found_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+          return `<div class="ex-card"><div class="ex-head"><span>${e.chat_id} · ${time}</span>${e.total_odds ? `<span class="ex-total">@ ${Number(e.total_odds).toFixed(2)}</span>` : ""}</div>
+            ${e.legs.map(legRow).join("")}</div>`;
+        }).join("")
+      : `<div class="news-empty">Никто ещё не искал экспресс</div>`;
+    content.innerHTML = `
+      <h3 class="sec-h">📈 Экспрессы дня (рассылка всем)</h3>
+      ${dailyCards}
+      <h3 class="sec-h">🔍 Найдены пользователями</h3>
+      ${foundCards}
+      <button type="button" class="btn-ghost wide" id="expresses-back">← К админке</button>`;
+    document.getElementById("expresses-back").addEventListener("click", renderAdmin);
   }
 
   // Who actually used the app today and what they did most, admins excluded entirely

@@ -474,6 +474,23 @@ class Repository:
     def expresses_sent_since(self, since_iso: str) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM sent_expresses WHERE sent_at >= ?", (since_iso,)).fetchone()[0]
 
+    def recent_sent_expresses(self, limit: int = 30) -> list[sqlite3.Row]:
+        """Daily auto-built expresses pushed out to users (bot/analysis/picks.py's
+        push_new_expresses) -- for the admin "прошлые экспрессы" screen. Only
+        express_key + sent_at are stored here; the caller rebuilds each leg from
+        express_key's match ids via get_ai_analysis."""
+        return self._conn.execute(
+            "SELECT * FROM sent_expresses ORDER BY sent_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    def recent_user_expresses(self, limit: int = 30) -> list[sqlite3.Row]:
+        """Expresses a user actually found with the «Найти экспресс» button, across ALL
+        users -- for the admin "прошлые экспрессы" screen (unlike user_expresses_since,
+        not scoped to one chat_id)."""
+        return self._conn.execute(
+            "SELECT * FROM user_expresses ORDER BY found_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+
     def ai_usage_today(self, chat_id: int, day: str) -> set[str]:
         rows = self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ? AND day = ?", (chat_id, day)).fetchall()
         return {r[0] for r in rows}

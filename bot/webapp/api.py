@@ -918,6 +918,40 @@ def register_api(
                 for b in repo.ai_bets_since((now - timedelta(days=14)).isoformat())]
         return {**summary, "week_start": week_start.isoformat(), "bets": bets}
 
+    @app.get("/api/admin/expresses")
+    async def get_admin_expresses(authorization: str | None = Header(default=None)):
+        """Admin-only: past expresses -- both the daily auto-built ones pushed to all
+        users, and the ones individual users found with «Найти экспресс» (owner
+        2026-10-10)."""
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        if not billing.is_admin(user, admin_chat_ids):
+            raise HTTPException(status_code=403, detail="Только для администраторов")
+
+        def leg_out(row) -> dict:
+            return {**_crests({"team_a": row["team_a"], "team_b": row["team_b"], "sport": row["sport"] if "sport" in row.keys() else "football"}),
+                    "league": row["league"], "label": row["option_label"], "odds": row["odds"],
+                    "confidence": row["confidence"], "result": row["result"], "score": row["score"]}
+
+        daily = []
+        for row in repo.recent_sent_expresses(30):
+            legs = [leg_out(r) for mid in row["express_key"].split("|") if (r := repo.get_ai_analysis(mid)) is not None]
+            if legs:
+                total_odds = 1.0
+                for leg in legs:
+                    total_odds *= leg["odds"]
+                daily.append({"sent_at": row["sent_at"], "legs": legs, "total_odds": round(total_odds, 2)})
+
+        found = []
+        for row in repo.recent_user_expresses(30):
+            payload = json.loads(row["payload"])
+            legs = [leg_out(r) for p in payload["legs"] if (r := repo.get_ai_analysis(p["match_id"])) is not None]
+            found.append({"chat_id": row["chat_id"], "found_at": row["found_at"],
+                         "legs": legs or [_crests(p) for p in payload["legs"]],
+                         "total_odds": payload.get("total_odds")})
+
+        return {"daily": daily, "found": found}
+
     ACTION_LABELS = {
         "open_app": "Открыл приложение", "ai_matches": "Листал матчи ИИ", "ai_analysis": "Разбор матча",
         "ai_screenshot": "Разбор по скриншоту", "picks": "Готовые прогнозы", "express": "Экспрессы",
