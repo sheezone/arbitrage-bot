@@ -49,9 +49,16 @@ SPORTS: dict[str, dict] = {
 PARENT_TO_SPORT = {p: k for k, v in SPORTS.items() for p in (v["parents"] if "parents" in v else (v["parent"],))}
 COMBAT_ORG_KEYWORDS = ("UFC", "Bellator", "PFL", "ACA", "KSW", "Fight Nights", "Contender Series", "Oktagon")
 CATALOG_TTL = 300
-HORIZON = timedelta(hours=48)      # the browsable top list
+HORIZON = timedelta(hours=72)      # the browsable top list (owner 2026-10-10: "матчи
+# на часов 20 вперед а я хотел бы побольше" -- was 48h, actual matches only filled ~20h
+# of it in quiet windows; 72h + a higher MAX_MATCHES below gives real depth per sport)
 LOOKUP_HORIZON = timedelta(days=7)  # matches a user can find by name/screenshot
-MAX_MATCHES = 40
+MAX_MATCHES = 80
+# Football alone has over a hundred top-league matches in a busy 72h window (22 leagues
+# in TOP_LEAGUES) -- the shared MAX_MATCHES cut most of them off before non-top matches
+# even got a look-in. Other sports have no league tiering (priority is flat), so the
+# shared default is plenty.
+SPORT_MAX_MATCHES = {"football": 150}
 
 SKIP_SEGMENT_WORDS = ("Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер",
                       "NBA 2K", "NHL 2", "FIFA", "eFootball", "Виртуал", "Победитель", "Специальн")
@@ -276,7 +283,7 @@ async def get_catalog(sport: str | None = None, game: str | None = None) -> list
     soon = datetime.now(timezone.utc) + HORIZON
     pool = [m for m in await get_full_line() if m.start_utc <= soon and (sport is None or m.sport == sport)
             and (not game or (esports_game(m.league) if sport == "esports" else m.discipline) == game)]
-    return pool[:MAX_MATCHES]
+    return pool[:SPORT_MAX_MATCHES.get(sport, MAX_MATCHES)]
 
 
 async def find_match(match_id: str) -> FootballMatch | None:
