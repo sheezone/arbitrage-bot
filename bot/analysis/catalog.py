@@ -76,7 +76,7 @@ TOP_LEAGUES = (
 # bare winner line) regardless of fame, so market size can't tell a big one apart --
 # esports, volleyball, table tennis (see FootballMatch.is_popular).
 TOP_TOURNAMENT_KEYWORDS = {
-    "esports": ("ESL Pro League", "Major", "IEM", "BLAST", "PGL", "Champions", "EMEA Masters",
+    "esports": ("ESL Pro League", "Major", "IEM", "BLAST", "PGL", "Valorant. Champions", "EMEA Masters",
                 "Worlds", "The International", "LCK", "LPL", "LCS", "LEC", "VCT", "Six Invitational"),
     "volleyball": ("Суперлига", "Серия A1", "PlusLiga", "Чемпионат мира", "Чемпионат Европы",
                    "Лига чемпионов", "Лига наций"),
