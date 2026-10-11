@@ -121,25 +121,40 @@ class FootballMatch:
 
     @property
     def is_popular(self) -> bool:
-        """Only matches people have actually heard of go into the public hit-rate stats
-        (owner 2026-10-05: "кидай туда где самые популярные события а не какие-то
-        ноунеймы", then 2026-10-06: a market-size cut-off doesn't actually work for
-        esports/tennis/volleyball/table_tennis -- Fonbet prices ALL of them with just a
-        bare winner line (2 options, fame or not: owner saw real CS2/basketball wins
-        missing from stats because of this), so those sports are judged by tournament
-        tier instead. Basketball's line really does vary with how big the match is, so
-        it keeps the market-size rule."""
-        if self.sport == "football":
-            return self.priority < len(TOP_LEAGUES)
-        if self.sport == "basketball":
-            return len(self.options) >= 6
-        if self.sport == "tennis":
-            if "Челленджер" in self.league or "125K" in self.league or self.league.endswith("Пары"):
-                return False
-            return self.league.startswith(("ATP.", "WTA."))
-        if self.sport == "combat":
-            return any(kw in self.league for kw in COMBAT_TOP)
-        return any(kw in self.league for kw in TOP_TOURNAMENT_KEYWORDS.get(self.sport, ()))
+        return popular_league(self.sport, self.league)
+
+
+# Stats only count matches people have heard of (owner 2026-10-05, tightened
+# 2026-10-11: "ноунеймы" like 2. Bundesliga, Примера RFEF, Лига наций C/D, NBL Австралии,
+# WTA пары kept slipping in through loose prefix matching and dragging the % down --
+# there's little real data on them). Whole-league match: exact name or name + ".".
+def _league_in(league: str, names) -> bool:
+    return any(league == n or league.startswith(n + ".") for n in names)
+
+
+BASKETBALL_TOP = ("НБА. Регулярный сезон", "НБА. Плей-офф", "Евролига", "Еврокубок", "Лига ВТБ",
+                  "Испания. ACB League", "Турция. Суперлига", "Италия. Серия А", "Греция. Basket League",
+                  "Германия. BBL", "Франция. LNB", "Чемпионат мира", "Чемпионат Европы")
+VOLLEYBALL_TOP = ("Россия. Суперлига", "Италия. Серия A1", "Польша. PlusLiga", "Турция. Суперлига",
+                  "Бразилия. Суперлига", "Лига чемпионов", "Лига наций", "Чемпионат мира", "Чемпионат Европы")
+NOT_TOP_WORDS = ("Дивизион С", "Дивизион C", "Дивизион D", "Квалификация", "Пары", "Предсезон", "Товарищ",
+                 "U21", "U19", "U20", "До 21", "До 19", "Молодеж", "Женщины")
+
+
+def popular_league(sport: str, league: str) -> bool:
+    if any(w in league for w in NOT_TOP_WORDS):
+        return False
+    if sport == "football":
+        return _league_in(league, TOP_LEAGUES)
+    if sport == "basketball":
+        return _league_in(league, BASKETBALL_TOP)
+    if sport == "volleyball":
+        return _league_in(league, VOLLEYBALL_TOP)
+    if sport == "tennis":
+        return league.startswith(("ATP.", "WTA.")) and "Челленджер" not in league and "125K" not in league
+    if sport == "combat":
+        return any(kw in league for kw in COMBAT_TOP)
+    return any(kw in league for kw in TOP_TOURNAMENT_KEYWORDS.get(sport, ()))
 
 
 def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = HORIZON,
