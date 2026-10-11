@@ -60,7 +60,7 @@ MAX_MATCHES = 80
 # shared default is plenty.
 SPORT_MAX_MATCHES = {"football": 150}
 
-SKIP_SEGMENT_WORDS = ("Mobile Legends", "Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер",
+SKIP_SEGMENT_WORDS = ("Mobile Legends", "CrossFire", "Rainbow Six", "Overwatch", "Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер",
                       "NBA 2K", "NHL 2", "FIFA", "eFootball", "Виртуал", "Победитель", "Специальн")
 # Shown first, in this order; anything else that's a real match comes after.
 TOP_LEAGUES = (
