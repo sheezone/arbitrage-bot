@@ -420,6 +420,10 @@ def register_api(
             "start_utc": "", "start_label": "", "team_a_flag": get_team_flag(match.team_a),
             "team_b_flag": get_team_flag(match.team_b),
         }
+        if not billing.has_access(user, now, admin_chat_ids) and result.get("pick"):
+            # Free tier teases (owner 2026-10-12): who wins + the full разбор, but the
+            # AI's bet and its confidence stay behind MAX.
+            result = {**result, "pick": None, "confidence": None, "reasoning": "", "pick_locked": True}
         return {"match": out, "analysis": result, "in_line": in_line,
                 "hit_rate": {"wins": wins, "total": total, "min_total": 20}}
 
@@ -602,7 +606,9 @@ def register_api(
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
         expresses = [{**e, "legs": [_crests(p) for p in e["legs"]]} for e in build_expresses(upcoming_picks(repo))]
         if not pro:
-            expresses = [{**e, "legs": [_lock(p) for p in e["legs"]], "total_odds": None} for e in expresses]
+            # Free tier sees the matches and the total odds, picks hidden (owner 2026-10-12:
+            # "кэф 4.2 -- открыть в MAX" is the hook).
+            expresses = [{**e, "legs": [_lock(p) for p in e["legs"]], "locked": True} for e in expresses]
         now = datetime.now(timezone.utc)
         return {"pro": pro, "expresses": expresses, "mine": _my_expresses(chat_id, now),
                 "bonus": repo.bonus_expresses(chat_id),
@@ -1107,7 +1113,9 @@ def register_api(
     # through the ЮKassa REST API (bot/core/payments.py), polled -- no webhook.
 
     def _plans_for(user: UserSettings) -> list[billing.Plan]:
-        return list(billing.PLANS)
+        if repo.has_paid(user.chat_id):
+            return list(billing.PLANS)
+        return [billing.FIRST_PLAN if p.id == "7d" else p for p in billing.PLANS]
 
     @app.get("/api/subscription")
     async def get_subscription(authorization: str | None = Header(default=None)):

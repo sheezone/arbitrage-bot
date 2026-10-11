@@ -157,6 +157,68 @@ async def push_new_expresses(repo: Repository, bot, webapp_url: str, admin_chat_
     return sent
 
 
+MORNING_HOUR, EVENING_HOUR = 10, 21
+
+
+async def _broadcast(repo: Repository, bot, webapp_url: str, text_for) -> int:
+    """text_for(user) -> str | None; sends to every user, skipping None."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+    markup = (InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📡 Открыть Матч Радар",
+              web_app=WebAppInfo(url=webapp_url))]]) if webapp_url else None)
+    sent = 0
+    for user in repo.get_all_users():
+        text = text_for(user)
+        if not text:
+            continue
+        try:
+            await bot.send_message(user.chat_id, text, parse_mode="HTML", reply_markup=markup,
+                                   disable_notification=user.muted)
+            sent += 1
+        except Exception:
+            pass  # blocked the bot / deleted account
+        await asyncio.sleep(0.05)
+    return sent
+
+
+async def daily_pushes(repo: Repository, bot, webapp_url: str, admin_chat_ids: frozenset[int]) -> None:
+    """A reason to open the app every day (owner 2026-10-12): 10:00 MSK «экспресс дня
+    готов» (full for MAX, total-odds teaser for free), 21:00 MSK «итог дня» -- how
+    many of today's AI forecasts came in. Each fires once per day."""
+    import html
+
+    from bot.core import billing
+
+    now = datetime.now(timezone.utc)
+    local = now.astimezone(MSK)
+    day = local.date().isoformat()
+    if local.hour >= MORNING_HOUR and local.hour < EVENING_HOUR and not repo.alert_sent(f"push_am_{day}"):
+        expresses = build_expresses(upcoming_picks(repo, now, hours=24))
+        if expresses:
+            repo.mark_alert_sent(f"push_am_{day}")
+            e = expresses[0]
+            repo.mark_express_sent(express_key(e))
+            teaser = (f"🔥 <b>Экспресс дня готов!</b> Общий кэф <b>{e['total_odds']:.2f}</b>\n\n"
+                      f"{len(e['legs'])} матча: " + ", ".join(html.escape(f"{p['team_a']} — {p['team_b']}") for p in e["legs"])
+                      + "\n\n🔒 Исходы — в MAX. Первая неделя всего за 149 ₽.")
+            n = await _broadcast(repo, bot, webapp_url,
+                                 lambda u: express_message(e, True) if billing.has_access(u, now, admin_chat_ids) else teaser)
+            logger.info("Morning express push: %s", n)
+    if local.hour >= EVENING_HOUR and not repo.alert_sent(f"push_pm_{day}"):
+        start = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        rows = repo.day_results((start - timedelta(hours=6)).isoformat(), now.isoformat())
+        repo.mark_alert_sent(f"push_pm_{day}")
+        if len(rows) >= 2:
+            wins = sum(r["stat_hit"] == "win" for r in rows)
+            lines = [f"📊 <b>Итог дня: {wins} из {len(rows)} прогнозов ИИ зашли</b>", ""]
+            for r in rows[:8]:
+                mark = "✅" if r["stat_hit"] == "win" else "❌"
+                lines.append(f"{mark} {html.escape(r['team_a'])} — {html.escape(r['team_b'])} {html.escape(r['score'] or '')}")
+            text = "\n".join(lines)
+            n = await _broadcast(repo, bot, webapp_url, lambda u: text)
+            logger.info("Evening results push: %s", n)
+
+
 def popular_to_analyse(matches, have: set[str], now: datetime) -> list:
     """Most popular not-yet-analysed matches of the next 24h, filling each sport's quota."""
     soon = [m for m in matches if now < m.start_utc <= now + timedelta(hours=24) and m.options]
@@ -229,9 +291,9 @@ async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp
                     except Exception:
                         logger.exception("Daily analysis failed for %s", match.id)
             if bot is not None:
-                n = await push_new_expresses(repo, bot, webapp_url, admin_chat_ids)
-                if n:
-                    logger.info("Express pushed to %s chats", n)
+                # Scheduled 10:00 / 21:00 pushes replace the old "every new express"
+                # stream (owner 2026-10-12).
+                await daily_pushes(repo, bot, webapp_url, admin_chat_ids)
                 if news_chat_id is not None and await post_fight_highlight(repo, bot, news_chat_id, now):
                     logger.info("Fight highlight posted to the channel")
         except Exception:

@@ -244,6 +244,18 @@ class Repository:
         ).fetchone()
         return START_BANKROLL + (row[0] or 0.0)
 
+    def day_results(self, since_iso: str, until_iso: str) -> list[sqlite3.Row]:
+        """Popular, already-judged picks whose match started in [since, until) -- the
+        evening «итог дня» push."""
+        hit = self._STAT_HIT_SQL
+        return self._conn.execute(
+            f"SELECT *, {hit} AS stat_hit FROM ai_analyses WHERE popular = 1 AND {hit} IN ('win','lose') "
+            f"AND start_utc >= ? AND start_utc < ? ORDER BY start_utc", (since_iso, until_iso),
+        ).fetchall()
+
+    def has_paid(self, chat_id: int) -> bool:
+        return self._conn.execute("SELECT 1 FROM payments WHERE chat_id = ? LIMIT 1", (chat_id,)).fetchone() is not None
+
     def ai_pending_stake(self) -> float:
         return float(self._conn.execute("SELECT SUM(stake) FROM ai_bets WHERE result IS NULL").fetchone()[0] or 0.0)
 

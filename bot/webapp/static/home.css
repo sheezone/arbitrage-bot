@@ -499,3 +499,11 @@ body {
 .cr-count { min-width: 26px; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.9); color: #1c1233; font-size: 12px; text-align: center; }
 .country-back { display: block; width: 100%; margin: 0 0 10px; padding: 11px 14px; border-radius: 12px; border: 1px solid rgba(178,107,255,.35);
   background: #1c1233; color: #e4cfff; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+
+.sub-pitch { margin: 10px 0; padding: 12px 14px; border-radius: 14px; font-weight: 800; font-size: 16px; text-align: center; color: #fff;
+  background: linear-gradient(90deg, #8b3ff0, #d04fd8); box-shadow: 0 4px 0 #4a1a8f; }
+.sub-old { opacity: .55; font-weight: 600; margin-right: 4px; }
+
+.an-locked { display: block; width: 100%; text-align: left; font: inherit; color: #fff; cursor: pointer;
+  border: 1px dashed rgba(255,140,240,.6) !important; }
+.an-unlock { margin-top: 8px; font-weight: 800; color: #ff8cf0; }

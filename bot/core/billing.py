@@ -74,7 +74,11 @@ def opportunity_key(game: str, team_a: str, team_b: str, start_time_utc: str) ->
     match again today" so re-showing it never costs the user a free slot)."""
     return f"{game}:{team_a}:{team_b}:{start_time_utc}"
 
-PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in [*PLANS, *RETIRED_PLANS, TEST_PLAN]}
+# First purchase is cheaper (owner 2026-10-12: "первую подписку дешёвую, а вторую уже
+# 299") -- shown INSTEAD of the 7-day plan to anyone who has never paid.
+FIRST_PLAN = Plan(id="7d_first", days=7, label="7 дней — первая покупка", price_rub=149, price_stars=100, price_usdt=1.75)
+
+PLANS_BY_ID: dict[str, Plan] = {p.id: p for p in [*PLANS, *RETIRED_PLANS, TEST_PLAN, FIRST_PLAN]}
 
 # Referral program: 1 tier only (no sub-referrals), credited as a discount balance the
 # referrer can spend on their own future subscription purchases -- not a cash payout,

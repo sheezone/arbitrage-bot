@@ -871,7 +871,8 @@ def _pay_app(tmp_path, monkeypatch, yk=None):
 def test_subscription_lists_plans_without_year_or_test_plan(tmp_path, monkeypatch):
     app, _ = _pay_app(tmp_path, monkeypatch, _FakeYK())
     body = _run(_get(app, "/api/subscription", headers=_auth_header(1))).json()
-    assert [p["id"] for p in body["plans"]] == ["7d", "30d"]
+    # never paid -> the cheap first-purchase week replaces the regular 7d plan
+    assert [p["id"] for p in body["plans"]] == ["7d_first", "30d"]
     assert body["methods"]["sbp"] is True
     admin = _run(_get(app, "/api/subscription", headers=_auth_header(99))).json()
     assert "test30" not in [p["id"] for p in admin["plans"]]
@@ -882,9 +883,9 @@ def test_sbp_pay_creates_payment_and_status_credits_once_paid(tmp_path, monkeypa
     app, repo = _pay_app(tmp_path, monkeypatch, yk)
     _run(_get(app, "/api/me", headers=_auth_header(5)))
 
-    r = _run(_post(app, "/api/pay", headers=_auth_header(5), json_body={"plan_id": "7d", "method": "sbp"})).json()
+    r = _run(_post(app, "/api/pay", headers=_auth_header(5), json_body={"plan_id": "7d_first", "method": "sbp"})).json()
     assert r == {"type": "sbp", "url": "https://yk/pay1", "payment_id": "pay1"}
-    assert yk.created[0][1] == {"chat_id": "5", "plan_id": "7d"}
+    assert yk.created[0][1] == {"chat_id": "5", "plan_id": "7d_first"}
 
     assert _run(_get(app, "/api/pay/sbp/pay1", headers=_auth_header(5))).json()["paid"] is False
     yk.status = {"status": "succeeded", "paid": True}

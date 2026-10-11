@@ -1977,7 +1977,7 @@ an_news: "News (injuries, form, suspensions)",
       .map(
         (p) => `
         <div class="card sub-plan">
-          <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.price_rub} ₽</span></div>
+          <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.id === "7d_first" ? `<s class="sub-old">299 ₽</s> ` : ""}${p.price_rub} ₽</span></div>
           <button type="button" class="save-btn pay-open-btn">${t("pay_btn")}</button>
           <div class="sub-plan-methods" hidden>
             ${methods
@@ -1993,6 +1993,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="card sub-status">${status}${
         d.referral_balance_rub > 0 ? `<div class="field-hint">${t("sub_ref_balance")}${Math.round(d.referral_balance_rub)} ₽</div>` : ""
       }</div>
+      <div class="sub-pitch">💡 Окупается одной зашедшей ставкой</div>
       <div class="meta-line">${methods.length ? t("sub_choose") : t("pay_no_methods")}</div>
       <div id="pay-status"></div>
       ${methods.length ? plans : ""}`;
@@ -2873,7 +2874,7 @@ an_news: "News (injuries, form, suspensions)",
     const others = outcomes.slice(1).map((o) =>
       o.kind === "draw" ? tr("vd_other_draw", { p: o.v }) : tr("vd_other", { t: esc(o.name), p: o.v })).join("<br>");
     const sure = (CONF_LEVEL[a.confidence] || 0) >= 3;
-    const pick = a.pick
+    const pick = a.pick_locked ? `<div class="vd-pick">🔒 Ставка ИИ — в MAX</div>` : a.pick
       ? `<div class="vd-pick">🎯 ${tr(sure ? "vd_pick" : "vd_pick_risky")}: <b>${esc(a.pick.label)}</b> @ <b>${a.pick.odds.toFixed(2)}</b> · ${tr("confidence")} ${confMeter(a.confidence)}</div>`
       : "";
     return `<div class="an-block vd-block">
@@ -2902,7 +2903,11 @@ an_news: "News (injuries, form, suspensions)",
     if (homeCache) homeCache.ai_quota.used = Math.max(homeCache.ai_quota.used, 1);
     const a = data.analysis;
     const m = data.match;
-    const pickHtml = a.pick
+    const lockHtml = `<button type="button" class="an-pick an-locked" data-go="sub">
+          <div class="an-pick-k">🔒 Ставка ИИ и уверенность — в MAX</div>
+          <div class="ai-sub">Разбор и прогноз победителя ниже открыты. Какую ставку сделал бы ИИ и насколько он уверен — откройте MAX.</div>
+          <div class="an-unlock">Открыть MAX →</div></button>`;
+    const pickHtml = a.pick_locked ? lockHtml : a.pick
       ? `<div class="an-pick">
           <div class="an-pick-k">${tr("pick")}</div>
           <div class="an-pick-v">${esc(a.pick.label)} <span class="an-odds">@ ${a.pick.odds.toFixed(2)}</span></div>
@@ -2934,6 +2939,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>${tr("an_foot")}</p></div>
       <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
     document.getElementById("an-back").addEventListener("click", () => analysisReturnTo());
+    content.querySelectorAll(".an-locked").forEach((el) => el.addEventListener("click", () => go("sub")));
   }
 
   // "Who wins" accuracy: the AI's own favourite (highest %) vs the final score.
@@ -2991,7 +2997,7 @@ an_news: "News (injuries, form, suspensions)",
 
   function exCard(e, title, mine) {
     const res = (p) => p.result === "win" ? " ✅" : p.result === "lose" ? " ❌" : "";
-    return `<div class="ex-card${mine ? " ex-mine" : ""}"><div class="ex-head"><span>${title}</span>${e.total_odds ? `<span class="ex-total">${tr("ex_odds", { k: e.total_odds.toFixed(2) })}</span>` : '<span class="hb-lock">🔒 MAX</span>'}</div>
+    return `<div class="ex-card${mine ? " ex-mine" : ""}"><div class="ex-head"><span>${title}</span>${e.total_odds ? `<span class="ex-total">${tr("ex_odds", { k: e.total_odds.toFixed(2) })}</span>` : '<span class="hb-lock">🔒 MAX</span>'}</div>${e.locked ? `<button type="button" class="pro-buy wide ex-unlock" data-go="sub">🔒 Открыть исходы в MAX</button>` : ""}
         ${e.legs.map((p) => `<div class="ex-leg"><div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${teamsLine(p)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
           <div class="ex-pick">${p.locked ? tr("hidden") : `${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span>${res(p)}`}</div></div>`).join("")}</div>`;
   }
@@ -3045,6 +3051,7 @@ an_news: "News (injuries, form, suspensions)",
     data.expresses.forEach((e, i) => { html += exCard(e, tr("ex_n", { n: i + 1 }), false); });
     content.innerHTML = html;
     wireInvite();
+    content.querySelectorAll(".ex-unlock").forEach((el) => el.addEventListener("click", () => go("sub")));
     const btn = document.getElementById("exf-btn");
     btn.addEventListener("click", async () => {
       haptic("medium");
