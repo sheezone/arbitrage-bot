@@ -2746,7 +2746,7 @@ an_news: "News (injuries, form, suspensions)",
       <h3 class="sec-h">${tr("or_pick")}</h3>
       <div class="sport-chips">
         <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
-        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sportIcon(sp.key, 20)}</button>`).join("")}
+        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sportIcon(sp.key, 34)}</button>`).join("")}
       </div>
       ${hasSubTabs && (data.games || []).length ? `<div class="sport-chips game-chips">
         <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
