@@ -88,10 +88,17 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   «Очень высокая» — редкость: только когда почти все факторы и линия единодушны. «Высокая» только когда
   несколько независимых факторов сходятся.
 - Никаких слов «гарантированно», «100%», «точно зайдёт», «верняк».
-- summary — 2–3 предложения о матче. factors — 3–5 пунктов (Форма, Личные встречи,
-  Турнирная мотивация/таблица, Новости, Что говорит линия), по 1–2 предложения.
-  reasoning — почему именно эта ставка, 2–3 предложения. risks — что может сломать
-  прогноз, 1–2 предложения.
+- Разбор должен быть ГЛУБОКИМ и с цифрами (владелец: "бот должен проводить более
+  глубокий анализ"): опирайся на конкретные числа из данных — счёт последних матчей,
+  забито/пропущено, дома/в гостях отдельно, место и очки в таблице, личные встречи со
+  счётом, средний тотал, усталость от календаря, кадровые потери. Общие слова без цифр
+  («команда в хорошей форме») — брак. Перед ставкой на тотал проверь, как часто у обеих
+  команд матчи проходили выше/ниже этой линии; перед ставкой на победу — сравни дом/выезд.
+- summary — 3–5 предложений о матче. factors — 5–7 пунктов (Форма, Дом/выезд, Личные
+  встречи, Таблица и мотивация, Состав и травмы, Статистика/тоталы, Что говорит линия),
+  по 2–3 предложения, в каждом минимум одна конкретная цифра, если она есть в данных.
+  reasoning — почему именно эта ставка, 3–5 предложений с цифрами. risks — что может
+  сломать прогноз, 2–3 предложения.
 - probabilities — твоя оценка шансов в процентах: p1 (победа первой команды), x (ничья),
   p2 (победа второй), целые числа, сумма 100. В видах спорта без ничьих (теннис,
   баскетбол, волейбол, киберспорт, настольный теннис, MMA, бокс) x = 0. Если даны коэффициенты, рыночные
@@ -142,7 +149,7 @@ def _research_system(sport: str) -> str:
     return (
         f"Ты собираешь фактуру перед матчем ({sport}). Найди в интернете свежую информацию именно "
         f"об этом матче: {checklist}. Выпиши только факты с короткой пометкой, откуда они (сайт). "
-        "Никаких прогнозов и ставок. По-русски, списком, до 15 пунктов. Если по матчу ничего не "
+        "Никаких прогнозов и ставок. По-русски, списком, до 25 пунктов, с цифрами. Если по матчу ничего не "
         "нашлось — так и напиши."
     )
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 5}
@@ -152,6 +159,11 @@ HLTV_SYSTEM = ("Ты собираешь статистику перед матч
                "рейтинг ключевых игроков (Rating 3.0) за последние месяцы, формат матча (Bo1/Bo3). "
                "Только факты с цифрами, без прогнозов. По-русски, списком, до 15 пунктов. Если на HLTV "
                "ничего не нашлось — так и напиши.")
+STATS_SYSTEM = ("Ты собираешь ЦИФРЫ перед матчем, не новости. Найди в интернете: результаты последних "
+                "5-10 матчей каждого участника со счётом, отдельно дома и в гостях; место, очки и разницу в "
+                "таблице; средний тотал и как часто матчи проходили выше/ниже типичных линий; личные встречи "
+                "со счётом за последние годы; сколько дней отдыха перед матчем и сколько игр за последние 2 "
+                "недели. Только цифры и факты с пометкой сайта, без прогнозов. По-русски, списком, до 25 пунктов.")
 SELF_CHECK_SYSTEM = ("Ты перепроверяешь чужой спортивный прогноз на завышенную уверенность. "
                      "Отвечай только честной, при необходимости пониженной уверенностью.")
 SELF_CHECK_SCHEMA = {
@@ -362,7 +374,11 @@ class Analyzer:
                 match, HLTV_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 6, "allowed_domains": ["hltv.org"]}))
             research = f"{general}\n\nДанные HLTV:\n{hltv}" if hltv else general
         else:
-            research = await self._research(match)
+            # Deeper analysis (owner 2026-10-11): a second, stats-only search pass in
+            # parallel with the general one -- numbers (home/away splits, totals trend,
+            # table, schedule) rather than news.
+            general, stats = await asyncio.gather(self._research(match), self._research(match, STATS_SYSTEM))
+            research = f"{general}\n\nСтатистика:\n{stats}" if stats else general
         return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines, "research": research}
 
     async def _research(self, match: FootballMatch, system: str | None = None, tool: dict | None = None) -> str:
@@ -373,7 +389,7 @@ class Analyzer:
         messages = [{"role": "user", "content": f"Матч: {match.team_a} — {match.team_b}{when}. {match.league}"}]
         # Non-football sports have no structured form/H2H API behind them (see _gather),
         # so web search is doing double duty there -- give it a bigger budget.
-        tool = tool or {**WEB_SEARCH_TOOL, "max_uses": 5 if match.sport == "football" else 8}
+        tool = tool or {**WEB_SEARCH_TOOL, "max_uses": 8 if match.sport == "football" else 10}
         system = system or _research_system(match.sport)
         try:
             for _ in range(3):  # server tool loops may pause; resume up to twice
@@ -389,7 +405,7 @@ class Analyzer:
             await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
             if response.stop_reason == "refusal":
                 return ""
-            return "\n".join(b.text for b in response.content if b.type == "text").strip()[:6000]
+            return "\n".join(b.text for b in response.content if b.type == "text").strip()[:10000]
         except Exception:
             logger.warning("Web research unavailable for %s", match.id, exc_info=True)
             return ""
@@ -419,7 +435,7 @@ class Analyzer:
             f"Новости за сутки (заголовки): {json.dumps(data['news'], ensure_ascii=False, default=str)}\n"
             f"\nСвежая информация из интернета:\n{data.get('research') or 'нет данных'}\n"
         )
-        return await self._json_call(SYSTEM, content, SCHEMA, effort="medium")
+        return await self._json_call(SYSTEM, content, SCHEMA, effort="high")
 
     async def _json_call(self, system: str, content, schema: dict, effort: str = "low") -> dict | None:
         response = await self.claude.beta.messages.create(
