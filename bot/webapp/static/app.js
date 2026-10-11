@@ -2712,9 +2712,7 @@ an_news: "News (injuries, form, suspensions)",
     return `${crest(m.team_a, m.team_a_logo, m.team_a_flag)}${esc(m.team_a)} — ${crest(m.team_b, m.team_b_logo, m.team_b_flag)}${esc(m.team_b)}`;
   }
 
-  const SPORT_EMOJI = { football: sportIcon("football"), hockey: sportIcon("hockey"), basketball: sportIcon("basketball"),
-    tennis: sportIcon("tennis"), esports: sportIcon("esports"), table_tennis: sportIcon("table_tennis"),
-    volleyball: sportIcon("volleyball"), combat: sportIcon("combat") };
+  const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐", combat: "🥊" };
   let aiSport = "";
   try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
   let aiGame = "";  // sub-discipline: esports game (CS2, Dota 2...) or combat org (UFC, Бокс...)
@@ -2746,7 +2744,7 @@ an_news: "News (injuries, form, suspensions)",
       <h3 class="sec-h">${tr("or_pick")}</h3>
       <div class="sport-chips">
         <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
-        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sportIcon(sp.key, 34)}</button>`).join("")}
+        ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sp.emoji}</button>`).join("")}
       </div>
       ${hasSubTabs && (data.games || []).length ? `<div class="sport-chips game-chips">
         <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
@@ -2757,7 +2755,7 @@ an_news: "News (injuries, form, suspensions)",
     for (const m of data.matches) {
       if (m.league !== league) {
         league = m.league;
-        html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || icon("trophy", 15)} ${esc(league)}</div>`;
+        html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(league)}</div>`;
       }
       html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
         <span class="ai-teams">${teamsLine(m)}</span>
@@ -2928,7 +2926,7 @@ an_news: "News (injuries, form, suspensions)",
     if (!w || !w.total) return "";
     const pct = Math.round((w.wins / w.total) * 100);
     const rows = Object.entries(w.by_sport || {}).sort((a, b) => b[1].total - a[1].total).map(([k, v]) =>
-      `<div class="ws-row"><span>${SPORT_EMOJI[k] || icon("trophy", 15)}</span><span class="ws-bar"><i style="width:${Math.round((v.wins / v.total) * 100)}%"></i></span><b>${v.wins}/${v.total}</b></div>`).join("");
+      `<div class="ws-row"><span>${SPORT_EMOJI[k] || "🏆"}</span><span class="ws-bar"><i style="width:${Math.round((v.wins / v.total) * 100)}%"></i></span><b>${v.wins}/${v.total}</b></div>`).join("");
     return `<div class="ws-block"><div class="an-h">${tr("ws_title")}</div>
       <div class="ws-main"><b>${pct}%</b> · ${tr("ws_sub", { w: w.wins, n: w.total })}</div>${rows}</div>`;
   }

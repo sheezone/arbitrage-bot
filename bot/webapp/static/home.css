@@ -487,9 +487,3 @@ body {
 /* pick cards in "Готовые прогнозы" open the full разбор on tap */
 .pk-clickable { cursor: pointer; }
 .pk-clickable:active { transform: translateY(2px); }
-
-/* bigger sport chips so the line icons have room to read (owner 2026-10-11) */
-.sport-chip { min-width: 62px; height: 62px; padding: 0 10px; border-radius: 16px; }
-.sport-chip:first-child { font-size: 15px; min-width: 66px; }
-.sport-chips { gap: 8px; }
-.sport-chip svg { stroke-width: 1.5; }
