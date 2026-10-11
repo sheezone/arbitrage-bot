@@ -27,6 +27,7 @@ from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.football_stats import get_match_h2h
 from bot.webapp.hockey_stats import get_match_h2h as hockey_h2h
 from bot.webapp.news import fetch_team_news
+from bot.webapp.openligadb import get_team_form as openligadb_form
 from bot.webapp.openscores import get_team_form as openscores_form
 from bot.webapp.team_form import get_team_form as espn_team_form
 
@@ -309,11 +310,14 @@ class Analyzer:
         async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Mozilla/5.0"}) as client:
             async def form(team: str):
                 try:
-                    found = (await fd_team_form(client, team, self.football_data_key) if self.football_data_key else None) \
+                    # Free/no-key first (German leagues only, but costs nothing to try),
+                    # then the paid/keyed sources, then OpenScores as the last resort
+                    # (top-5 leagues + World Cup only -- see openscores.py's docstring).
+                    found = await openligadb_form(client, team) \
+                        or (await fd_team_form(client, team, self.football_data_key) if self.football_data_key else None) \
                         or await espn_team_form(client, team)
                     if found:
                         return found
-                    # Last resort, top-5 leagues + World Cup only -- see openscores.py's docstring
                     return await openscores_form(team, self.openscores_api_key) if self.openscores_api_key else None
                 except Exception:
                     return None
