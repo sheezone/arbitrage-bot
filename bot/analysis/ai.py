@@ -25,6 +25,7 @@ from bot.analysis.catalog import FootballMatch, Option
 from bot.db.repository import Repository
 from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.football_stats import get_match_h2h
+from bot.webapp.hockey_stats import get_match_h2h as hockey_h2h
 from bot.webapp.news import fetch_team_news
 from bot.webapp.team_form import get_team_form as espn_team_form
 
@@ -317,6 +318,15 @@ class Analyzer:
                 except Exception:
                     return None
 
+            async def hockey_h2h_():
+                # Same api-sports.io account as football's key -- confirmed live
+                # 2026-10-11 that it works on v1.hockey.api-sports.io too, no separate key.
+                try:
+                    return await hockey_h2h(client, match.team_a, match.team_b, self.api_football_key) \
+                        if self.api_football_key else None
+                except Exception:
+                    return None
+
             async def news():
                 try:
                     return await fetch_team_news(client, match.team_a, match.team_b)
@@ -327,6 +337,9 @@ class Analyzer:
                 form_a, form_b, h2h_data, headlines = await asyncio.gather(
                     form(match.team_a), form(match.team_b), h2h(), news()
                 )
+            elif match.sport == "hockey":
+                form_a = form_b = None
+                h2h_data, headlines = await asyncio.gather(hockey_h2h_(), news())
             else:
                 form_a = form_b = h2h_data = None
                 headlines = await news()
