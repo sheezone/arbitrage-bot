@@ -487,3 +487,15 @@ body {
 /* pick cards in "Готовые прогнозы" open the full разбор on tap */
 .pk-clickable { cursor: pointer; }
 .pk-clickable:active { transform: translateY(2px); }
+
+/* football: country list (owner 2026-10-11) */
+.country-list { border-radius: 16px; overflow: hidden; background: #1c1233; border: 1px solid rgba(178,107,255,.25); }
+.country-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px; background: none; border: 0;
+  border-bottom: 1px solid rgba(178,107,255,.15); color: #fff; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; text-align: left; }
+.country-row:last-child { border-bottom: 0; }
+.country-row:active { background: rgba(178,107,255,.15); }
+.cr-flag { font-size: 20px; width: 24px; text-align: center; }
+.cr-name { flex: 1; }
+.cr-count { min-width: 26px; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.9); color: #1c1233; font-size: 12px; text-align: center; }
+.country-back { display: block; width: 100%; margin: 0 0 10px; padding: 11px 14px; border-radius: 12px; border: 1px solid rgba(178,107,255,.35);
+  background: #1c1233; color: #e4cfff; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }

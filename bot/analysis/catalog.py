@@ -256,6 +256,27 @@ def combat_discipline(league: str, parent_id: int) -> str:
     return "Бокс" if parent_id == 1436 else "MMA"
 
 
+# Football is browsed country-first (owner 2026-10-11: "всё в кучу в футболе"), like
+# bookmaker sites: the biggest football countries on top, then the rest by match count.
+FOOTBALL_COUNTRY_ORDER = ("Россия", "Англия", "Испания", "Италия", "Германия", "Франция",
+                          "Лига Чемпионов УЕФА", "Лига Европы УЕФА", "Лига Конференций УЕФА", "Лига конференций УЕФА")
+
+
+def football_country(league: str) -> str:
+    return league.split(".")[0].strip()
+
+
+async def football_countries() -> list[tuple[str, int]]:
+    soon = datetime.now(timezone.utc) + HORIZON
+    counts: dict[str, int] = {}
+    for m in await get_full_line():
+        if m.sport == "football" and m.start_utc <= soon:
+            c = football_country(m.league)
+            counts[c] = counts.get(c, 0) + 1
+    rank = {c: i for i, c in enumerate(FOOTBALL_COUNTRY_ORDER)}
+    return sorted(counts.items(), key=lambda kv: (rank.get(kv[0], len(rank)), -kv[1], kv[0]))
+
+
 async def combat_disciplines() -> list[tuple[str, int]]:
     """Disciplines in the current combat line, most matches first."""
     soon = datetime.now(timezone.utc) + HORIZON
@@ -282,7 +303,8 @@ async def get_catalog(sport: str | None = None, game: str | None = None) -> list
     given; "all" keeps football's top leagues first, then everything by kick-off)."""
     soon = datetime.now(timezone.utc) + HORIZON
     pool = [m for m in await get_full_line() if m.start_utc <= soon and (sport is None or m.sport == sport)
-            and (not game or (esports_game(m.league) if sport == "esports" else m.discipline) == game)]
+            and (not game or (esports_game(m.league) if sport == "esports"
+                              else football_country(m.league) if sport == "football" else m.discipline) == game)]
     return pool[:SPORT_MAX_MATCHES.get(sport, MAX_MATCHES)]
 
 
