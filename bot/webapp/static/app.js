@@ -2134,7 +2134,7 @@ an_news: "News (injuries, form, suspensions)",
     const totalSign = profit >= 0 ? "+" : "";
     const rows = s.bets.map((b) => {
       const sign = b.result === "win" ? "win" : b.result === "lose" ? "lose" : "";
-      const pnl = b.result ? `${b.payout - b.stake >= 0 ? "+" : ""}${Math.round(b.payout - b.stake)} ₽` : `⏳ ${Math.round(b.stake)} ₽`;
+      const pnl = b.result === "void" ? "↩ возврат" : b.result ? `${b.payout - b.stake >= 0 ? "+" : ""}${Math.round(b.payout - b.stake)} ₽` : `⏳ ${Math.round(b.stake)} ₽`;
       return `<div class="pk-card"><div class="pk-top"><span class="pk-league">${esc(b.league)}</span>${b.result ? `<span class="res ${sign}">${pnl}</span>` : `<span class="hb-badge">${pnl}</span>`}</div>
         <div class="pk-teams">${SPORT_EMOJI[b.sport] || ""} ${teamsLine(b)}</div>
         <div class="pk-pick">🎯 ${esc(b.label)} <span class="an-odds">@ ${Number(b.odds).toFixed(2)}</span></div>
@@ -2144,7 +2144,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="st-hero">
         <div class="st-big">${Math.round(s.balance).toLocaleString("ru-RU")} ₽</div>
         <div class="st-cap">Баланс (старт — ${Math.round(s.start_bankroll).toLocaleString("ru-RU")} ₽)</div>
-        <div class="ai-sub">${totalSign}${Math.round(profit).toLocaleString("ru-RU")} ₽ всего · ${s.bets_settled} ставок, ${s.wins}/${s.losses}</div>
+        <div class="ai-sub">${totalSign}${Math.round(profit).toLocaleString("ru-RU")} ₽ всего · ${s.bets_settled} ставок: ${s.wins} ✅ / ${s.losses} ❌${s.voids ? ` / ${s.voids} ↩` : ""}</div>
       </div>
       <div class="ws-block"><div class="an-h">📅 За эту неделю</div>
         <div class="ws-main"><b>${weekSign}${Math.round(s.week_profit).toLocaleString("ru-RU")} ₽</b> · ${s.week_bets} ставок</div></div>

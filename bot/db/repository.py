@@ -244,6 +244,9 @@ class Repository:
         ).fetchone()
         return START_BANKROLL + (row[0] or 0.0)
 
+    def ai_pending_stake(self) -> float:
+        return float(self._conn.execute("SELECT SUM(stake) FROM ai_bets WHERE result IS NULL").fetchone()[0] or 0.0)
+
     def ai_bet_exists(self, match_id: str) -> bool:
         return self._conn.execute("SELECT 1 FROM ai_bets WHERE match_id = ?", (match_id,)).fetchone() is not None
 
@@ -289,7 +292,8 @@ class Repository:
             "start_bankroll": START_BANKROLL,
             "bets_settled": settled[1] or 0,
             "wins": wins,
-            "losses": (settled[1] or 0) - wins,
+            "losses": self._conn.execute("SELECT COUNT(*) FROM ai_bets WHERE result = 'lose'").fetchone()[0],
+            "voids": self._conn.execute("SELECT COUNT(*) FROM ai_bets WHERE result = 'void'").fetchone()[0],
             "week_profit": round(week[0] or 0.0, 2),
             "week_bets": week[1] or 0,
             "pending_bets": pending[0] or 0,

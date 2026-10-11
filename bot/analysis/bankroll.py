@@ -25,10 +25,18 @@ MIN_STAKE, MAX_STAKE = 50.0, 1500.0
 def place_bet(repo: Repository, match: FootballMatch, option: Option, confidence: str) -> None:
     if confidence not in SURE_CONFIDENCE or repo.ai_bet_exists(match.id):
         return
-    balance = repo.ai_bankroll_balance()
-    if balance < MIN_STAKE:
+    # Only where the bet can actually be settled: a sport we have a results feed for,
+    # and a popular tournament (minor tennis/table tennis/hockey never got a score, so
+    # their stakes were stuck or written off -- owner 2026-10-11 review).
+    from bot.analysis.results import BETCITY_SPORT
+
+    if match.sport not in BETCITY_SPORT or not match.is_popular:
+        return
+    # Money already riding on open bets isn't available to stake again.
+    available = repo.ai_bankroll_balance() - repo.ai_pending_stake()
+    if available < MIN_STAKE:
         return  # busted -- stop digging until(/unless) the owner tops it back up
-    stake = round(min(MAX_STAKE, max(MIN_STAKE, balance * STAKE_PCT[confidence])), 2)
+    stake = round(min(MAX_STAKE, available, max(MIN_STAKE, available * STAKE_PCT[confidence])), 2)
     repo.place_ai_bet(
         match.id, match.team_a, match.team_b, match.sport, match.league,
         option.label, option.odds, confidence, stake, match.start_utc.isoformat(),

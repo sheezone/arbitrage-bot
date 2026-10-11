@@ -94,7 +94,10 @@ async def settle_ai_bets(repo: Repository) -> int:
         row = repo.get_ai_analysis(bet["match_id"])
         if row is None or row["result"] not in ("win", "lose"):
             if now - datetime.fromisoformat(bet["start_utc"]) > GIVE_UP_AFTER:
-                repo.settle_ai_bet(bet["match_id"], "lose", 0.0)  # abandoned stake, not a win
+                # No final score ever arrived (no results feed for this sport/tournament):
+                # the outcome is unknown, so the stake is returned -- NOT counted as a loss
+                # (owner 2026-10-11: that was 100 of 119 "losses" and the whole -28k).
+                repo.settle_ai_bet(bet["match_id"], "void", bet["stake"])
                 n += 1
             continue
         payout = bet["stake"] * bet["odds"] if row["result"] == "win" else 0.0
