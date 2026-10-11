@@ -8,3 +8,4 @@ fastapi>=0.110,<1
 uvicorn>=0.29,<1
 websockets>=12,<16
 anthropic>=1.9,<2
+mcp>=1.0,<3

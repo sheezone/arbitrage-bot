@@ -129,6 +129,7 @@ async def main() -> None:
         analyzer = Analyzer(
             repo, config.anthropic_api_key, model=config.news_model,
             api_football_key=config.api_football_key, football_data_key=config.football_data_key,
+            openscores_api_key=config.openscores_api_key,
             bot=bot, admin_chat_ids=config.admin_chat_ids,
         )
         settle_task = asyncio.create_task(run_settler(repo))

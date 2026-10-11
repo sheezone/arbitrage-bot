@@ -27,6 +27,7 @@ from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.football_stats import get_match_h2h
 from bot.webapp.hockey_stats import get_match_h2h as hockey_h2h
 from bot.webapp.news import fetch_team_news
+from bot.webapp.openscores import get_team_form as openscores_form
 from bot.webapp.team_form import get_team_form as espn_team_form
 
 logger = logging.getLogger(__name__)
@@ -229,11 +230,13 @@ def _normalise(probs: dict) -> dict:
 
 class Analyzer:
     def __init__(self, repo: Repository, api_key: str, *, model: str, api_football_key: str = "",
-                 football_data_key: str = "", bot=None, admin_chat_ids: frozenset[int] = frozenset()):
+                 football_data_key: str = "", openscores_api_key: str = "",
+                 bot=None, admin_chat_ids: frozenset[int] = frozenset()):
         self.repo = repo
         self.model = model
         self.api_football_key = api_football_key
         self.football_data_key = football_data_key
+        self.openscores_api_key = openscores_api_key
         self.bot = bot
         self.admin_chat_ids = admin_chat_ids
         self.claude = anthropic.AsyncAnthropic(api_key=api_key)
@@ -306,8 +309,12 @@ class Analyzer:
         async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Mozilla/5.0"}) as client:
             async def form(team: str):
                 try:
-                    return (await fd_team_form(client, team, self.football_data_key) if self.football_data_key else None) \
+                    found = (await fd_team_form(client, team, self.football_data_key) if self.football_data_key else None) \
                         or await espn_team_form(client, team)
+                    if found:
+                        return found
+                    # Last resort, top-5 leagues + World Cup only -- see openscores.py's docstring
+                    return await openscores_form(team, self.openscores_api_key) if self.openscores_api_key else None
                 except Exception:
                     return None
 

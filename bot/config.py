@@ -26,6 +26,7 @@ class Config:
     prodamus_secret_key: str
     prodamus_npd_income_type: str
     football_data_key: str
+    openscores_api_key: str
     webapp_url: str
     webapp_port: int
     admin_chat_ids: frozenset[int]
@@ -84,6 +85,7 @@ def load_config() -> Config:
         # results for ~10 top competitions to the analysis view. Empty = skip, ESPN
         # stays the fallback. See bot/webapp/football_data.py.
         football_data_key=os.environ.get("FOOTBALL_DATA_KEY", ""),
+        openscores_api_key=os.environ.get("OPENSCORES_API_KEY", ""),
         webapp_url=os.environ.get("WEBAPP_URL", "").rstrip("/"),
         webapp_port=int(os.environ.get("WEBAPP_PORT", "8000")),
         admin_chat_ids=frozenset(
