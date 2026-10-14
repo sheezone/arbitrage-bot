@@ -11,13 +11,13 @@ from bot.db.repository import UserSettings
 
 # Owner 2026-10-03: new users get MAX for 1 day (2 via a friend's link). Users who
 # started before the change keep the old 5/7-day trial they were promised.
-TRIAL_DAYS = 1
+TRIAL_DAYS = 3  # owner 2026-10-15: "всем при первом заходе 3 дня бесплатно"
 TRIAL_CHANGED_AT = "2026-10-03T03:00:00+00:00"
 OLD_TRIAL_DAYS, OLD_REFERRED_TRIAL_DAYS = 5, 7
 # A user who signed up via someone's referral link gets a longer trial -- extra incentive
 # to actually use a referral link instead of just starting the bot cold. Kept strictly
 # above TRIAL_DAYS so "referred = more" stays true.
-REFERRED_TRIAL_DAYS = 2
+REFERRED_TRIAL_DAYS = 4
 # Free days credited to the referrer for each new user who starts the bot via their link.
 REFERRAL_BONUS_DAYS = 3
 # ...plus an instant reward: one extra «Найти экспресс» on top of the normal limit.
