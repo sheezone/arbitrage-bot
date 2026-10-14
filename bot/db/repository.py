@@ -230,8 +230,11 @@ class Repository:
     )
     _FAV_SQL = f"IFNULL({_TOP_PROB_SQL}, 0) >= 0.60"
     _STAT_HIT_SQL = (
-        f"CASE WHEN (winner_result = 'win' AND {_FAV_SQL}) OR result = 'win' THEN 'win' "
-        f"WHEN (winner_result = 'lose' AND {_FAV_SQL}) OR result = 'lose' THEN 'lose' END"
+        # a bet on the winner itself is the same coin-flip, so it's filtered too
+        f"CASE WHEN (winner_result = 'win' AND {_FAV_SQL}) OR (result = 'win' AND ({_FAV_SQL} "
+        f"OR option_kind NOT IN ('1x2','winner'))) THEN 'win' "
+        f"WHEN (winner_result = 'lose' AND {_FAV_SQL}) OR (result = 'lose' AND ({_FAV_SQL} "
+        f"OR option_kind NOT IN ('1x2','winner'))) THEN 'lose' END"
     )
 
     def ai_hit_rate(self, since_iso: str = "") -> tuple[int, int]:
