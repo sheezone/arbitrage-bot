@@ -321,7 +321,17 @@ def register_api(
         pool = [p for p in picks if p.get("popular") and not p.get("skip") and p.get("probabilities")]
         if not pool:
             return None
-        p = min(pool, key=lambda p: (_CONF_RANK.get(p["confidence"], 5), p["start_utc"]))
+        def top_pct(p: dict) -> int:
+            pr = p["probabilities"]
+            return max(pr.get("p1") or 0, pr.get("x") or 0, pr.get("p2") or 0)
+
+        # most confident first, then the clearest favourite; low-confidence coin-flips
+        # never headline the home screen
+        pool = [p for p in pool if _CONF_RANK.get(p["confidence"], 5) <= 2] or \
+            [p for p in pool if top_pct(p) >= 60]
+        if not pool:
+            return None
+        p = min(pool, key=lambda p: (_CONF_RANK.get(p["confidence"], 5), -top_pct(p), p["start_utc"]))
         out = {k: p[k] for k in ("match_id", "sport", "team_a", "team_b", "league", "start_utc", "confidence",
                                  "probabilities", "predicted")}
         out["start_label"] = format_match_start(p["start_utc"])

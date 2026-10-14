@@ -2693,7 +2693,7 @@ an_news: "News (injuries, form, suspensions)",
     const hr = h.hit_rate || { wins: 0, total: 0, min_total: 20 };
     const y = h.yesterday || { wins: 0, total: 0 };
     const trust = [
-      y.total ? tr("hp_yday", { w: y.wins, n: y.total }) : "",
+      y.total >= 3 && y.wins / y.total >= 0.6 ? tr("hp_yday", { w: y.wins, n: y.total }) : "",
       hr.total >= hr.min_total ? tr("hp_total", { p: Math.round((hr.wins / hr.total) * 100), n: hr.total }) : "",
     ].filter(Boolean).join(" · ");
     const q = (go, ic, t, s) => `<button type="button" class="hq" data-go="${go}"><span class="hq-ico">${icon(ic, 26)}</span><span class="hq-t">${t}</span><span class="hq-s">${s}</span></button>`;
