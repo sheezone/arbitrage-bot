@@ -47,7 +47,7 @@ def test_method_view_lists_all_plans_for_that_method():
     text, keyboard = _subscription_method_view(_user(), "crypto", admin_chat_ids=frozenset())
     data = [b.callback_data for row in keyboard.inline_keyboard for b in row]
     assert "sub:7d:crypto" in data
-    assert "sub:30d:crypto" in data
+    assert "sub:30d_sale:crypto" in data
     assert "sub:360d:crypto" not in data
 
 
@@ -60,7 +60,7 @@ def test_stars_method_view_offers_buy_stars_link():
     assert "starslly_bot" in text
     # still lists the plans as normal
     data = [b.callback_data for row in keyboard.inline_keyboard for b in row]
-    assert "sub:30d:stars" in data
+    assert "sub:30d_sale:stars" in data
 
 
 def test_non_stars_method_view_has_no_buy_stars_link():
