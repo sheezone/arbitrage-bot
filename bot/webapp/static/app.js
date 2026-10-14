@@ -3033,9 +3033,7 @@ an_news: "News (injuries, form, suspensions)",
           <div class="an-unlock">Открыть MAX →</div></button>`;
     const pickHtml = a.pick_locked ? lockHtml : a.pick
       ? `<div class="an-pick">
-          <div class="an-pick-k">${tr("pick")}</div>
-          <div class="an-pick-v">${esc(a.pick.label)} <span class="an-odds">@ ${a.pick.odds.toFixed(2)}</span></div>
-          <div class="an-conf">${tr("confidence")} ${confMeter(a.confidence)}</div>
+          <div class="an-pick-k">🎯 Почему эта ставка</div>
           <div class="an-why">${esc(a.reasoning)}</div>
         </div>`
       : `<div class="an-pick">
@@ -3050,9 +3048,9 @@ an_news: "News (injuries, form, suspensions)",
         <div class="an-teams">${teamsLine(m)}</div>
         ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>
-      ${finalNotice(a, m)}
       ${verdictBlock(a, m)}
       ${pickHtml}
+      ${finalNotice(a, m)}
       <div class="an-block"><div class="an-h">${tr("summary")}</div><div>${esc(a.summary)}</div></div>
       ${fold(tr("factors"), a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join(""))}
       ${a.injuries ? fold(tr("injuries"), esc(a.injuries)) : ""}
