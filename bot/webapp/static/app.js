@@ -2701,7 +2701,7 @@ an_news: "News (injuries, form, suspensions)",
       <section class="home">
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
         ${topPickCard(h.top_pick)}
-        ${trust ? `<button type="button" class="hp-trust" data-go="aistats">${trust}<span>${tr("hp_stats")} ›</span></button>` : ""}
+        ${trust ? `<button type="button" class="hp-trust" data-go="aistats"><span class="hp-trust-t">${trust}</span><span>${tr("hp_stats")} ›</span></button>` : ""}
         <div class="hq-grid">
           ${q("ai", "brain", tr("q_ai"), tr("q_ai_s"))}
           ${q("express", "trending", tr("q_ex"), h.express_count ? tr("c_ex_badge", { n: h.express_count }) : tr("q_ex_s"))}

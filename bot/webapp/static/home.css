@@ -570,3 +570,9 @@ body {
 .onb-dots i { width: 7px; height: 7px; border-radius: 50%; background: #4a3570; }
 .onb-dots i.on { background: #b26bff; width: 20px; border-radius: 4px; }
 .onb-btn { width: 100%; padding: 12px; font-size: 15px; }
+
+/* Wide windows (Telegram Desktop): keep the app a phone-width column, centred. */
+main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margin-right: auto; width: 100%; box-sizing: border-box; }
+.bottom-nav { padding-left: max(0px, calc((100% - 520px) / 2)); padding-right: max(0px, calc((100% - 520px) / 2)); }
+.hp-trust { justify-content: space-between; }
+.hp-trust .hp-trust-t { flex: 1; color: #e9e2f7; font-weight: 400; white-space: normal; }
