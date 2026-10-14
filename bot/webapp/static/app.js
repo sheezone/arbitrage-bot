@@ -2882,6 +2882,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="vd-main">${head}</div>
       ${others ? `<div class="vd-others">${others}</div>` : ""}
       ${pick}
+      ${a.skip ? `<div class="vd-skip">⛔ <b>Совет ИИ: лучше пропустить этот матч.</b>${a.skip_reason ? " " + esc(a.skip_reason) : ""}</div>` : ""}
       <div class="vd-note">${tr("vd_note")}</div>
     </div>`;
   }

@@ -67,9 +67,11 @@ SCHEMA = {
         "risks": {"type": "string"},
         "injuries": {"type": "string"},
         "motivation": {"type": "string"},
+        "skip": {"type": "boolean"},
+        "skip_reason": {"type": "string"},
     },
     "required": ["summary", "factors", "probabilities", "option_id", "confidence", "reasoning", "risks",
-                 "injuries", "motivation"],
+                 "injuries", "motivation", "skip", "skip_reason"],
     "additionalProperties": False,
 }
 
@@ -116,6 +118,11 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   информация из интернета», 1–3 предложения; если таких данных нет — так и напиши.
 - motivation — турнирная мотивация: за что борются команды, ротация, график, 1–2
   предложения.
+- skip — честная рекомендация «лучше пропустить матч» (owner 2026-10-15). Ставка всё равно
+  выбирается как обычно, но skip = true, если: шансы почти равны (фаворит ниже ~55%), данных
+  мало или они противоречат друг другу, ключевой состав неизвестен, или выбранная ставка не
+  выгоднее линии. skip_reason — 1 предложение, почему (с цифрой); при skip = false — пустая строка.
+  Не ставь skip ради перестраховки на ясных матчах.
 - Пиши по-русски, коротко и по делу."""
 
 # Team form + head-to-head come from a real API for football only (bot/webapp/football_data.py,
@@ -347,7 +354,8 @@ class Analyzer:
             )
             from bot.analysis.bankroll import place_bet
 
-            place_bet(self.repo, match, option, result["confidence"])
+            if not result.get("skip"):  # AI itself advises sitting this one out
+                place_bet(self.repo, match, option, result["confidence"])
             return result
 
     async def _self_check(self, match: FootballMatch, result: dict, option: Option) -> str | None:
