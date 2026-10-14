@@ -203,6 +203,8 @@ def test_evaluate_group_keeps_arbs_at_or_below_the_max_displayable_ceiling():
 
 import asyncio
 
+from bot.core import billing
+
 
 class _FakeBot:
     def __init__(self):
@@ -258,8 +260,8 @@ def test_send_expiry_reminders_attaches_the_keyboard_factorys_markup(tmp_path):
     repo = Repository(str(tmp_path / "t.sqlite3"))
     repo.upsert_user(1)
     repo.set_active(1, True)
-    # Push the trial to expire in under 24h so the reminder actually fires (TRIAL_DAYS=1).
-    soon = (datetime.now(timezone.utc) - timedelta(hours=23)).isoformat()
+    # Push the trial to expire in under 24h so the reminder actually fires (trial = TRIAL_DAYS).
+    soon = (datetime.now(timezone.utc) - timedelta(days=billing.TRIAL_DAYS) + timedelta(hours=1)).isoformat()
     repo._conn.execute("UPDATE users SET trial_started_at = ? WHERE chat_id = ?", (soon, 1))
     repo._conn.commit()
 
