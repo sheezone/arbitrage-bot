@@ -26,6 +26,7 @@ from bot.db.repository import Repository
 from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.football_stats import get_match_h2h
 from bot.webapp.hockey_stats import get_match_h2h as hockey_h2h
+from bot.webapp.tennis_elo import match_elo as tennis_elo
 from bot.webapp.news import fetch_team_news
 from bot.webapp.openligadb import get_team_form as openligadb_form
 from bot.webapp.openscores import get_team_form as openscores_form
@@ -159,6 +160,11 @@ HLTV_SYSTEM = ("Ты собираешь статистику перед матч
                "рейтинг ключевых игроков (Rating 3.0) за последние месяцы, формат матча (Bo1/Bo3). "
                "Только факты с цифрами, без прогнозов. По-русски, списком, до 15 пунктов. Если на HLTV "
                "ничего не нашлось — так и напиши.")
+TENNIS_SYSTEM = ("Ты собираешь статистику перед теннисным матчем с сайта tennisabstract.com. Найди: "
+                 "результаты последних 10 матчей каждого игрока со счётом и соперниками, винрейт на этом покрытии "
+                 "за сезон, личные встречи, процент выигранных геймов на своей подаче и на приёме, сколько матчей "
+                 "сыграно за последние 2 недели (усталость), снятия и травмы. Только факты с цифрами, без прогнозов. "
+                 "По-русски, списком, до 15 пунктов. Если ничего не нашлось — так и напиши.")
 STATS_SYSTEM = ("Ты собираешь ЦИФРЫ перед матчем, не новости. Найди в интернете: результаты последних "
                 "5-10 матчей каждого участника со счётом, отдельно дома и в гостях; место, очки и разницу в "
                 "таблице; средний тотал и как часто матчи проходили выше/ниже типичных линий; личные встречи "
@@ -363,6 +369,10 @@ class Analyzer:
             elif match.sport == "hockey":
                 form_a = form_b = None
                 h2h_data, headlines = await asyncio.gather(hockey_h2h_(), news())
+            elif match.sport == "tennis":
+                form_a = form_b = h2h_data = None
+                elo, headlines = await asyncio.gather(
+                    tennis_elo(client, match.team_a, match.team_b, match.league), news())
             else:
                 form_a = form_b = h2h_data = None
                 headlines = await news()
@@ -373,6 +383,14 @@ class Analyzer:
             general, hltv = await asyncio.gather(self._research(match), self._research(
                 match, HLTV_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 6, "allowed_domains": ["hltv.org"]}))
             research = f"{general}\n\nДанные HLTV:\n{hltv}" if hltv else general
+        elif match.sport == "tennis":
+            # Tennis (owner 2026-10-15): Elo from Tennis Abstract + a search pass on that site.
+            general, ta = await asyncio.gather(self._research(match), self._research(
+                match, TENNIS_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 6, "allowed_domains": ["tennisabstract.com"]}))
+            research = "
+
+".join(x for x in (elo, general, f"Данные Tennis Abstract:
+{ta}" if ta else "") if x)
         else:
             # Deeper analysis (owner 2026-10-11): a second, stats-only search pass in
             # parallel with the general one -- numbers (home/away splits, totals trend,
