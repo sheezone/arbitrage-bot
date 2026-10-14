@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 import anthropic
 import httpx
 
@@ -119,10 +120,11 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
 - motivation — турнирная мотивация: за что борются команды, ротация, график, 1–2
   предложения.
 - skip — честная рекомендация «лучше пропустить матч» (owner 2026-10-15). Ставка всё равно
-  выбирается как обычно, но skip = true, если: шансы почти равны (фаворит ниже ~55%), данных
-  мало или они противоречат друг другу, ключевой состав неизвестен, или выбранная ставка не
-  выгоднее линии. skip_reason — 1 предложение, почему (с цифрой); при skip = false — пустая строка.
-  Не ставь skip ради перестраховки на ясных матчах.
+  выбирается как обычно, но skip = true ТОЛЬКО если: шансы почти равны (у фаворита меньше 52%),
+  или собранные факты прямо противоречат друг другу, или выбранная ставка явно невыгодна (твоя
+  вероятность ниже той, что заложена в коэффициент). Фаворит 55%+ — нормальная ставка, НЕ пропуск
+  (владелец 2026-10-15). Нехватка части данных сама по себе — не повод для skip: просто честно
+  понизь уверенность. skip_reason — 1 предложение с цифрой; при skip = false — пустая строка.
 - Пиши по-русски, коротко и по делу."""
 
 # Team form + head-to-head come from a real API for football only (bot/webapp/football_data.py,
@@ -477,19 +479,40 @@ class Analyzer:
         # Non-football sports have no structured form/H2H API behind them (see _gather),
         # so web search is doing double duty there -- give it a bigger budget.
         tool = tool or {**WEB_SEARCH_TOOL, "max_uses": 8 if match.sport == "football" else 10}
-        system = system or _research_system(match.sport)
-        try:
-            for _ in range(3):  # server tool loops may pause; resume up to twice
-                response = await self.claude.messages.create(
-                    model=self.model, max_tokens=6000, system=system,
-                    messages=messages, tools=[tool], output_config={"effort": "low"},
-                )
-                if response.stop_reason != "pause_turn":
-                    break
-                messages = messages + [{"role": "assistant", "content": response.content}]
-            from bot.analysis.token_budget import record as _record_token_usage
+        system = (system or _research_system(match.sport)) + (
+            f"\n\nСегодня {datetime.now(timezone.utc):%d.%m.%Y} — это реальная текущая дата, матч предстоящий. "
+            "Используй инструменты web_search и fetch_page: сначала поиск, потом открой 2-4 самые полезные "
+            "страницы и выпиши факты. Не отвечай по памяти.")
+        domains = tool.get("allowed_domains")
+        budget = int(tool.get("max_uses", 6)) + 3  # searches + page reads
+        # The gateway's server-side web_search is unavailable (2026-10-15), so we run
+        # our own tools (bot/analysis/websearch.py) in a client-side tool loop.
+        from bot.analysis import websearch
+        from bot.analysis.token_budget import record as _record_token_usage
 
-            await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
+        try:
+            async with httpx.AsyncClient() as http:
+                used = 0
+                for _ in range(budget + 1):
+                    response = await self.claude.messages.create(
+                        model=self.model, max_tokens=6000, system=system, messages=messages,
+                        tools=websearch.TOOLS, output_config={"effort": "low"},
+                        tool_choice={"type": "auto"} if used < budget else {"type": "none"},
+                    )
+                    await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)
+                    calls = [b for b in response.content if b.type == "tool_use"]
+                    if response.stop_reason != "tool_use" or not calls:
+                        break
+                    results = []
+                    for c in calls:
+                        used += 1
+                        if c.name == "web_search":
+                            out = await websearch.search(http, str(c.input.get("query", "")), domains)
+                        else:
+                            out = await websearch.fetch(http, str(c.input.get("url", "")), domains)
+                        results.append({"type": "tool_result", "tool_use_id": c.id, "content": out})
+                    messages = messages + [{"role": "assistant", "content": response.content},
+                                           {"role": "user", "content": results}]
             if response.stop_reason == "refusal":
                 return ""
             return "\n".join(b.text for b in response.content if b.type == "text").strip()[:10000]
