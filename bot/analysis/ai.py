@@ -185,6 +185,12 @@ CONTEXT_SYSTEM = ("Ты ищешь НЕОЧЕВИДНЫЕ факторы пер�
                   "нужно, матч памяти, юбилей, судья и его статистика карточек/пенальти.\n"
                   "5) Движение линии: если коэффициент сильно изменился за последние дни — почему.\n"
                   "Никаких прогнозов. По-русски, списком, до 15 пунктов. Чего не нашлось — не выдумывай.")
+INJURIES_SYSTEM = ("Ты собираешь список травмированных и дисквалифицированных игроков перед футбольным матчем "
+                   "с сайтов football-lineups.com и transfermarkt. Для каждой команды: кто не сыграет, причина "
+                   "(травма какая / дисквалификация / под вопросом), примерная дата возвращения, насколько это "
+                   "ключевой игрок (основа, голы/передачи в сезоне). Только факты, без прогнозов. По-русски, "
+                   "списком по командам. Если ничего не нашлось — так и напиши.")
+INJURY_DOMAINS = ["football-lineups.com", "transfermarkt.com", "transfermarkt.ru", "transfermarkt.de"]
 FLASHSCORE_SYSTEM = ("Ты собираешь данные перед матчем только с сайта Flashscore (flashscorekz.com / "
                      "flashscore.com). Найди: результаты последних 5-10 матчей каждой команды/игрока со "
                      "счётом и датами, отдельно дома и в гостях, место и очки в турнирной таблице, личные "
@@ -407,6 +413,11 @@ class Analyzer:
         flash_task = asyncio.create_task(self._research(
             match, FLASHSCORE_SYSTEM,
             {**WEB_SEARCH_TOOL, "max_uses": 4, "allowed_domains": ["flashscorekz.com", "flashscore.com"]}))
+        # Injuries (owner 2026-10-15): football-lineups.com is behind Cloudflare for direct
+        # requests (403 from the server), so it's read via domain-restricted web search.
+        inj_task = asyncio.create_task(self._research(
+            match, INJURIES_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 4, "allowed_domains": INJURY_DOMAINS},
+        )) if match.sport == "football" else None
         if match.sport == "esports" and match.league.startswith("Counter-Strike"):
             # CS2: HLTV is the reference source (ranking, map pool, recent results, H2H).
             # hltv.org is behind Cloudflare bot protection for direct requests, so it's
@@ -432,6 +443,9 @@ class Analyzer:
         flash = await flash_task
         if flash:
             research += f"\n\nДанные Flashscore:\n{flash}"
+        injuries = await inj_task if inj_task else ""
+        if injuries:
+            research += f"\n\nТравмы и дисквалификации (football-lineups / transfermarkt):\n{injuries}"
         return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines, "research": research}
 
     async def _research(self, match: FootballMatch, system: str | None = None, tool: dict | None = None) -> str:
