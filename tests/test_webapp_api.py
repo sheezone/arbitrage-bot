@@ -872,7 +872,7 @@ def test_subscription_lists_plans_without_year_or_test_plan(tmp_path, monkeypatc
     app, _ = _pay_app(tmp_path, monkeypatch, _FakeYK())
     body = _run(_get(app, "/api/subscription", headers=_auth_header(1))).json()
     # never paid -> the cheap first-purchase week replaces the regular 7d plan
-    assert [p["id"] for p in body["plans"]] == ["7d_first", "30d"]
+    assert [p["id"] for p in body["plans"]] == ["7d_first", "30d_sale"]
     assert body["methods"]["sbp"] is True
     admin = _run(_get(app, "/api/subscription", headers=_auth_header(99))).json()
     assert "test30" not in [p["id"] for p in admin["plans"]]

@@ -39,12 +39,14 @@ class Plan:
 # to revisit, not a permanently fixed peg. Same for price_usdt (see USDT_TO_RUB_RATE below).
 PLANS: list[Plan] = [
     Plan(id="7d", days=7, label="7 дней", price_rub=299, price_stars=200, price_usdt=3.5),
-    Plan(id="30d", days=30, label="30 дней", price_rub=999, price_stars=700, price_usdt=11.0),
+    # 30 days at 499 instead of 999 (owner 2026-10-15: "выгодный" option next to the week).
+    Plan(id="30d_sale", days=30, label="30 дней — выгодно", price_rub=499, price_stars=350, price_usdt=5.75),
 ]
 # No longer sold (removed from the subscription screen 2026-09-25); kept resolvable in
 # PLANS_BY_ID so an invoice issued before removal still credits correctly.
 RETIRED_PLANS: list[Plan] = [
     Plan(id="360d", days=360, label="360 дней", price_rub=6990, price_stars=5000, price_usdt=78.0),
+    Plan(id="30d", days=30, label="30 дней", price_rub=999, price_stars=700, price_usdt=11.0),
 ]
 
 # Admin-only, 30₽ for 1 day -- exists purely to let an admin run a real payment through a

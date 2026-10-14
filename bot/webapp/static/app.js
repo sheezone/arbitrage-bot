@@ -1977,7 +1977,7 @@ an_news: "News (injuries, form, suspensions)",
       .map(
         (p) => `
         <div class="card sub-plan">
-          <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.id === "7d_first" ? `<s class="sub-old">299 ₽</s> ` : ""}${p.price_rub} ₽</span></div>
+          <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.id === "7d_first" ? `<s class="sub-old">299 ₽</s> ` : p.id === "30d_sale" ? `<s class="sub-old">999 ₽</s> ` : ""}${p.price_rub} ₽</span></div>
           <button type="button" class="save-btn pay-open-btn">${t("pay_btn")}</button>
           <div class="sub-plan-methods" hidden>
             ${methods
