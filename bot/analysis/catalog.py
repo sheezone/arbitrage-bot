@@ -141,20 +141,37 @@ NOT_TOP_WORDS = ("Дивизион С", "Дивизион C", "Дивизион 
                  "U21", "U19", "U20", "До 21", "До 19", "Молодеж", "Женщины")
 
 
+# Stats = only the elite of the day (owner 2026-10-15: "лучшие матчи дня типа лиги
+# чемпионов, НХЛ... в кс хороший турнир, а не каких-то китайцев"). Everything else
+# still gets analysed, it just doesn't feed the public hit-rate.
+STAT_FOOTBALL = ("Лига Чемпионов УЕФА", "Лига Европы УЕФА", "Лига наций УЕФА. Дивизион А",
+                 "Чемпионат мира", "Чемпионат Европы", "Англия. Премьер-Лига", "Испания. Примера",
+                 "Италия. Серия А", "Германия. Бундеслига", "Франция. Лига 1", "Россия. Премьер-Лига")
+STAT_HOCKEY = ("НХЛ", "КХЛ")
+STAT_BASKETBALL = ("НБА. Регулярный сезон", "НБА. Плей-офф", "Евролига", "Лига ВТБ")
+STAT_ESPORTS = ("Major", "IEM", "BLAST", "ESL Pro League", "PGL", "The International", "Riyadh",
+                "Esports World Cup", "Worlds", "MSI", "Valorant. Champions")
+STAT_TENNIS = ("Australian Open", "Ролан Гаррос", "Roland Garros", "Уимблдон", "Wimbledon", "US Open",
+               "Итоговый")
+STAT_COMBAT = ("UFC",)
+
+
 def popular_league(sport: str, league: str) -> bool:
     if any(w in league for w in NOT_TOP_WORDS):
         return False
     if sport == "football":
-        return _league_in(league, TOP_LEAGUES)
+        return _league_in(league, STAT_FOOTBALL) or league.startswith("Лига наций УЕФА. Дивизион А")
+    if sport == "hockey":
+        return _league_in(league, STAT_HOCKEY)
     if sport == "basketball":
-        return _league_in(league, BASKETBALL_TOP)
-    if sport == "volleyball":
-        return _league_in(league, VOLLEYBALL_TOP)
+        return _league_in(league, STAT_BASKETBALL)
     if sport == "tennis":
-        return league.startswith(("ATP.", "WTA.")) and "Челленджер" not in league and "125K" not in league
+        return any(kw in league for kw in STAT_TENNIS)
+    if sport == "esports":
+        return any(kw in league for kw in STAT_ESPORTS)
     if sport == "combat":
-        return any(kw in league for kw in COMBAT_TOP)
-    return any(kw in league for kw in TOP_TOURNAMENT_KEYWORDS.get(sport, ()))
+        return any(kw in league for kw in STAT_COMBAT)
+    return False
 
 
 def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = HORIZON,
