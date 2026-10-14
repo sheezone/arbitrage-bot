@@ -185,6 +185,12 @@ CONTEXT_SYSTEM = ("Ты ищешь НЕОЧЕВИДНЫЕ факторы пер�
                   "нужно, матч памяти, юбилей, судья и его статистика карточек/пенальти.\n"
                   "5) Движение линии: если коэффициент сильно изменился за последние дни — почему.\n"
                   "Никаких прогнозов. По-русски, списком, до 15 пунктов. Чего не нашлось — не выдумывай.")
+FLASHSCORE_SYSTEM = ("Ты собираешь данные перед матчем только с сайта Flashscore (flashscorekz.com / "
+                     "flashscore.com). Найди: результаты последних 5-10 матчей каждой команды/игрока со "
+                     "счётом и датами, отдельно дома и в гостях, место и очки в турнирной таблице, личные "
+                     "встречи со счётом, ожидаемые составы и отсутствующих игроков, если указаны. Только факты "
+                     "с цифрами, без прогнозов. По-русски, списком, до 15 пунктов. Если ничего не нашлось — "
+                     "так и напиши.")
 STATS_SYSTEM = ("Ты собираешь ЦИФРЫ перед матчем, не новости. Найди в интернете: результаты последних "
                 "5-10 матчей каждого участника со счётом, отдельно дома и в гостях; место, очки и разницу в "
                 "таблице; средний тотал и как часто матчи проходили выше/ниже типичных линий; личные встречи "
@@ -396,6 +402,11 @@ class Analyzer:
             else:
                 form_a = form_b = h2h_data = None
                 headlines = await news()
+        # Flashscore (owner 2026-10-15): results, standings, H2H, lineups for every sport.
+        # Read through web search restricted to its domains, runs alongside the other passes.
+        flash_task = asyncio.create_task(self._research(
+            match, FLASHSCORE_SYSTEM,
+            {**WEB_SEARCH_TOOL, "max_uses": 4, "allowed_domains": ["flashscorekz.com", "flashscore.com"]}))
         if match.sport == "esports" and match.league.startswith("Counter-Strike"):
             # CS2: HLTV is the reference source (ranking, map pool, recent results, H2H).
             # hltv.org is behind Cloudflare bot protection for direct requests, so it's
@@ -418,6 +429,9 @@ class Analyzer:
             general, stats, *ctx = await asyncio.gather(*passes)
             research = general + (f"\n\nСтатистика:\n{stats}" if stats else "") \
                 + (f"\n\nСкрытые факторы:\n{ctx[0]}" if ctx and ctx[0] else "")
+        flash = await flash_task
+        if flash:
+            research += f"\n\nДанные Flashscore:\n{flash}"
         return {"form_a": form_a, "form_b": form_b, "h2h": h2h_data, "news": headlines, "research": research}
 
     async def _research(self, match: FootballMatch, system: str | None = None, tool: dict | None = None) -> str:
