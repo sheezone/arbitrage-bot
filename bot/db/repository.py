@@ -219,9 +219,19 @@ class Repository:
     # totals bet (result) -- if either one actually hit, the card is a win overall,
     # even when the other one missed). Only counts as a miss when at least one of the
     # two was actually settled and neither hit; NULL (unsettled) if neither resolved.
+    # The winner call only counts for a clear favourite -- AI's top probability >= 60%
+    # (owner 2026-10-14: tennis went 1/6 on coin-flips). Probabilities may be stored
+    # as 0-1 or 0-100, so both scales are normalised.
+    _TOP_PROB_SQL = (
+        "(SELECT MAX(v) FROM (SELECT CASE WHEN p > 1 THEN p / 100.0 ELSE p END AS v FROM ("
+        "SELECT CAST(json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.probabilities.p1') AS REAL) AS p UNION ALL "
+        "SELECT CAST(json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.probabilities.x') AS REAL) UNION ALL "
+        "SELECT CAST(json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.probabilities.p2') AS REAL))))"
+    )
+    _FAV_SQL = f"IFNULL({_TOP_PROB_SQL}, 0) >= 0.60"
     _STAT_HIT_SQL = (
-        "CASE WHEN winner_result = 'win' OR result = 'win' THEN 'win' "
-        "WHEN winner_result = 'lose' OR result = 'lose' THEN 'lose' END"
+        f"CASE WHEN (winner_result = 'win' AND {_FAV_SQL}) OR result = 'win' THEN 'win' "
+        f"WHEN (winner_result = 'lose' AND {_FAV_SQL}) OR result = 'lose' THEN 'lose' END"
     )
 
     def ai_hit_rate(self, since_iso: str = "") -> tuple[int, int]:
