@@ -300,7 +300,40 @@ def register_api(
             if billing.on_trial(user, now) and not billing.is_admin(user, admin_chat_ids) else 0,
             "bonus_expresses": repo.bonus_expresses(chat_id),
             "referral": {"days": billing.REFERRAL_BONUS_DAYS, "expresses": billing.REFERRAL_BONUS_EXPRESSES},
+            "top_pick": _top_pick(picks, billing.has_access(user, now, admin_chat_ids)),
+            "yesterday": _yesterday(now),
         }
+
+    def _mini_verdict(p: dict) -> dict | None:
+        """One-line AI verdict on a match-list card: who wins and how sure, no bet."""
+        pr, pred = p.get("probabilities") or {}, p.get("predicted")
+        if not pred:
+            return None
+        who = {"1": p["team_a"], "2": p["team_b"], "X": "Ничья"}[pred]
+        pct = {"1": pr.get("p1"), "2": pr.get("p2"), "X": pr.get("x")}[pred]
+        return {"who": who, "pct": pct, "confidence": p["confidence"], "skip": p.get("skip", False)}
+
+    _CONF_RANK = {"очень высокая": 0, "высокая": 1, "средняя": 2, "низкая": 3, "очень низкая": 4}
+
+    def _top_pick(picks: list[dict], access: bool) -> dict | None:
+        """Home hero (2026-10-15 redesign): the AI's single most confident upcoming top
+        match. The bet itself stays MAX-only, the predicted winner is shown to all."""
+        pool = [p for p in picks if p.get("popular") and not p.get("skip") and p.get("probabilities")]
+        if not pool:
+            return None
+        p = min(pool, key=lambda p: (_CONF_RANK.get(p["confidence"], 5), p["start_utc"]))
+        out = {k: p[k] for k in ("match_id", "sport", "team_a", "team_b", "league", "start_utc", "confidence",
+                                 "probabilities", "predicted")}
+        out["start_label"] = format_match_start(p["start_utc"])
+        out["label"], out["odds"] = (p["label"], p["odds"]) if access else (None, None)
+        return _crests(out)
+
+    def _yesterday(now: datetime) -> dict:
+        msk = timezone(timedelta(hours=3))
+        day0 = now.astimezone(msk).replace(hour=0, minute=0, second=0, microsecond=0)
+        rows = repo.day_results((day0 - timedelta(days=1)).astimezone(timezone.utc).isoformat(),
+                                day0.astimezone(timezone.utc).isoformat())
+        return {"wins": sum(r["stat_hit"] == "win" for r in rows), "total": len(rows)}
 
     ticker_cache: dict[str, object] = {"at": 0.0, "items": []}
 
@@ -386,8 +419,9 @@ def register_api(
                 games = []
         except Exception:
             matches, games = [], []
-        analyzed = {p["match_id"] for p in upcoming_picks(repo)}
-        return {"matches": [{**_match_out(m), "analyzed": m.id in analyzed} for m in matches],
+        verdicts = {p["match_id"]: _mini_verdict(p) for p in upcoming_picks(repo)}
+        return {"matches": [{**_match_out(m), "analyzed": m.id in verdicts, "verdict": verdicts.get(m.id)}
+                            for m in matches],
                 "sports": [{"key": k, "emoji": v["emoji"], "name": v["name"]} for k, v in SPORTS.items()],
                 "games": [{"name": g, "count": n, "flag": national_flag(g) if sport == "football" else None}
                           for g, n in games]}

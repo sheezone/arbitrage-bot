@@ -1976,7 +1976,8 @@ an_news: "News (injuries, form, suspensions)",
     const plans = d.plans
       .map(
         (p) => `
-        <div class="card sub-plan">
+        <div class="card sub-plan${p.id === "30d_sale" ? " sub-best" : ""}">
+          ${p.id === "30d_sale" ? `<span class="sub-save">${tr("save50")}</span>` : ""}
           <div class="sub-plan-head"><b>${esc(p.label)}</b><span class="sub-plan-price">${p.id === "7d_first" ? `<s class="sub-old">299 ₽</s> ` : p.id === "30d_sale" ? `<s class="sub-old">999 ₽</s> ` : ""}${p.price_rub} ₽</span></div>
           <button type="button" class="save-btn pay-open-btn">${t("pay_btn")}</button>
           <div class="sub-plan-methods" hidden>
@@ -1993,6 +1994,8 @@ an_news: "News (injuries, form, suspensions)",
       <div class="card sub-status">${status}${
         d.referral_balance_rub > 0 ? `<div class="field-hint">${t("sub_ref_balance")}${Math.round(d.referral_balance_rub)} ₽</div>` : ""
       }</div>
+      <div class="card max-what"><div class="max-what-h">💎 ${tr("max_what")}</div>
+        ${["max_1", "max_2", "max_3", "max_4"].map((k) => `<div class="max-li">✅ ${tr(k)}</div>`).join("")}</div>
       <div class="sub-pitch">💡 Окупается одной зашедшей ставкой</div>
       <div class="meta-line">${methods.length ? t("sub_choose") : t("pay_no_methods")}</div>
       <div id="pay-status"></div>
@@ -2527,6 +2530,41 @@ an_news: "News (injuries, form, suspensions)",
     if (vars) for (const k in vars) s = s.split(`{${k}}`).join(vars[k]);
     return s;
   }
+  // 2026-10-15 redesign strings (ru is the fallback for every language in tr()).
+  Object.assign(HL.ru, {
+    nav_home: "Главная", nav_ai: "Прогнозы", nav_express: "Экспрессы",
+    hp_top: "🔥 Прогноз дня", hp_open: "Смотреть разбор →", hp_wins: "Победит <b>{t}</b> · {p}%",
+    hp_bet: "Ставка ИИ: <b>{l}</b> @ <b>{o}</b>", hp_bet_lock: "🔒 Ставка ИИ — в MAX",
+    hp_none: "ИИ готовит прогнозы на ближайшие матчи — загляните чуть позже.",
+    hp_yday: "Вчера <b>{w} из {n}</b> ✅", hp_total: "Всего <b>{p}%</b> · {n} матчей", hp_stats: "Подробнее",
+    q_ai: "Прогнозы ИИ", q_ai_s: "Разбор любого матча", q_ex: "Экспрессы", q_ex_s: "Готовые на сегодня",
+    q_pk: "Готовые прогнозы", q_pk_s: "Уверенные ставки дня", q_st: "Статистика", q_st_s: "Что зашло",
+    only_sure: "Только уверенные", ml_skip: "лучше пропустить", sec_more: "Подробнее",
+    max_what: "Что даёт MAX", max_1: "Ставка ИИ и уверенность в каждом разборе", max_2: "Экспрессы каждый день",
+    max_3: "Финальный разбор за час до матча", max_4: "Готовые уверенные прогнозы дня", save50: "−50%",
+    ob_next: "Дальше", ob_go: "Начать",
+    ob1_t: "ИИ разбирает матчи", ob1_s: "Форма, травмы, составы, мотивация и линия — по каждому матчу, с цифрами.",
+    ob2_t: "Смотрите итог сверху", ob2_s: "Кто победит и с какой вероятностью. 🟢 уверенно · 🟡 средне · ⛔ лучше пропустить.",
+    ob3_t: "Экспрессы и статистика", ob3_s: "Готовые экспрессы на день и честная статистика всех прогнозов.",
+  });
+  Object.assign(HL.en, {
+    nav_home: "Home", nav_ai: "Forecasts", nav_express: "Accas",
+    hp_top: "🔥 Pick of the day", hp_open: "Open analysis →", hp_wins: "<b>{t}</b> wins · {p}%",
+    hp_bet: "AI bet: <b>{l}</b> @ <b>{o}</b>", hp_bet_lock: "🔒 AI bet — in MAX",
+    hp_none: "The AI is preparing forecasts for upcoming matches — check back soon.",
+    hp_yday: "Yesterday <b>{w} of {n}</b> ✅", hp_total: "Overall <b>{p}%</b> · {n} matches", hp_stats: "Details",
+    q_ai: "AI forecasts", q_ai_s: "Analyse any match", q_ex: "Accumulators", q_ex_s: "Ready for today",
+    q_pk: "Ready picks", q_pk_s: "Confident bets of the day", q_st: "Statistics", q_st_s: "What won",
+    only_sure: "Confident only", ml_skip: "better skip", sec_more: "Details",
+    max_what: "What MAX gives", max_1: "AI bet and confidence in every analysis", max_2: "Accumulators every day",
+    max_3: "Final analysis an hour before kick-off", max_4: "Ready confident picks of the day", save50: "−50%",
+    ob_next: "Next", ob_go: "Start",
+    ob1_t: "AI analyses matches", ob1_s: "Form, injuries, lineups, motivation and the line — for every match, with numbers.",
+    ob2_t: "The verdict is on top", ob2_s: "Who wins and how likely. 🟢 confident · 🟡 medium · ⛔ better skip.",
+    ob3_t: "Accas and statistics", ob3_s: "Ready accumulators for the day and honest stats of every forecast.",
+  });
+  const CONF_DOT = { "очень высокая": "🟢", "высокая": "🟢", "средняя": "🟡", "низкая": "🟠", "очень низкая": "🟠" };
+
   const CONF_KEY = { "очень низкая": "conf_vlow", "низкая": "conf_low", "средняя": "conf_mid", "высокая": "conf_high", "очень высокая": "conf_vhigh" };
   const CONF_LEVEL = { "очень низкая": 1, "низкая": 2, "средняя": 3, "высокая": 4, "очень высокая": 5 };
 
@@ -2537,7 +2575,7 @@ an_news: "News (injuries, form, suspensions)",
   function applyNavLabels() {
     const sub = document.querySelector(".brand-text small");
     if (sub) sub.textContent = tr("brand_sub");
-    const labels = { help: tr("nav_help"), support: tr("nav_support"), sub: "MAX" };
+    const labels = { home: tr("nav_home"), ai: tr("nav_ai"), express: tr("nav_express"), support: tr("nav_support"), sub: "MAX" };
     document.querySelectorAll(".bn-item").forEach((b) => {
       const span = b.querySelector("span:last-child");
       if (span && labels[b.dataset.go]) span.textContent = labels[b.dataset.go];
@@ -2587,6 +2625,7 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   const ICONS = {
+    home: '<path d="M4 11.2 12 4.5l8 6.7"/><path d="M6 9.8V19a1 1 0 0 0 1 1h3.5v-5.2h3V20H17a1 1 0 0 0 1-1V9.8"/>',
     brain: '<path d="M9 4.5a2.5 2.5 0 0 0-2.5 2.5v.2A2.5 2.5 0 0 0 5 9.5v1A2.5 2.5 0 0 0 6.5 13a2.5 2.5 0 0 0 2.5 2.5M9 4.5a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 9 18.5M9 4.5V18.5M9 8h2.5M9 12H6M9 15.5H6.5"/><path d="M15 4.5a2.5 2.5 0 0 1 2.5 2.5v.2A2.5 2.5 0 0 1 19 9.5v1a2.5 2.5 0 0 1-1.5 2.5 2.5 2.5 0 0 1-2.5 2.5M15 4.5a2.5 2.5 0 0 0-2.5 2.5v9a2.5 2.5 0 0 0 2.5 2.5M15 4.5V18.5M15 8h-2.5M15 12h3M15 15.5h2.5"/>',
     trending: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 6h6v6"/>',
     target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>',
@@ -2625,6 +2664,24 @@ an_news: "News (injuries, form, suspensions)",
     </button>`;
   }
 
+  // Home (2026-10-15 redesign): one clear answer on top (the AI's pick of the day), a
+  // trust strip (yesterday's result + overall %), then 4 big shortcuts. Ticker last.
+  function topPickCard(p) {
+    if (!p) return `<div class="hp-card hp-empty">${tr("hp_none")}</div>`;
+    const pr = p.probabilities || {};
+    const who = p.predicted === "1" ? p.team_a : p.predicted === "2" ? p.team_b : tr("draw");
+    const pct = p.predicted === "1" ? pr.p1 : p.predicted === "2" ? pr.p2 : pr.x;
+    const bet = p.label ? tr("hp_bet", { l: esc(p.label), o: Number(p.odds).toFixed(2) }) : tr("hp_bet_lock");
+    return `<button type="button" class="hp-card" data-pick="${esc(p.match_id)}">
+      <div class="hp-top"><span>${tr("hp_top")}</span><span class="hp-time">${SPORT_EMOJI[p.sport] || "🏆"} ${esc(p.start_label || "")}</span></div>
+      <div class="hp-league">${esc(p.league || "")}</div>
+      <div class="hp-teams">${teamsLine(p)}</div>
+      <div class="hp-win">${tr("hp_wins", { t: esc(who), p: pct })} ${confMeter(p.confidence)}</div>
+      <div class="hp-bet">${bet}</div>
+      <div class="hp-open">${tr("hp_open")}</div>
+    </button>`;
+  }
+
   async function renderHome() {
     let h = homeCache;
     try {
@@ -2633,26 +2690,61 @@ an_news: "News (injuries, form, suspensions)",
     } catch (e) {
       if (!h) throw e;
     }
-    const locked = !h.has_access;
-    const quota = h.ai_quota.limit == null ? "" : ` · ${h.ai_quota.used}/${h.ai_quota.limit}`;
+    const hr = h.hit_rate || { wins: 0, total: 0, min_total: 20 };
+    const y = h.yesterday || { wins: 0, total: 0 };
+    const trust = [
+      y.total ? tr("hp_yday", { w: y.wins, n: y.total }) : "",
+      hr.total >= hr.min_total ? tr("hp_total", { p: Math.round((hr.wins / hr.total) * 100), n: hr.total }) : "",
+    ].filter(Boolean).join(" · ");
+    const q = (go, ic, t, s) => `<button type="button" class="hq" data-go="${go}"><span class="hq-ico">${icon(ic, 26)}</span><span class="hq-t">${t}</span><span class="hq-s">${s}</span></button>`;
     content.innerHTML = `
       <section class="home">
-        <div class="ticker" id="home-ticker" hidden><div class="ticker-track" id="ticker-track"></div></div>
-        <div class="home-row">
-          <h2 class="home-welcome">${tr("welcome")}</h2>
-        </div>
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
-        <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
-          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">${icon("trophy", 34)}</span><span class="tile-label">${tr("tile_stats")}</span></button>
-          ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">${icon("wrench", 34)}</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
+        ${topPickCard(h.top_pick)}
+        ${trust ? `<button type="button" class="hp-trust" data-go="aistats">${trust}<span>${tr("hp_stats")} ›</span></button>` : ""}
+        <div class="hq-grid">
+          ${q("ai", "brain", tr("q_ai"), tr("q_ai_s"))}
+          ${q("express", "trending", tr("q_ex"), h.express_count ? tr("c_ex_badge", { n: h.express_count }) : tr("q_ex_s"))}
+          ${q("picks", "target", tr("q_pk"), h.picks_count ? `${tr("q_pk_s")} · ${h.picks_count}` : tr("q_pk_s"))}
+          ${q("aistats", "trophy", tr("q_st"), tr("q_st_s"))}
         </div>
-        <h2 class="home-pro">${tr("max_access")}${locked ? ` <button type="button" class="pro-buy" data-go="sub">${tr("buy")}</button>` : ""}</h2>
-        ${proCard("ai", "brain", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
-        ${proCard("express", "trending", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
-        ${proCard("picks", "target", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
+        ${h.is_admin ? `<button type="button" class="hp-admin" data-go="admin">${icon("wrench", 18)} ${tr("tile_admin")}</button>` : ""}
+        <div class="ticker" id="home-ticker" hidden><div class="ticker-track" id="ticker-track"></div></div>
         <p class="home-note">${tr("note")}</p>
       </section>`;
-    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));    loadTicker();
+    content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+    content.querySelectorAll("[data-pick]").forEach((el) => el.addEventListener("click", () => {
+      haptic("light");
+      renderAiAnalysis(`/api/ai/picks/view?match_id=${encodeURIComponent(el.dataset.pick)}`, () => switchTab("home"));
+    }));
+    loadTicker();
+    maybeOnboarding();
+  }
+
+  // First launch: 3 short slides "what the app does" (per-viewer, localStorage).
+  function maybeOnboarding() {
+    let seen = false;
+    try { seen = localStorage.getItem("onboarded_v1") === "1"; } catch (e) { seen = true; }
+    if (seen || document.getElementById("onb")) return;
+    const slides = [["🧠", "ob1_t", "ob1_s"], ["🎯", "ob2_t", "ob2_s"], ["📈", "ob3_t", "ob3_s"]];
+    let i = 0;
+    const box = document.createElement("div");
+    box.id = "onb";
+    box.className = "onb";
+    const draw = () => {
+      const [e, t, s] = slides[i];
+      box.innerHTML = `<div class="onb-card"><div class="onb-emoji">${e}</div><div class="onb-t">${tr(t)}</div>
+        <div class="onb-s">${tr(s)}</div><div class="onb-dots">${slides.map((_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("")}</div>
+        <button type="button" class="pro-buy onb-btn">${tr(i < slides.length - 1 ? "ob_next" : "ob_go")}</button></div>`;
+      box.querySelector(".onb-btn").addEventListener("click", () => {
+        haptic("light");
+        if (++i < slides.length) return draw();
+        try { localStorage.setItem("onboarded_v1", "1"); } catch (e) { /* ignore */ }
+        box.remove();
+      });
+    };
+    draw();
+    document.body.appendChild(box);
   }
 
   // Running news strip on the home screen: live scores, AI favourites, headlines.
@@ -2720,6 +2812,8 @@ an_news: "News (injuries, form, suspensions)",
   const GAME_SHORT = { "Counter-Strike": "CS2", "Dota 2": "Dota 2", "LoL": "LoL", "Valorant": "Valorant",
     "Mobile Legends": "MLBB", "Rainbow Six Siege": "R6", "KoG": "HoK", "StarCraft II": "SC2" };
 
+  let onlySure = false;
+  try { onlySure = localStorage.getItem("only_sure") === "1"; } catch (e) { /* convenience only */ }
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
   let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
   async function renderAiMatches() {
@@ -2730,8 +2824,7 @@ an_news: "News (injuries, form, suspensions)",
     const data = await api(`/api/ai/matches${q}`);
     const h = homeCache;
     const quota = h && h.ai_quota.limit != null ? tr("quota", { u: h.ai_quota.used, l: h.ai_quota.limit }) : tr("unlimited");
-    let html = `<div class="ai-ask">
-        <div class="ai-ask-h">${tr("ask_h")}</div>
+    let html = `<details class="ai-ask-wrap"><summary>🔎 ${tr("ask_h")}</summary><div class="ai-ask">
         <div class="ai-ask-row">
           <input id="ai-team-a" class="ai-input" placeholder="${esc(tr("team1"))}" maxlength="60" autocomplete="off">
           <span class="ai-vs">VS</span>
@@ -2742,8 +2835,8 @@ an_news: "News (injuries, form, suspensions)",
           <button type="button" class="pro-buy ai-go" id="ai-go">${tr("analyze")}</button>
         </div>
         <div class="ai-quota">${quota}</div>
-      </div>
-      <h3 class="sec-h">${tr("or_pick")}</h3>
+      </div></details>
+
       <div class="sport-chips">
         <button type="button" class="sport-chip${aiSport ? "" : " on"}" data-sport="">${tr("all_sports")}</button>
         ${(data.sports || []).map((sp) => `<button type="button" class="sport-chip${aiSport === sp.key ? " on" : ""}" data-sport="${sp.key}" title="${esc(sp.name)}">${sp.emoji}</button>`).join("")}
@@ -2762,20 +2855,36 @@ an_news: "News (injuries, form, suspensions)",
       html += `<button type="button" class="country-back" id="country-back">‹ ${tr("all_countries")} · ${g && g.flag ? g.flag + " " : ""}${esc(aiGame)}</button>`;
     }
     if (!countryList && !data.matches.length) html += `<div class="ai-empty">${tr("no_matches")}</div>`;
+    if (!countryList && data.matches.some((m) => m.verdict)) {
+      html += `<label class="sure-toggle"><input type="checkbox" id="only-sure"${onlySure ? " checked" : ""}><span></span>${tr("only_sure")}</label>`;
+    }
+    const isSure = (v) => v && !v.skip && (CONF_LEVEL[v.confidence] || 0) >= 3;
     let league = null;
     for (const m of countryList ? [] : data.matches) {
+      if (onlySure && !isSure(m.verdict)) continue;
       if (m.league !== league) {
         league = m.league;
         html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(league)}</div>`;
       }
+      const v = m.verdict;
+      const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>` : "";
       html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
         <span class="ai-teams">${teamsLine(m)}</span>
-        <span class="ai-meta">🕒 ${esc(m.start_label || "")}${m.analyzed ? ` · <span class="ai-done">${tr("analyzed")}</span>` : ""}</span></button>`;
+        <span class="ai-meta">🕒 ${esc(m.start_label || "")}</span>${vline}</button>`;
+    }
+    if (!countryList && onlySure && data.matches.length && !data.matches.some((m) => isSure(m.verdict))) {
+      html += `<div class="ai-empty">${tr("no_matches")}</div>`;
     }
     content.innerHTML = html;
     content.querySelectorAll(".country-row").forEach((b) => b.addEventListener("click", () => {
       aiGame = b.dataset.game; haptic("light"); renderAiMatches(); window.scrollTo(0, 0);
     }));
+    const os = document.getElementById("only-sure");
+    if (os) os.addEventListener("change", () => {
+      onlySure = os.checked; haptic("light");
+      try { localStorage.setItem("only_sure", onlySure ? "1" : ""); } catch (e) { /* ignore */ }
+      renderAiMatches();
+    });
     const cb = document.getElementById("country-back");
     if (cb) cb.addEventListener("click", () => { aiGame = ""; haptic("light"); renderAiMatches(); });
     content.querySelectorAll(".sport-chip").forEach((b) =>
@@ -2887,6 +2996,12 @@ an_news: "News (injuries, form, suspensions)",
     </div>`;
   }
 
+  // Secondary analysis sections fold away so the screen reads top-down: verdict, bet,
+  // summary -- details on tap (2026-10-15 redesign).
+  function fold(title, body, cls) {
+    return `<details class="an-block an-fold ${cls || ""}"><summary class="an-h">${title}</summary><div class="fold-body">${body}</div></details>`;
+  }
+
   // Top matches get a second, final analysis ~60 min before kick-off (bot/analysis/final_pass.py).
   function finalNotice(a, m) {
     if (a.final) return `<div class="an-block an-final">✅ <b>Финальный разбор</b> — сделан за час до матча, с учётом составов и движения линии.</div>`;
@@ -2937,15 +3052,13 @@ an_news: "News (injuries, form, suspensions)",
       </div>
       ${finalNotice(a, m)}
       ${verdictBlock(a, m)}
-      ${probBlock(tr("p_ai"), a.probabilities, m, "an-probs")}
       ${pickHtml}
-      ${probBlock(tr("p_market"), a.market, m, "an-probs-market")}
       <div class="an-block"><div class="an-h">${tr("summary")}</div><div>${esc(a.summary)}</div></div>
-      <div class="an-block"><div class="an-h">${tr("factors")}</div>
-        ${a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join("")}</div>
-      ${a.injuries ? `<div class="an-block"><div class="an-h">${tr("injuries")}</div><div>${esc(a.injuries)}</div></div>` : ""}
-      ${a.motivation ? `<div class="an-block"><div class="an-h">${tr("motivation")}</div><div>${esc(a.motivation)}</div></div>` : ""}
-      <div class="an-block an-risk"><div class="an-h">${tr("risks")}</div><div>${esc(a.risks)}</div></div>
+      ${fold(tr("factors"), a.factors.map((f) => `<div class="an-f"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div>`).join(""))}
+      ${a.injuries ? fold(tr("injuries"), esc(a.injuries)) : ""}
+      ${a.motivation ? fold(tr("motivation"), esc(a.motivation)) : ""}
+      ${fold(tr("risks"), esc(a.risks), "an-risk")}
+      ${a.market ? fold(tr("p_market"), probBlock("", a.market, m, "an-probs-market fold-inner")) : ""}
       <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>${tr("an_foot")}</p></div>
       <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
     document.getElementById("an-back").addEventListener("click", () => analysisReturnTo());

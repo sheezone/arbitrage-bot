@@ -509,3 +509,64 @@ body {
 .an-unlock { margin-top: 8px; font-weight: 800; color: #ff8cf0; }
 .an-final { font-size: 13px; line-height: 1.45; border: 1px solid rgba(178, 107, 255, 0.45); background: rgba(178, 107, 255, 0.10); }
 .vd-skip { margin-top: 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; background: rgba(255, 90, 90, 0.12); border: 1px solid rgba(255, 90, 90, 0.45); }
+
+/* ---- 2026-10-15 redesign: clear top answer, big shortcuts, folded details ---- */
+.hp-card { display: block; width: 100%; text-align: left; font: inherit; color: #fff; cursor: pointer; margin: 4px 0 12px; padding: 16px; border-radius: 20px; border: 1.5px solid rgba(178, 107, 255, 0.7); background: radial-gradient(circle at 100% 0%, rgba(255, 92, 225, 0.22), transparent 55%), radial-gradient(circle at 0% 100%, rgba(120, 70, 255, 0.25), transparent 60%), #170d2a; box-shadow: 0 10px 30px rgba(120, 60, 220, 0.25); transition: transform 0.15s; }
+.hp-card:active { transform: scale(0.985); }
+.hp-empty { cursor: default; color: #bfb0dd; font-size: 14px; text-align: center; }
+.hp-top { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 15px; }
+.hp-time { font-weight: 600; font-size: 12px; color: #bfb0dd; }
+.hp-league { font-size: 12px; color: #9d8cc0; margin-top: 4px; }
+.hp-teams { font-size: 17px; font-weight: 800; margin: 10px 0 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.hp-win { font-size: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hp-win b { color: #e6c9ff; }
+.hp-bet { margin-top: 8px; font-size: 14px; color: #d9cdf0; }
+.hp-open { margin-top: 12px; text-align: center; font-weight: 800; padding: 10px; border-radius: 12px; background: linear-gradient(90deg, #8b3ff0, #c84fe0); }
+.hp-trust { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; font: inherit; font-size: 14px; color: #e9e2f7; cursor: pointer; padding: 12px 14px; margin-bottom: 14px; border-radius: 14px; border: 1px solid #33244d; background: rgba(23, 13, 42, 0.85); text-align: left; }
+.hp-trust span { color: #b26bff; font-weight: 700; white-space: nowrap; }
+.hq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.hq { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; min-height: 104px; border-radius: 16px; border: 1px solid #33244d; background: linear-gradient(160deg, #22123d, #140a26); color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform 0.15s; }
+.hq:active { transform: scale(0.97); }
+.hq-ico { color: #c08bff; filter: drop-shadow(0 0 6px rgba(178, 107, 255, 0.6)); }
+.hq-t { font-weight: 800; font-size: 15px; margin-top: 4px; }
+.hq-s { font-size: 12px; color: #a898c8; line-height: 1.3; }
+.hp-admin { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px; margin-bottom: 14px; border-radius: 12px; border: 1px dashed #4a3570; background: none; color: #b26bff; font: inherit; font-weight: 700; cursor: pointer; }
+.bottom-nav .bn-item { font-size: 10.5px; }
+
+.ai-ask-wrap { margin-bottom: 12px; border-radius: 14px; border: 1px solid #33244d; background: rgba(23, 13, 42, 0.7); }
+.ai-ask-wrap > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 700; color: #d9cdf0; }
+.ai-ask-wrap > summary::-webkit-details-marker { display: none; }
+.ai-ask-wrap .ai-ask { margin: 0 10px 10px; }
+.sure-toggle { display: flex; align-items: center; gap: 10px; margin: 8px 2px 4px; font-size: 14px; font-weight: 700; color: #e9e2f7; cursor: pointer; }
+.sure-toggle input { display: none; }
+.sure-toggle span { width: 40px; height: 22px; border-radius: 11px; background: #33244d; position: relative; transition: background 0.2s; flex: none; }
+.sure-toggle span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.sure-toggle input:checked + span { background: #8b3ff0; }
+.sure-toggle input:checked + span::after { transform: translateX(18px); }
+.ai-verdict { display: block; margin-top: 6px; font-size: 13px; color: #e6dbf7; }
+.ai-verdict b { color: #e6c9ff; }
+.ai-verdict.skip { color: #ff9a9a; }
+
+.an-fold { padding: 0; }
+.an-fold > summary { list-style: none; cursor: pointer; padding: 14px 16px; margin: 0; display: flex; justify-content: space-between; align-items: center; }
+.an-fold > summary::-webkit-details-marker { display: none; }
+.an-fold > summary::after { content: "›"; font-size: 20px; transition: transform 0.2s; color: #b26bff; }
+.an-fold[open] > summary::after { transform: rotate(90deg); }
+.an-fold .fold-body { padding: 0 16px 14px; }
+.fold-inner { margin: 0; border: none; background: none; padding: 0; }
+
+.max-what { margin-bottom: 10px; }
+.max-what-h { font-weight: 800; font-size: 16px; margin-bottom: 8px; }
+.max-li { font-size: 14px; padding: 4px 0; color: #e9e2f7; }
+.sub-best { position: relative; border: 2px solid #b26bff !important; box-shadow: 0 0 22px rgba(178, 107, 255, 0.35); }
+.sub-save { position: absolute; top: -10px; right: 12px; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 800; color: #fff; background: linear-gradient(90deg, #ff5ce1, #8b3ff0); }
+
+.onb { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(6, 3, 12, 0.85); backdrop-filter: blur(6px); }
+.onb-card { width: 100%; max-width: 360px; padding: 28px 22px 22px; border-radius: 22px; text-align: center; border: 1.5px solid rgba(178, 107, 255, 0.6); background: radial-gradient(circle at 50% 0%, rgba(178, 107, 255, 0.25), transparent 60%), #170d2a; color: #fff; }
+.onb-emoji { font-size: 56px; }
+.onb-t { font-size: 20px; font-weight: 800; margin: 12px 0 8px; }
+.onb-s { font-size: 14px; line-height: 1.5; color: #cdbfe8; }
+.onb-dots { display: flex; gap: 6px; justify-content: center; margin: 18px 0; }
+.onb-dots i { width: 7px; height: 7px; border-radius: 50%; background: #4a3570; }
+.onb-dots i.on { background: #b26bff; width: 20px; border-radius: 4px; }
+.onb-btn { width: 100%; padding: 12px; font-size: 15px; }

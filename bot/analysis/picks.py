@@ -67,6 +67,9 @@ def pick_from_row(row) -> dict:
         # Repository._STAT_HIT_SQL so the app shows the same verdict it's counted by.
         "stat_result": _stat_hit(row["winner_result"] if "winner_result" in row.keys() else None, row["result"]),
         "score": row["score"],
+        "skip": bool(payload.get("skip")),
+        "skip_reason": payload.get("skip_reason", ""),
+        "popular": bool(row["popular"]) if "popular" in row.keys() else False,
     }
 
 
