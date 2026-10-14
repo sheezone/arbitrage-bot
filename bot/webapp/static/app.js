@@ -2664,24 +2664,7 @@ an_news: "News (injuries, form, suspensions)",
     </button>`;
   }
 
-  // Home (2026-10-15 redesign): one clear answer on top (the AI's pick of the day), a
-  // trust strip (yesterday's result + overall %), then 4 big shortcuts. Ticker last.
-  function topPickCard(p) {
-    if (!p) return `<div class="hp-card hp-empty">${tr("hp_none")}</div>`;
-    const pr = p.probabilities || {};
-    const who = p.predicted === "1" ? p.team_a : p.predicted === "2" ? p.team_b : tr("draw");
-    const pct = p.predicted === "1" ? pr.p1 : p.predicted === "2" ? pr.p2 : pr.x;
-    const bet = p.label ? tr("hp_bet", { l: esc(p.label), o: Number(p.odds).toFixed(2) }) : tr("hp_bet_lock");
-    return `<button type="button" class="hp-card" data-pick="${esc(p.match_id)}">
-      <div class="hp-top"><span>${tr("hp_top")}</span><span class="hp-time">${SPORT_EMOJI[p.sport] || "🏆"} ${esc(p.start_label || "")}</span></div>
-      <div class="hp-league">${esc(p.league || "")}</div>
-      <div class="hp-teams">${teamsLine(p)}</div>
-      <div class="hp-win">${tr("hp_wins", { t: esc(who), p: pct })} ${confMeter(p.confidence)}</div>
-      <div class="hp-bet">${bet}</div>
-      <div class="hp-open">${tr("hp_open")}</div>
-    </button>`;
-  }
-
+  // Home: the original tiles + MAX cards layout (owner 2026-10-15 preferred it over the redesign).
   async function renderHome() {
     let h = homeCache;
     try {
@@ -2690,33 +2673,26 @@ an_news: "News (injuries, form, suspensions)",
     } catch (e) {
       if (!h) throw e;
     }
-    const hr = h.hit_rate || { wins: 0, total: 0, min_total: 20 };
-    const y = h.yesterday || { wins: 0, total: 0 };
-    const trust = [
-      y.total >= 3 && y.wins / y.total >= 0.6 ? tr("hp_yday", { w: y.wins, n: y.total }) : "",
-      hr.total >= hr.min_total ? tr("hp_total", { p: Math.round((hr.wins / hr.total) * 100), n: hr.total }) : "",
-    ].filter(Boolean).join(" · ");
-    const q = (go, ic, t, s) => `<button type="button" class="hq" data-go="${go}"><span class="hq-ico">${icon(ic, 26)}</span><span class="hq-t">${t}</span><span class="hq-s">${s}</span></button>`;
+    const locked = !h.has_access;
+    const quota = h.ai_quota.limit == null ? "" : ` · ${h.ai_quota.used}/${h.ai_quota.limit}`;
     content.innerHTML = `
       <section class="home">
-        ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
-        ${topPickCard(h.top_pick)}
-        ${trust ? `<button type="button" class="hp-trust" data-go="aistats"><span class="hp-trust-t">${trust}</span><span>${tr("hp_stats")} ›</span></button>` : ""}
-        <div class="hq-grid">
-          ${q("ai", "brain", tr("q_ai"), tr("q_ai_s"))}
-          ${q("express", "trending", tr("q_ex"), h.express_count ? tr("c_ex_badge", { n: h.express_count }) : tr("q_ex_s"))}
-          ${q("picks", "target", tr("q_pk"), h.picks_count ? `${tr("q_pk_s")} · ${h.picks_count}` : tr("q_pk_s"))}
-          ${q("aistats", "trophy", tr("q_st"), tr("q_st_s"))}
-        </div>
-        ${h.is_admin ? `<button type="button" class="hp-admin" data-go="admin">${icon("wrench", 18)} ${tr("tile_admin")}</button>` : ""}
         <div class="ticker" id="home-ticker" hidden><div class="ticker-track" id="ticker-track"></div></div>
+        <div class="home-row">
+          <h2 class="home-welcome">${tr("welcome")}</h2>
+        </div>
+        ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
+        <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
+          <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">${icon("trophy", 34)}</span><span class="tile-label">${tr("tile_stats")}</span></button>
+          ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">${icon("wrench", 34)}</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
+        </div>
+        <h2 class="home-pro">${tr("max_access")}${locked ? ` <button type="button" class="pro-buy" data-go="sub">${tr("buy")}</button>` : ""}</h2>
+        ${proCard("ai", "brain", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
+        ${proCard("express", "trending", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
+        ${proCard("picks", "target", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
         <p class="home-note">${tr("note")}</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
-    content.querySelectorAll("[data-pick]").forEach((el) => el.addEventListener("click", () => {
-      haptic("light");
-      renderAiAnalysis(`/api/ai/picks/view?match_id=${encodeURIComponent(el.dataset.pick)}`, () => switchTab("home"));
-    }));
     loadTicker();
     maybeOnboarding();
   }
