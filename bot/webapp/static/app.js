@@ -2926,6 +2926,7 @@ an_news: "News (injuries, form, suspensions)",
         <div class="an-teams">${teamsLine(m)}</div>
         ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>
+      ${verdictBlock(a, m)}
       ${probBlock(tr("p_ai"), a.probabilities, m, "an-probs")}
       ${pickHtml}
       ${probBlock(tr("p_market"), a.market, m, "an-probs-market")}
@@ -2935,7 +2936,6 @@ an_news: "News (injuries, form, suspensions)",
       ${a.injuries ? `<div class="an-block"><div class="an-h">${tr("injuries")}</div><div>${esc(a.injuries)}</div></div>` : ""}
       ${a.motivation ? `<div class="an-block"><div class="an-h">${tr("motivation")}</div><div>${esc(a.motivation)}</div></div>` : ""}
       <div class="an-block an-risk"><div class="an-h">${tr("risks")}</div><div>${esc(a.risks)}</div></div>
-      ${verdictBlock(a, m)}
       <div class="an-foot">${hitBadge(data.hit_rate ? { ...data.hit_rate } : null)}<p>${tr("an_foot")}</p></div>
       <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
     document.getElementById("an-back").addEventListener("click", () => analysisReturnTo());
