@@ -251,7 +251,7 @@ def register_api(
         return _crests({
             "id": m.id, "team_a": m.team_a, "team_b": m.team_b, "league": m.league, "sport": m.sport,
             "start_utc": m.start_utc.isoformat(), "start_label": format_match_start(m.start_utc.isoformat()),
-            "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b),
+            "team_a_flag": get_team_flag(m.team_a), "team_b_flag": get_team_flag(m.team_b), "popular": m.is_popular,
         })
 
     support_cache: dict[str, list[str]] = {}

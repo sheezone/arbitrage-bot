@@ -2886,6 +2886,14 @@ an_news: "News (injuries, form, suspensions)",
     </div>`;
   }
 
+  // Top matches get a second, final analysis ~60 min before kick-off (bot/analysis/final_pass.py).
+  function finalNotice(a, m) {
+    if (a.final) return `<div class="an-block an-final">✅ <b>Финальный разбор</b> — сделан за час до матча, с учётом составов и движения линии.</div>`;
+    const left = m.start_utc ? (new Date(m.start_utc) - Date.now()) / 60000 : 0;
+    if (!m.popular || left < 40) return "";
+    return `<div class="an-block an-final">🔄 Более подробный и точный разбор появится <b>за 60 минут до начала матча</b> — с подтверждёнными составами и движением линии. Загляните ближе к игре.</div>`;
+  }
+
   async function renderAiAnalysis(url, returnTo) {
     aiInAnalysis = true;
     analysisReturnTo = returnTo || renderAiMatches;
@@ -2926,6 +2934,7 @@ an_news: "News (injuries, form, suspensions)",
         <div class="an-teams">${teamsLine(m)}</div>
         ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>
+      ${finalNotice(a, m)}
       ${verdictBlock(a, m)}
       ${probBlock(tr("p_ai"), a.probabilities, m, "an-probs")}
       ${pickHtml}

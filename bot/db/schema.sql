@@ -179,3 +179,6 @@ CREATE TABLE IF NOT EXISTS user_activity (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_user_activity_created ON user_activity (created_at);
+
+-- small text notes the AI keeps for itself, e.g. weekly "lessons from misses" (2026-10-15)
+CREATE TABLE IF NOT EXISTS ai_notes (key TEXT PRIMARY KEY, text TEXT NOT NULL, updated_at TEXT NOT NULL);

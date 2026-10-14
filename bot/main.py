@@ -136,6 +136,9 @@ async def main() -> None:
         from bot.analysis.logos import run_logo_filler
 
         logos_task = asyncio.create_task(run_logo_filler(analyzer, repo, config.api_football_key))  # noqa: F841 (lives with the process)
+        from bot.analysis.final_pass import run_final_pass
+
+        final_task = asyncio.create_task(run_final_pass(analyzer, repo))  # noqa: F841 (lives with the process)
         from bot.analysis.picks import run_daily_picks
 
         picks_task = asyncio.create_task(run_daily_picks(

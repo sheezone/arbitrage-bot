@@ -415,6 +415,26 @@ class Repository:
         self._conn.execute("DELETE FROM ai_budget_alerts")
         self._conn.commit()
 
+    def get_ai_note(self, key: str) -> str:
+        row = self._conn.execute("SELECT text FROM ai_notes WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else ""
+
+    def set_ai_note(self, key: str, text: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO ai_notes (key, text, updated_at) VALUES (?, ?, ?)",
+            (key, text, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def ai_recent_misses(self, since_iso: str) -> list[sqlite3.Row]:
+        """Popular picks that lost (bet or predicted winner) since `since_iso` -- raw
+        material for the weekly lessons pass."""
+        return self._conn.execute(
+            "SELECT * FROM ai_analyses WHERE popular = 1 AND start_utc >= ? "
+            "AND (result = 'lose' OR winner_result = 'lose') ORDER BY start_utc DESC LIMIT 40",
+            (since_iso,),
+        ).fetchall()
+
     def alert_sent(self, key: str) -> bool:
         return self._conn.execute("SELECT 1 FROM ai_budget_alerts WHERE key = ?", (key,)).fetchone() is not None
 

@@ -302,14 +302,18 @@ class Analyzer:
         # analyses of matches not in the line (no pick to settle): memory only
         self._adhoc: dict[str, dict] = {}
 
-    async def analyze(self, match: FootballMatch) -> dict | None:
-        """Cached analysis for the match (computed once). None if the model declined."""
+    async def analyze(self, match: FootballMatch, final: bool = False) -> dict | None:
+        """Cached analysis for the match (computed once). None if the model declined.
+        final=True: the pre-kickoff re-analysis (see bot/analysis/final_pass.py) --
+        recomputes over the early one unless that's already been done."""
         lock = self._locks.setdefault(match.id, asyncio.Lock())
         async with lock:  # two users tapping the same match at once -> one model call
             row = self.repo.get_ai_analysis(match.id)
             if row is not None:
-                return json.loads(row["payload"])
-            if match.id in self._adhoc:
+                cached = json.loads(row["payload"])
+                if not final or cached.get("final"):
+                    return cached
+            if match.id in self._adhoc and not final:
                 return self._adhoc[match.id]
             data = await self._gather(match)
             result = await self._ask(match, data)
@@ -322,6 +326,7 @@ class Analyzer:
                 probs["x"] = 0
             result["probabilities"] = _normalise(probs)
             result["sport"] = match.sport
+            result["final"] = final
             result["market"] = market_probabilities(match)
             if not match.options:
                 result["pick"] = None
@@ -495,6 +500,9 @@ class Analyzer:
                        "отклоняйся от него только когда собранные данные это реально обосновывают.\n\n"
                        if market else "")
         accuracy_line = _accuracy_note(self.repo, match.sport)
+        lessons = self.repo.get_ai_note("lessons")
+        if lessons:
+            accuracy_line += f"Уроки твоих прошлых ошибок (разбор незашедших прогнозов за 2 недели):\n{lessons}\n\n"
         when = f"Начало (UTC): {match.start_utc:%Y-%m-%d %H:%M}\n" if match.start_utc.year > 2000 else ""
         from bot.analysis.catalog import SPORTS
 
