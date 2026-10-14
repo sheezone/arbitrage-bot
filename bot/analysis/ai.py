@@ -387,10 +387,7 @@ class Analyzer:
             # Tennis (owner 2026-10-15): Elo from Tennis Abstract + a search pass on that site.
             general, ta = await asyncio.gather(self._research(match), self._research(
                 match, TENNIS_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 6, "allowed_domains": ["tennisabstract.com"]}))
-            research = "
-
-".join(x for x in (elo, general, f"Данные Tennis Abstract:
-{ta}" if ta else "") if x)
+            research = "\n\n".join(x for x in (elo, general, f"Данные Tennis Abstract:\n{ta}" if ta else "") if x)
         else:
             # Deeper analysis (owner 2026-10-11): a second, stats-only search pass in
             # parallel with the general one -- numbers (home/away splits, totals trend,
