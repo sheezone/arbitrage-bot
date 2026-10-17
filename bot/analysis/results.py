@@ -64,13 +64,25 @@ def parse_results(raw: dict, sport_id: str = FOOTBALL) -> list[tuple[str, str, d
     return out
 
 
+def _prefix(ours: str, theirs: str) -> bool:
+    """Our name equals the leading word(s) of theirs ("авангард" vs "авангард омск")."""
+    o, t = ours.split(), theirs.split()
+    return bool(o) and len(o) < len(t) and t[:len(o)] == o and len(ours) >= 4
+
+
 def find_score(team_a: str, team_b: str, start: datetime, results) -> tuple[int, int] | None:
     pair = (normalize_team(team_a), normalize_team(team_b))
     best, best_score = None, NAME_MATCH_THRESHOLD
     for home, away, when, ga, gb in results:
         if abs(when - start) > timedelta(hours=14):
             continue
-        same = _pair_similarity(pair, (normalize_team(home), normalize_team(away)))
+        h, a = normalize_team(home), normalize_team(away)
+        # Results often add the city: "Авангард" vs "Авангард Омск" (hockey, 2026-10-17)
+        if _prefix(pair[0], h) and _prefix(pair[1], a):
+            return ga, gb
+        if _prefix(pair[0], a) and _prefix(pair[1], h):
+            return gb, ga
+        same = _pair_similarity(pair, (h, a))
         if same >= best_score:
             # orientation: if the result lists the teams swapped, swap the score too
             straight = _pair_similarity((pair[0], ""), (normalize_team(home), ""))
