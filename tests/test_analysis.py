@@ -63,17 +63,18 @@ def test_results_match_by_names_and_swap_orientation():
     assert find_score("Ливерпуль", "Эвертон", start, res) is None
 
 
-def test_build_expresses_uses_distinct_medium_high_picks_within_total_range():
+def test_build_expresses_uses_only_high_confidence_top_picks_within_total_range():
     from bot.analysis.picks import build_expresses
 
-    def p(i, odds, conf="средняя"):
-        return {"match_id": f"m{i}", "odds": odds, "confidence": conf}
+    def p(i, odds, conf="высокая", popular=True, skip=False):
+        return {"match_id": f"m{i}", "odds": odds, "confidence": conf, "popular": popular, "skip": skip}
 
-    picks = [p(1, 1.5), p(2, 1.6, "высокая"), p(3, 1.7), p(4, 1.9, "низкая"), p(5, 3.0)]
+    picks = [p(1, 1.5), p(2, 1.6, "очень высокая"), p(3, 1.7), p(4, 1.9, "средняя"), p(5, 3.0),
+             p(6, 1.5, popular=False), p(7, 1.5, skip=True)]
     ex = build_expresses(picks)
-    assert ex and all(2.0 <= e["total_odds"] <= 6.0 for e in ex)
+    assert ex and all(1.8 <= e["total_odds"] <= 6.0 for e in ex)
     legs = [leg["match_id"] for e in ex for leg in e["legs"]]
-    assert len(legs) == len(set(legs)) and "m4" not in legs and "m5" not in legs
+    assert len(legs) == len(set(legs)) and not {"m4", "m5", "m6", "m7"} & set(legs)
 
 
 def test_match_by_teams_short_names_either_order_and_rejects_half_match():
