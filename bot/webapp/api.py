@@ -439,7 +439,7 @@ def register_api(
             pool = []
         now_ = datetime.now(timezone.utc)
         top: list = []
-        for hours in (24, 72):  # today's big games; if none today -- the nearest ones
+        for hours in (24, 72, 168):  # today's big games; else the nearest ones (up to a week)
             top = sorted((m for m in pool if m.is_popular and now_ < m.start_utc <= now_ + timedelta(hours=hours)),
                          key=lambda m: (m.start_utc, m.priority))[:8]
             if top:
