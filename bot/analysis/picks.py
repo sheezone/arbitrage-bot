@@ -31,7 +31,7 @@ PER_RUN = 6               # model calls per job run (spreads cost/latency over t
 RUN_EVERY_S = 3600
 ACTIVE_HOURS = range(8, 23)
 EXPRESS_LEG_ODDS = (1.3, 2.4)
-EXPRESS_TOTAL = (2.0, 6.0)
+EXPRESS_TOTAL = (1.8, 6.0)  # 2 safe legs (~1.35 each) still make an express
 EXPRESS_COUNT = 3
 
 
@@ -80,7 +80,10 @@ def upcoming_picks(repo: Repository, now: datetime | None = None, hours: int = 4
 
 
 def build_expresses(picks: list[dict], count: int = EXPRESS_COUNT, exclude: frozenset[str] = frozenset()) -> list[dict]:
-    legs = [p for p in picks if p["confidence"] in ("средняя", "высокая", "очень высокая")
+    # Only high-confidence picks from top tournaments, never one the AI said to skip
+    # (owner 2026-10-17: expresses passed 14 of 51 with "средняя" and minor leagues in).
+    legs = [p for p in picks if p["confidence"] in ("высокая", "очень высокая")
+            and p.get("popular", True) and not p.get("skip")
             and EXPRESS_LEG_ODDS[0] <= p["odds"] <= EXPRESS_LEG_ODDS[1]]
     rank = {"очень высокая": 0, "высокая": 1, "средняя": 2}
     legs.sort(key=lambda p: (rank.get(p["confidence"], 3), p["odds"]))
