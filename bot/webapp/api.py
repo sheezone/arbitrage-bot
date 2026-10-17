@@ -433,13 +433,17 @@ def register_api(
         # «Главные матчи дня» on top of every list (owner 2026-10-17): the top-tournament
         # matches of the next 24h for this sport (all sports on «Все»), whatever
         # country / game sub-filter is open.
-        try:
-            pool = await get_catalog(sport if sport in SPORTS else None, None) if (game or sport not in SPORTS) else matches
+        try:  # the full line, not the capped browsable list (UCL can sit past the cap)
+            pool = [m for m in await get_full_line() if m.options and (sport not in SPORTS or m.sport == sport)]
         except Exception:
             pool = []
-        soon = datetime.now(timezone.utc) + timedelta(hours=24)
-        top = sorted((m for m in pool if m.is_popular and m.start_utc <= soon),
-                     key=lambda m: (m.priority, m.start_utc))[:8]
+        now_ = datetime.now(timezone.utc)
+        top: list = []
+        for hours in (24, 72):  # today's big games; if none today -- the nearest ones
+            top = sorted((m for m in pool if m.is_popular and now_ < m.start_utc <= now_ + timedelta(hours=hours)),
+                         key=lambda m: (m.start_utc, m.priority))[:8]
+            if top:
+                break
 
         def out(m):
             return {**_match_out(m), "analyzed": m.id in verdicts, "verdict": verdicts.get(m.id)}
