@@ -2861,20 +2861,22 @@ an_news: "News (injuries, form, suspensions)",
       html += `<button type="button" class="country-back" id="country-back">‹ ${tr("all_countries")} · ${g && g.flag ? g.flag + " " : ""}${esc(aiGame)}</button>`;
     }
     if (!countryList && !data.matches.length) html += `<div class="ai-empty">${tr("no_matches")}</div>`;
-    if (!countryList && data.matches.some((m) => m.verdict)) {
+    const hasVerdicts = data.matches.some((m) => m.verdict);
+    const sureOn = onlySure && hasVerdicts;  // filter only applies when its toggle is visible
+    if (!countryList && hasVerdicts) {
       html += `<label class="sure-toggle"><input type="checkbox" id="only-sure"${onlySure ? " checked" : ""}><span></span>${tr("only_sure")}</label>`;
     }
     const isSure = (v) => v && !v.skip && (CONF_LEVEL[v.confidence] || 0) >= 3;
     let league = null;
     for (const m of countryList ? [] : data.matches) {
-      if (onlySure && !isSure(m.verdict)) continue;
+      if (sureOn && !isSure(m.verdict)) continue;
       if (m.league !== league) {
         league = m.league;
         html += `<div class="ai-league">${leagueIcon(league, m.sport)} ${esc(league)}</div>`;
       }
       html += matchBtn(m);
     }
-    if (!countryList && onlySure && data.matches.length && !data.matches.some((m) => isSure(m.verdict))) {
+    if (!countryList && sureOn && !data.matches.some((m) => isSure(m.verdict))) {
       html += `<div class="ai-empty">${tr("no_matches")}</div>`;
     }
     content.innerHTML = html;
