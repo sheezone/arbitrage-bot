@@ -2787,8 +2787,8 @@ an_news: "News (injuries, form, suspensions)",
   // Esports sub-tab badges: the games' official logos (from Wikimedia Commons, served
   // from /img/games) + the full game name (owner 2026-10-17: "именно логотип").
   const GAME_META = {
-    "Counter-Strike": { full: "Counter-Strike 2", logo: "img/games/cs2.svg" },
-    "Dota 2": { full: "Dota 2", logo: "img/games/dota2.svg" },
+    "Counter-Strike": { full: "Counter-Strike 2", logo: "img/games/cs2.png" },
+    "Dota 2": { full: "Dota 2", logo: "img/games/dota2.png" },
     "LoL": { full: "League of Legends", logo: "img/games/lol.svg", wide: true },
     "Valorant": { full: "Valorant", logo: "img/games/valorant.svg" },
   };
