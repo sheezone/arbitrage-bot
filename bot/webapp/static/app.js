@@ -2801,7 +2801,8 @@ an_news: "News (injuries, form, suspensions)",
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
   let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
   // Tournament logos next to the league name (owner 2026-10-17); emoji otherwise.
-  const LEAGUE_LOGO = [["Лига Чемпионов УЕФА", "img/leagues/ucl.png"], ["Англия. Премьер-Лига", "img/leagues/epl.png"]];
+  const LEAGUE_LOGO = [["Лига Чемпионов УЕФА", "img/leagues/ucl.png"], ["Англия. Премьер-Лига", "img/leagues/epl.png"],
+    ["НХЛ", "img/leagues/nhl.svg"], ["Фонбет КХЛ", "img/leagues/khl.svg"], ["КХЛ", "img/leagues/khl.svg"]];
   function leagueIcon(league, sport) {
     const hit = LEAGUE_LOGO.find(([p]) => String(league || "").startsWith(p));
     return hit ? `<img class="lg-logo" src="${hit[1]}" alt="">` : (SPORT_EMOJI[sport] || "🏆");
