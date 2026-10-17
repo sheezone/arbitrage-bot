@@ -551,15 +551,24 @@ class Analyzer:
         return await self._json_call(SYSTEM, content, SCHEMA, effort="high")
 
     async def _json_call(self, system: str, content, schema: dict, effort: str = "low") -> dict | None:
-        response = await self.claude.beta.messages.create(
-            model=self.model,
-            max_tokens=8000,
-            system=system,
-            messages=[{"role": "user", "content": content}],
-            output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-        )
+        # The gateway sometimes answers 504 "request timed out" on long prompts (it cost
+        # the pre-kickoff pass of Сибирь — Барыс, 2026-10-17) -- retry those a couple of times.
+        for attempt in range(3):
+            try:
+                response = await self.claude.beta.messages.create(
+                    model=self.model,
+                    max_tokens=8000,
+                    system=system,
+                    messages=[{"role": "user", "content": content}],
+                    output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
+                    betas=["server-side-fallback-2026-07-01"],
+                    fallbacks="default",
+                )
+                break
+            except (anthropic.InternalServerError, anthropic.APITimeoutError, anthropic.APIConnectionError):
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(5 * (attempt + 1))
         from bot.analysis.token_budget import record as _record_token_usage
 
         await _record_token_usage(self.repo, response, self.bot, self.admin_chat_ids)

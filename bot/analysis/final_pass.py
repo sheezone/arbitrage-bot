@@ -21,9 +21,9 @@ from bot.db.repository import Repository
 
 logger = logging.getLogger(__name__)
 
-FINAL_WINDOW = (timedelta(minutes=40), timedelta(minutes=65))
+FINAL_WINDOW = (timedelta(minutes=25), timedelta(minutes=70))  # wide: room for retries
 FINAL_CHECK_EVERY = 10 * 60
-FINAL_PER_RUN = 6
+FINAL_PER_RUN = 10
 LESSONS_EVERY = timedelta(days=7)
 LESSONS_LOOKBACK = timedelta(days=14)
 
@@ -49,7 +49,8 @@ async def _final_once(analyzer: Analyzer, repo: Repository) -> int:
         if not (lo <= m.start_utc <= hi) or not m.is_popular or not m.options:
             continue
         row = repo.get_ai_analysis(m.id)
-        if row is None or json.loads(row["payload"]).get("final"):
+        # every top match gets one, analysed earlier or not (owner 2026-10-17: "по хоккею не было")
+        if row is not None and json.loads(row["payload"]).get("final"):
             continue
         due.append(m)
     n = 0
