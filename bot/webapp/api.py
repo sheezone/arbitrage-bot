@@ -441,7 +441,11 @@ def register_api(
             raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
         now = datetime.now(timezone.utc)
         limit, used = _ai_quota(user, now)
-        if limit is not None and match.id not in used and len(used) >= limit:
+        # Opening a match the AI has ALREADY analysed (daily picks, other users, the
+        # pre-kickoff pass) is just viewing -- it doesn't use up the daily quota (owner
+        # 2026-10-17: "сделал 1 разбор, а показывает 2 из 5"). Only a fresh analysis counts.
+        cached = repo.get_ai_analysis(match.id) is not None
+        if not cached and limit is not None and match.id not in used and len(used) >= limit:
             raise HTTPException(status_code=429, detail=(
                 f"Лимит на сегодня: {limit}. Оформите MAX — до {AI_PAID_PER_DAY} анализов в день."
                 if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
@@ -456,7 +460,8 @@ def register_api(
             result = None
         if result is None:
             raise HTTPException(status_code=424, detail="Не удалось разобрать этот матч, попробуйте позже")
-        repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
+        if not cached:
+            repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
         wins, total = repo.ai_hit_rate()
         in_line = bool(match.options)
         out = _match_out(match) if in_line else {

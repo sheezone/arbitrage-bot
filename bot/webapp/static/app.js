@@ -3000,7 +3000,6 @@ an_news: "News (injuries, form, suspensions)",
       if (e.status === 429 && homeCache && !homeCache.has_access) return switchTab("sub");
       return analysisReturnTo();
     }
-    if (homeCache) homeCache.ai_quota.used = Math.max(homeCache.ai_quota.used, 1);
     const a = data.analysis;
     const m = data.match;
     const lockHtml = `<button type="button" class="an-pick an-locked" data-go="sub">
