@@ -1009,7 +1009,23 @@ def register_api(
                          "legs": legs or [_crests(p) for p in payload["legs"]],
                          "total_odds": payload.get("total_odds")})
 
-        return {"daily": daily, "found": found}
+        def status(legs: list[dict]) -> str:
+            """Express verdict: lose if any leg lost, win when every leg won, a leg that
+            was never settled ("unknown") counts as void -- win if the rest won."""
+            res = [leg.get("result") for leg in legs]
+            if not res:
+                return "pending"
+            if "lose" in res:
+                return "lose"
+            if any(r is None for r in res):
+                return "pending"
+            return "win" if "win" in res else "void"
+
+        for e in daily + found:
+            e["status"] = status(e["legs"])
+        done = [e for e in daily + found if e["status"] in ("win", "lose")]
+        return {"daily": daily, "found": found,
+                "summary": {"win": sum(e["status"] == "win" for e in done), "total": len(done)}}
 
     ACTION_LABELS = {
         "open_app": "Открыл приложение", "ai_matches": "Листал матчи ИИ", "ai_analysis": "Разбор матча",

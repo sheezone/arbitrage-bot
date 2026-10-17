@@ -3193,6 +3193,10 @@ an_news: "News (injuries, form, suspensions)",
 
   // Past expresses: the daily auto-built ones pushed to everyone, and the ones
   // individual users found with «Найти экспресс» (owner 2026-10-10).
+  function exBadge(st) {
+    return { win: "✅ Прошёл", lose: "❌ Не прошёл", void: "↩ Возврат", pending: "⏳ Ждём" }[st] || "";
+  }
+
   async function renderAdminExpresses() {
     const s = await api("/api/admin/expresses");
     const legRow = (p) => `<div class="ex-leg"><div class="pk-teams">${SPORT_EMOJI[p.sport] || ""} ${teamsLine(p)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}</div>
@@ -3200,18 +3204,19 @@ an_news: "News (injuries, form, suspensions)",
     const dailyCards = s.daily.length
       ? s.daily.map((e) => {
           const time = new Date(e.sent_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-          return `<div class="ex-card"><div class="ex-head"><span>${time}</span><span class="ex-total">@ ${e.total_odds.toFixed(2)}</span></div>
+          return `<div class="ex-card ex-st-${e.status}"><div class="ex-head"><span>${time}</span><span class="ex-total">${exBadge(e.status)} @ ${e.total_odds.toFixed(2)}</span></div>
             ${e.legs.map(legRow).join("")}</div>`;
         }).join("")
       : `<div class="news-empty">Пока ничего не рассылалось</div>`;
     const foundCards = s.found.length
       ? s.found.map((e) => {
           const time = new Date(e.found_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-          return `<div class="ex-card"><div class="ex-head"><span>${e.chat_id} · ${time}</span>${e.total_odds ? `<span class="ex-total">@ ${Number(e.total_odds).toFixed(2)}</span>` : ""}</div>
+          return `<div class="ex-card ex-st-${e.status}"><div class="ex-head"><span>${e.chat_id} · ${time}</span><span class="ex-total">${exBadge(e.status)}${e.total_odds ? ` @ ${Number(e.total_odds).toFixed(2)}` : ""}</span></div>
             ${e.legs.map(legRow).join("")}</div>`;
         }).join("")
       : `<div class="news-empty">Никто ещё не искал экспресс</div>`;
     content.innerHTML = `
+      ${s.summary && s.summary.total ? `<div class="ex-sum">Прошло <b>${s.summary.win} из ${s.summary.total}</b> рассчитанных экспрессов (${Math.round(s.summary.win / s.summary.total * 100)}%)</div>` : ""}
       <h3 class="sec-h">📈 Экспрессы дня (рассылка всем)</h3>
       ${dailyCards}
       <h3 class="sec-h">🔍 Найдены пользователями</h3>
