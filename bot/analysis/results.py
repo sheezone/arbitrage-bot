@@ -26,7 +26,11 @@ SCORE_URL = "https://ad.betcity.ru/d/score/sports"
 SCORE_PARAMS = {"rev": 1, "ver": 1, "csn": "ooca9s"}
 FOOTBALL = "1"
 BETCITY_SPORT = {"football": "1", "basketball": "3", "tennis": "2", "volleyball": "12",
-                 "table_tennis": "46", "esports": "73"}  # hockey deliberately absent
+                 "table_tennis": "46", "esports": "73", "hockey": "7"}
+# Hockey markets (1X2, totals) are regular time only, while sc_ev includes OT/shootout --
+# so for hockey the score is the sum of the first three periods from sc_ext_ev
+# ("2:0, 0:1, 2:1[, 1:0 OT]"); confirmed in the feed 2026-10-17.
+REGULATION_PERIODS = {"7": 3}
 SETTLE_AFTER = timedelta(hours=2, minutes=30)
 GIVE_UP_AFTER = timedelta(days=3)
 CHECK_EVERY_S = 1800
@@ -41,11 +45,22 @@ def parse_results(raw: dict, sport_id: str = FOOTBALL) -> list[tuple[str, str, d
             m = re.fullmatch(r"\s*(\d+)\s*:\s*(\d+)\s*", str(ev.get("sc_ev") or ""))
             if not m or not ev.get("name_ht") or not ev.get("name_at"):
                 continue
+            if "(" in ev["name_ht"] or "(" in ev["name_at"]:
+                continue  # stat pseudo-events: "Авангард (бр)", "(штр)"...
+            periods = REGULATION_PERIODS.get(sport_id)
+            if periods:
+                parts = re.findall(r"(\d+)\s*:\s*(\d+)", str(ev.get("sc_ext_ev") or ""))
+                if len(parts) < periods:
+                    continue
+                ga = sum(int(a) for a, _ in parts[:periods])
+                gb = sum(int(b) for _, b in parts[:periods])
+            else:
+                ga, gb = int(m.group(1)), int(m.group(2))
             try:
                 when = datetime.strptime(ev.get("date_ev", "")[:16], "%Y-%m-%d %H:%M").replace(tzinfo=MSK)
             except ValueError:
                 continue
-            out.append((ev["name_ht"], ev["name_at"], when, int(m.group(1)), int(m.group(2))))
+            out.append((ev["name_ht"], ev["name_at"], when, ga, gb))
     return out
 
 
