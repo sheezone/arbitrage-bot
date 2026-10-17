@@ -2810,7 +2810,10 @@ an_news: "News (injuries, form, suspensions)",
 
   function matchBtn(m, extra) {
     const v = m.verdict;
-    const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>` : "";
+    // «✓ разобран» on every already-analysed match (owner 2026-10-17), verdict after it
+    const done = m.analyzed ? `<span class="ai-done">${tr("analyzed")}</span>` : "";
+    const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${done}${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>`
+      : done ? `<span class="ai-verdict">${done}</span>` : "";
     return `<button type="button" class="ai-match${extra ? " ai-match-top" : ""}" data-id="${esc(m.id)}">${extra || ""}
         <span class="ai-teams">${teamsLine(m)}</span>
         <span class="ai-meta">🕒 ${esc(m.start_label || "")}</span>${vline}</button>`;

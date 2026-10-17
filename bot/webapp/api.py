@@ -30,7 +30,7 @@ from bot.core.arbitrage import calc_stakes
 from bot.analysis.ai import AI_FREE_PER_DAY, AI_PAID_PER_DAY
 from bot.core.flags import national_flag
 from bot.analysis.catalog import SPORTS, FootballMatch, _name_score, combat_disciplines, esports_games, football_countries, find_match, get_catalog, get_full_line, match_by_teams
-from bot.analysis.picks import build_expresses, express_key, pick_from_row, upcoming_picks
+from bot.analysis.picks import SHOWN_PICKS_HOURS, build_expresses, express_key, pick_from_row, upcoming_picks
 from bot.core.monitor import BOOKMAKER_URLS, GAME_EMOJI, format_match_start, user_allows_arb, within_time_horizon
 from bot.core.state import LatestState
 from bot.core.subscription import is_subscribed
@@ -429,7 +429,7 @@ def register_api(
                 games = []
         except Exception:
             matches, games = [], []
-        verdicts = {p["match_id"]: _mini_verdict(p) for p in upcoming_picks(repo)}
+        verdicts = {p["match_id"]: _mini_verdict(p) for p in upcoming_picks(repo, hours=SHOWN_PICKS_HOURS)}
         # «Главные матчи дня» on top of every list (owner 2026-10-17): the top-tournament
         # matches of the next 24h for this sport (all sports on «Все»), whatever
         # country / game sub-filter is open.
@@ -596,7 +596,7 @@ def register_api(
         user = _get_user(repo, chat_id)
         _log(chat_id, "picks")
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
-        upcoming = [_crests(p) for p in upcoming_picks(repo)]
+        upcoming = [_crests(p) for p in upcoming_picks(repo, hours=SHOWN_PICKS_HOURS)]
         recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(20)]
         return {"pro": pro, "upcoming": upcoming if pro else [_lock(p) for p in upcoming], "recent": recent}
 

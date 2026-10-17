@@ -33,6 +33,10 @@ ACTIVE_HOURS = range(8, 23)
 EXPRESS_LEG_ODDS = (1.3, 2.4)
 EXPRESS_TOTAL = (1.8, 6.0)  # 2 safe legs (~1.35 each) still make an express
 EXPRESS_COUNT = 3
+# How far ahead the app shows already-analysed matches (list verdicts, «Готовые
+# прогнозы») -- as far as the «Главные матчи» block reaches, so a midweek UCL game
+# analysed 3 days early isn't missing its «разобран» mark (owner 2026-10-17).
+SHOWN_PICKS_HOURS = 168
 
 
 def _stat_hit(winner_result: str | None, result: str | None) -> str | None:

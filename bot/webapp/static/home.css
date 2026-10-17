@@ -546,6 +546,8 @@ body {
 .ai-verdict { display: block; margin-top: 6px; font-size: 13px; color: #e6dbf7; }
 .ai-verdict b { color: #e6c9ff; }
 .ai-verdict.skip { color: #ff9a9a; }
+.ai-done { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 8px;
+  background: rgba(98, 214, 140, .16); color: #7fe0a2; font-size: 12px; font-weight: 600; }
 
 .an-fold { padding: 0; }
 .an-fold > summary { list-style: none; cursor: pointer; padding: 14px 16px; margin: 0; display: flex; justify-content: space-between; align-items: center; }
