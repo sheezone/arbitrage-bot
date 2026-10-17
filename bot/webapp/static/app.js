@@ -2800,6 +2800,13 @@ an_news: "News (injuries, form, suspensions)",
   try { onlySure = localStorage.getItem("only_sure") === "1"; } catch (e) { /* convenience only */ }
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
   let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
+  // Tournament logos next to the league name (owner 2026-10-17); emoji otherwise.
+  const LEAGUE_LOGO = [["Лига Чемпионов УЕФА", "img/leagues/ucl.png"]];
+  function leagueIcon(league, sport) {
+    const hit = LEAGUE_LOGO.find(([p]) => String(league || "").startsWith(p));
+    return hit ? `<img class="lg-logo" src="${hit[1]}" alt="">` : (SPORT_EMOJI[sport] || "🏆");
+  }
+
   function matchBtn(m, extra) {
     const v = m.verdict;
     const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>` : "";
@@ -2840,7 +2847,7 @@ an_news: "News (injuries, form, suspensions)",
     // «Главные матчи дня» first, in every sport (owner 2026-10-17).
     if ((data.top || []).length && !(byCountry && aiGame)) {
       html += `<div class="top-day"><h3 class="sec-h">🔥 ${tr("top_day")}</h3>${data.top.map((m) =>
-        matchBtn(m, `<span class="ai-lg">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(m.league)}</span>`)).join("")}</div>`;
+        matchBtn(m, `<span class="ai-lg">${leagueIcon(m.league, m.sport)} ${esc(m.league)}</span>`)).join("")}</div>`;
       if (!byCountry || aiGame) html += `<h3 class="sec-h">${tr("all_matches")}</h3>`;
     }
     // Football: country list first (like bookmaker sites), matches after a tap.
@@ -2862,7 +2869,7 @@ an_news: "News (injuries, form, suspensions)",
       if (onlySure && !isSure(m.verdict)) continue;
       if (m.league !== league) {
         league = m.league;
-        html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(league)}</div>`;
+        html += `<div class="ai-league">${leagueIcon(league, m.sport)} ${esc(league)}</div>`;
       }
       html += matchBtn(m);
     }
@@ -3037,7 +3044,7 @@ an_news: "News (injuries, form, suspensions)",
         </div>`;
     content.innerHTML = `
       <div class="an-hero">
-        ${m.league ? `<div class="an-league">🏆 ${esc(m.league)}</div>` : ""}
+        ${m.league ? `<div class="an-league">${leagueIcon(m.league, "")} ${esc(m.league)}</div>` : ""}
         <div class="an-teams">${teamsLine(m)}</div>
         ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>

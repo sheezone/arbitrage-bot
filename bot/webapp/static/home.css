@@ -596,3 +596,4 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .top-day { margin-bottom: 6px; }
 .ai-match-top { border-color: rgba(178, 107, 255, 0.55) !important; background: linear-gradient(160deg, rgba(60, 30, 110, 0.55), rgba(20, 10, 38, 0.9)) !important; }
 .ai-lg { display: block; font-size: 11.5px; font-weight: 700; color: #b98cff; margin-bottom: 4px; }
+.lg-logo { width: 16px; height: 16px; vertical-align: -3px; object-fit: contain; }
