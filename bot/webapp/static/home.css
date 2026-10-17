@@ -588,3 +588,6 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .gc-txt { display: flex; flex-direction: column; line-height: 1.15; }
 .gc-txt b { font-size: 13px; }
 .gc-txt i { font-style: normal; font-size: 10.5px; font-weight: 600; opacity: 0.65; white-space: nowrap; }
+.gc-ico { background: #0e0818; overflow: hidden; }
+.gc-ico img { width: 100%; height: 100%; object-fit: contain; }
+.gc-ico.gc-wide { width: 52px; padding: 3px; box-sizing: border-box; }
