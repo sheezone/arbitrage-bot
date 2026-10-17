@@ -581,3 +581,10 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .ex-st-win { border-color: rgba(90, 210, 150, 0.6) !important; }
 .ex-st-lose { border-color: rgba(255, 90, 90, 0.5) !important; }
 .ex-sum { margin: 4px 0 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid #33244d; background: rgba(23, 13, 42, 0.85); font-size: 14px; }
+
+/* esports sub-tabs with a game badge + full name */
+.game-chip.game-chip-x { height: auto; min-height: 44px; padding: 6px 12px 6px 6px; display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+.gc-ico { width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex: none; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+.gc-txt { display: flex; flex-direction: column; line-height: 1.15; }
+.gc-txt b { font-size: 13px; }
+.gc-txt i { font-style: normal; font-size: 10.5px; font-weight: 600; opacity: 0.65; white-space: nowrap; }

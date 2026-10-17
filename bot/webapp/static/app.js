@@ -2784,6 +2784,17 @@ an_news: "News (injuries, form, suspensions)",
   const SPORT_EMOJI = { football: "⚽", hockey: "🏒", basketball: "🏀", tennis: "🎾", esports: "🎮", table_tennis: "🏓", volleyball: "🏐", combat: "🥊" };
   let aiSport = "";
   try { aiSport = localStorage.getItem("ai_sport") || ""; } catch (e) { /* convenience only */ }
+  // Esports sub-tab badges: simple coloured marks (not the official logos) + the full name.
+  const GAME_META = {
+    "Counter-Strike": { full: "Counter-Strike 2", bg: "linear-gradient(135deg,#f6a21e,#c8620e)",
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1.2" fill="#fff"/></svg>' },
+    "Dota 2": { full: "Dota 2", bg: "linear-gradient(135deg,#e2382b,#8f1a12)",
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M6.5 6.5l11 11M15 6.5h2.5V9M6.5 15v2.5H9"/></svg>' },
+    "LoL": { full: "League of Legends", bg: "linear-gradient(135deg,#d4af5a,#7a5a1e)",
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v15h9"/><circle cx="12" cy="12" r="9" stroke-width="1.4" opacity="0.7"/></svg>' },
+    "Valorant": { full: "Valorant", bg: "linear-gradient(135deg,#ff4655,#a3142a)",
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M3 5l8.5 14h4.2L7.2 5z"/><path d="M15.2 5H21l-4.4 7.2h-5.8z"/></svg>' },
+  };
   let aiGame = "";  // sub-discipline: esports game (CS2, Dota 2...) or combat org (UFC, Бокс...)
   const GAME_SHORT = { "Counter-Strike": "CS2", "Dota 2": "Dota 2", "LoL": "LoL", "Valorant": "Valorant",
     "Mobile Legends": "MLBB", "Rainbow Six Siege": "R6", "KoG": "HoK", "StarCraft II": "SC2" };
@@ -2819,7 +2830,7 @@ an_news: "News (injuries, form, suspensions)",
       </div>
       ${hasSubTabs && (data.games || []).length ? `<div class="sport-chips game-chips">
         <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
-        ${data.games.map((g) => `<button type="button" class="game-chip${aiGame === g.name ? " on" : ""}" data-game="${esc(g.name)}">${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small></button>`).join("")}
+        ${data.games.map((g) => { const gm = GAME_META[g.name]; return `<button type="button" class="game-chip${gm ? " game-chip-x" : ""}${aiGame === g.name ? " on" : ""}" data-game="${esc(g.name)}">${gm ? `<span class="gc-ico" style="background:${gm.bg}">${gm.svg}</span><span class="gc-txt"><b>${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small></b><i>${esc(gm.full)}</i></span>` : `${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small>`}</button>`; }).join("")}
       </div>` : ""}`;
     // Football: country list first (like bookmaker sites), matches after a tap.
     const countryList = byCountry && !aiGame;
