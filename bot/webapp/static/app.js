@@ -2539,7 +2539,7 @@ an_news: "News (injuries, form, suspensions)",
     hp_yday: "Вчера <b>{w} из {n}</b> ✅", hp_total: "Всего <b>{p}%</b> · {n} матчей", hp_stats: "Подробнее",
     q_ai: "Прогнозы ИИ", q_ai_s: "Разбор любого матча", q_ex: "Экспрессы", q_ex_s: "Готовые на сегодня",
     q_pk: "Готовые прогнозы", q_pk_s: "Уверенные ставки дня", q_st: "Статистика", q_st_s: "Что зашло",
-    only_sure: "Только уверенные", ml_skip: "лучше пропустить", sec_more: "Подробнее",
+    only_sure: "Только уверенные", top_day: "Главные матчи дня", all_matches: "Все матчи", ml_skip: "лучше пропустить", sec_more: "Подробнее",
     max_what: "Что даёт MAX", max_1: "Ставка ИИ и уверенность в каждом разборе", max_2: "Экспрессы каждый день",
     max_3: "Финальный разбор за час до матча", max_4: "Готовые уверенные прогнозы дня", save50: "−50%",
     ob_next: "Дальше", ob_go: "Начать",
@@ -2555,7 +2555,7 @@ an_news: "News (injuries, form, suspensions)",
     hp_yday: "Yesterday <b>{w} of {n}</b> ✅", hp_total: "Overall <b>{p}%</b> · {n} matches", hp_stats: "Details",
     q_ai: "AI forecasts", q_ai_s: "Analyse any match", q_ex: "Accumulators", q_ex_s: "Ready for today",
     q_pk: "Ready picks", q_pk_s: "Confident bets of the day", q_st: "Statistics", q_st_s: "What won",
-    only_sure: "Confident only", ml_skip: "better skip", sec_more: "Details",
+    only_sure: "Confident only", top_day: "Top matches of the day", all_matches: "All matches", ml_skip: "better skip", sec_more: "Details",
     max_what: "What MAX gives", max_1: "AI bet and confidence in every analysis", max_2: "Accumulators every day",
     max_3: "Final analysis an hour before kick-off", max_4: "Ready confident picks of the day", save50: "−50%",
     ob_next: "Next", ob_go: "Start",
@@ -2800,6 +2800,14 @@ an_news: "News (injuries, form, suspensions)",
   try { onlySure = localStorage.getItem("only_sure") === "1"; } catch (e) { /* convenience only */ }
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
   let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
+  function matchBtn(m, extra) {
+    const v = m.verdict;
+    const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>` : "";
+    return `<button type="button" class="ai-match${extra ? " ai-match-top" : ""}" data-id="${esc(m.id)}">${extra || ""}
+        <span class="ai-teams">${teamsLine(m)}</span>
+        <span class="ai-meta">🕒 ${esc(m.start_label || "")}</span>${vline}</button>`;
+  }
+
   async function renderAiMatches() {
     aiInAnalysis = false;
     const hasSubTabs = aiSport === "esports" || aiSport === "combat";
@@ -2829,6 +2837,12 @@ an_news: "News (injuries, form, suspensions)",
         <button type="button" class="game-chip${aiGame ? "" : " on"}" data-game="">${tr("all_sports")}</button>
         ${data.games.map((g) => { const gm = GAME_META[g.name]; return `<button type="button" class="game-chip${gm ? " game-chip-x" : ""}${aiGame === g.name ? " on" : ""}" data-game="${esc(g.name)}">${gm ? `<span class="gc-ico${gm.wide ? " gc-wide" : ""}"><img src="${gm.logo}" alt=""></span><span class="gc-txt"><b>${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small></b><i>${esc(gm.full)}</i></span>` : `${esc(GAME_SHORT[g.name] || g.name)} <small>${g.count}</small>`}</button>`; }).join("")}
       </div>` : ""}`;
+    // «Главные матчи дня» first, in every sport (owner 2026-10-17).
+    if ((data.top || []).length && !(byCountry && aiGame)) {
+      html += `<div class="top-day"><h3 class="sec-h">🔥 ${tr("top_day")}</h3>${data.top.map((m) =>
+        matchBtn(m, `<span class="ai-lg">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(m.league)}</span>`)).join("")}</div>`;
+      if (!byCountry || aiGame) html += `<h3 class="sec-h">${tr("all_matches")}</h3>`;
+    }
     // Football: country list first (like bookmaker sites), matches after a tap.
     const countryList = byCountry && !aiGame;
     if (countryList) {
@@ -2850,11 +2864,7 @@ an_news: "News (injuries, form, suspensions)",
         league = m.league;
         html += `<div class="ai-league">${SPORT_EMOJI[m.sport] || "🏆"} ${esc(league)}</div>`;
       }
-      const v = m.verdict;
-      const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>` : "";
-      html += `<button type="button" class="ai-match" data-id="${esc(m.id)}">
-        <span class="ai-teams">${teamsLine(m)}</span>
-        <span class="ai-meta">🕒 ${esc(m.start_label || "")}</span>${vline}</button>`;
+      html += matchBtn(m);
     }
     if (!countryList && onlySure && data.matches.length && !data.matches.some((m) => isSure(m.verdict))) {
       html += `<div class="ai-empty">${tr("no_matches")}</div>`;

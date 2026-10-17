@@ -430,8 +430,25 @@ def register_api(
         except Exception:
             matches, games = [], []
         verdicts = {p["match_id"]: _mini_verdict(p) for p in upcoming_picks(repo)}
-        return {"matches": [{**_match_out(m), "analyzed": m.id in verdicts, "verdict": verdicts.get(m.id)}
-                            for m in matches],
+        # «Главные матчи дня» on top of every list (owner 2026-10-17): the top-tournament
+        # matches of the next 24h for this sport (all sports on «Все»), whatever
+        # country / game sub-filter is open.
+        try:
+            pool = await get_catalog(sport if sport in SPORTS else None, None) if (game or sport not in SPORTS) else matches
+        except Exception:
+            pool = []
+        soon = datetime.now(timezone.utc) + timedelta(hours=24)
+        top = sorted((m for m in pool if m.is_popular and m.start_utc <= soon),
+                     key=lambda m: (m.priority, m.start_utc))[:8]
+
+        def out(m):
+            return {**_match_out(m), "analyzed": m.id in verdicts, "verdict": verdicts.get(m.id)}
+
+        top_ids = {m.id for m in top}
+        # inside the list, top-tournament matches go first too
+        matches = sorted(matches, key=lambda m: (not m.is_popular, m.priority if m.is_popular else 0))
+        return {"top": [out(m) for m in top],
+                "matches": [out(m) for m in matches if m.id not in top_ids or game],
                 "sports": [{"key": k, "emoji": v["emoji"], "name": v["name"]} for k, v in SPORTS.items()],
                 "games": [{"name": g, "count": n, "flag": national_flag(g) if sport == "football" else None}
                           for g, n in games]}

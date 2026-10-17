@@ -591,3 +591,8 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .gc-ico { background: #0e0818; overflow: hidden; }
 .gc-ico img { width: 100%; height: 100%; object-fit: contain; }
 .gc-ico.gc-wide { width: 52px; padding: 3px; box-sizing: border-box; }
+
+/* «Главные матчи дня» block on top of every match list */
+.top-day { margin-bottom: 6px; }
+.ai-match-top { border-color: rgba(178, 107, 255, 0.55) !important; background: linear-gradient(160deg, rgba(60, 30, 110, 0.55), rgba(20, 10, 38, 0.9)) !important; }
+.ai-lg { display: block; font-size: 11.5px; font-weight: 700; color: #b98cff; margin-bottom: 4px; }
