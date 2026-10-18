@@ -213,7 +213,9 @@ FLASHSCORE_SYSTEM = ("Ты собираешь данные перед матче
                      "встречи со счётом, ожидаемые составы и отсутствующих игроков, если указаны. Только факты "
                      "с цифрами, без прогнозов. По-русски, списком, до 15 пунктов. Если ничего не нашлось — "
                      "так и напиши.")
-STATS_SYSTEM = ("Ты собираешь ЦИФРЫ перед матчем, не новости. Найди в интернете: результаты последних "
+STATS_SYSTEM = ("Ты собираешь ЦИФРЫ перед матчем, не новости. Лучшие источники цифр — flashscore.com / "
+                "flashscorekz.com (отдельного прохода по Flashscore больше нет), затем sofascore, espn, "
+                "сайты лиг. Найди в интернете: результаты последних "
                 "5-10 матчей каждого участника со счётом, отдельно дома и в гостях; место, очки и разницу в "
                 "таблице; средний тотал и как часто матчи проходили выше/ниже типичных линий; личные встречи "
                 "со счётом за последние годы; сколько дней отдыха перед матчем и сколько игр за последние 2 "
@@ -430,11 +432,6 @@ class Analyzer:
             else:
                 form_a = form_b = h2h_data = None
                 headlines = await news()
-        # Flashscore (owner 2026-10-15): results, standings, H2H, lineups for every sport.
-        # Read through web search restricted to its domains, runs alongside the other passes.
-        flash_task = asyncio.create_task(self._research(
-            match, FLASHSCORE_SYSTEM,
-            {**WEB_SEARCH_TOOL, "max_uses": 4, "allowed_domains": ["flashscorekz.com", "flashscore.com"]}))
         # Injuries (owner 2026-10-15): football-lineups.com is behind Cloudflare for direct
         # requests (403 from the server), so it's read via domain-restricted web search.
         inj_task = asyncio.create_task(self._research(
@@ -462,9 +459,6 @@ class Analyzer:
             general, stats, *ctx = await asyncio.gather(*passes)
             research = general + (f"\n\nСтатистика:\n{stats}" if stats else "") \
                 + (f"\n\nСкрытые факторы:\n{ctx[0]}" if ctx and ctx[0] else "")
-        flash = await flash_task
-        if flash:
-            research += f"\n\nДанные Flashscore:\n{flash}"
         injuries = await inj_task if inj_task else ""
         if injuries:
             research += f"\n\nТравмы и дисквалификации (football-lineups / transfermarkt):\n{injuries}"

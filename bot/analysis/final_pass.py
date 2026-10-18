@@ -41,12 +41,31 @@ LESSONS_SCHEMA = {
 }
 
 
+# Only the truly big games get the costly pre-kickoff pass (owner 2026-10-19, after the
+# API balance ran dry on every NHL game and the whole UFC undercard): UCL, top-5
+# leagues, RPL, KHL, and any play-off. At most FINAL_PER_DAY per MSK day.
+FINAL_LEAGUES = ("Лига Чемпионов УЕФА", "Англия. Премьер-Лига", "Испания. Примера", "Италия. Серия А",
+                 "Германия. Бундеслига", "Франция. Лига 1", "Россия. Премьер-Лига", "Фонбет КХЛ", "КХЛ")
+FINAL_PER_DAY = 10
+MSK = timezone(timedelta(hours=3))
+
+
+def final_worthy(m) -> bool:
+    if "плей-офф" in m.league.lower():
+        return m.is_popular
+    return any(m.league == p or m.league.startswith(p + ".") for p in FINAL_LEAGUES)
+
+
 async def _final_once(analyzer: Analyzer, repo: Repository) -> int:
     now = datetime.now(timezone.utc)
     lo, hi = now + FINAL_WINDOW[0], now + FINAL_WINDOW[1]
+    day_key = f"final_count_{now.astimezone(MSK).date().isoformat()}"
+    done_today = int(repo.get_ai_note(day_key) or 0)
+    if done_today >= FINAL_PER_DAY:
+        return 0
     due = []
     for m in await get_full_line():
-        if not (lo <= m.start_utc <= hi) or not m.is_popular or not m.options:
+        if not (lo <= m.start_utc <= hi) or not m.options or not final_worthy(m):
             continue
         row = repo.get_ai_analysis(m.id)
         # every top match gets one, analysed earlier or not (owner 2026-10-17: "по хоккею не было")
@@ -54,10 +73,11 @@ async def _final_once(analyzer: Analyzer, repo: Repository) -> int:
             continue
         due.append(m)
     n = 0
-    for m in sorted(due, key=lambda m: m.start_utc)[:FINAL_PER_RUN]:
+    for m in sorted(due, key=lambda m: m.start_utc)[:min(FINAL_PER_RUN, FINAL_PER_DAY - done_today)]:
         try:
             if await analyzer.analyze(m, final=True):
                 n += 1
+                repo.set_ai_note(day_key, str(done_today + n))
         except Exception:
             logger.exception("final pass failed for %s", m.id)
     return n
