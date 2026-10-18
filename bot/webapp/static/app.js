@@ -856,7 +856,7 @@ an_news: "News (injuries, form, suspensions)",
       if (tab === "home") await renderHome();
       else if (tab === "ai") await renderAiMatches();
       else if (tab === "picks") await renderPicks();
-      else if (tab === "express") await renderExpress();
+      else if (tab === "express") { switchTab("home"); return; }
       else if (tab === "help") renderHelp();
       else if (tab === "aistats") await renderAiStats();
       else if (tab === "vilki") { await renderVilki(); await vilkiRunBanner(); }
@@ -1995,7 +1995,7 @@ an_news: "News (injuries, form, suspensions)",
         d.referral_balance_rub > 0 ? `<div class="field-hint">${t("sub_ref_balance")}${Math.round(d.referral_balance_rub)} ₽</div>` : ""
       }</div>
       <div class="card max-what"><div class="max-what-h">💎 ${tr("max_what")}</div>
-        ${["max_1", "max_2", "max_3", "max_4"].map((k) => `<div class="max-li">✅ ${tr(k)}</div>`).join("")}</div>
+        ${["max_1", "max_3", "max_4"].map((k) => `<div class="max-li">✅ ${tr(k)}</div>`).join("")}</div>
       <div class="sub-pitch">💡 Окупается одной зашедшей ставкой</div>
       <div class="meta-line">${methods.length ? t("sub_choose") : t("pay_no_methods")}</div>
       <div id="pay-status"></div>
@@ -2196,7 +2196,7 @@ an_news: "News (injuries, form, suspensions)",
     content.innerHTML = `
       <button type="button" class="pro-buy wide" id="admin-bank-btn" style="margin-bottom:10px">🤖 ИИ-банк — виртуальные 10 000 ₽</button>
       <button type="button" class="btn-ghost wide" id="admin-activity-btn" style="margin-bottom:10px">📊 Активность за сегодня</button>
-      <button type="button" class="btn-ghost wide" id="admin-expresses-btn" style="margin-bottom:10px">📈 Прошлые экспрессы</button>
+      
       <div class="section-title">${t("admin_users")}</div>
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-value" data-v="${s.total_users}" data-suf="" data-dec="0">0</div><div class="stat-label">${t("admin_total")}</div></div>
@@ -2545,7 +2545,7 @@ an_news: "News (injuries, form, suspensions)",
     ob_next: "Дальше", ob_go: "Начать",
     ob1_t: "ИИ разбирает матчи", ob1_s: "Форма, травмы, составы, мотивация и линия — по каждому матчу, с цифрами.",
     ob2_t: "Смотрите итог сверху", ob2_s: "Кто победит и с какой вероятностью. 🟢 уверенно · 🟡 средне · ⛔ лучше пропустить.",
-    ob3_t: "Экспрессы и статистика", ob3_s: "Готовые экспрессы на день и честная статистика всех прогнозов.",
+    ob3_t: "Честная статистика", ob3_s: "Готовые прогнозы дня и статистика всех прогнозов — что зашло, а что нет.",
   });
   Object.assign(HL.en, {
     nav_home: "Home", nav_ai: "Forecasts", nav_express: "Accas",
@@ -2561,7 +2561,7 @@ an_news: "News (injuries, form, suspensions)",
     ob_next: "Next", ob_go: "Start",
     ob1_t: "AI analyses matches", ob1_s: "Form, injuries, lineups, motivation and the line — for every match, with numbers.",
     ob2_t: "The verdict is on top", ob2_s: "Who wins and how likely. 🟢 confident · 🟡 medium · ⛔ better skip.",
-    ob3_t: "Accas and statistics", ob3_s: "Ready accumulators for the day and honest stats of every forecast.",
+    ob3_t: "Honest statistics", ob3_s: "Ready picks of the day and stats of every forecast — what won and what didn't.",
   });
   const CONF_DOT = { "очень высокая": "🟢", "высокая": "🟢", "средняя": "🟡", "низкая": "🟠", "очень низкая": "🟠" };
 
@@ -2688,7 +2688,6 @@ an_news: "News (injuries, form, suspensions)",
         </div>
         <h2 class="home-pro">${tr("max_access")}${locked ? ` <button type="button" class="pro-buy" data-go="sub">${tr("buy")}</button>` : ""}</h2>
         ${proCard("ai", "brain", tr("t_ai"), hitBadge(h.hit_rate), [tr("c_ai1") + quota, tr("c_ai2"), tr("c_ai3")], "ai", false)}
-        ${proCard("express", "trending", tr("t_express"), h.express_count ? `<span class="hb-badge">${tr("c_ex_badge", { n: h.express_count })}</span>` : "", [tr("c_ex1"), tr("c_ex2"), tr("c_ex3")], "express", locked)}
         ${proCard("picks", "target", tr("t_picks"), `<span class="hb-badge hb-hot">${tr("hot")}</span>`, [tr("c_pk1") + (h.picks_count ? ` · ${h.picks_count}` : ""), tr("c_pk2"), tr("c_pk3")], "picks", locked)}
         <p class="home-note">${tr("note")}</p>
       </section>`;

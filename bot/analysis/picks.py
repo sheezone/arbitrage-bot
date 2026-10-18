@@ -33,6 +33,7 @@ ACTIVE_HOURS = range(8, 23)
 EXPRESS_LEG_ODDS = (1.3, 2.4)
 EXPRESS_TOTAL = (1.8, 6.0)  # 2 safe legs (~1.35 each) still make an express
 EXPRESS_COUNT = 3
+EXPRESSES_ENABLED = False  # owner 2026-10-19: "не делай больше экспрессы и удали их"
 # How far ahead the app shows already-analysed matches (list verdicts, «Готовые
 # прогнозы») -- as far as the «Главные матчи» block reaches, so a midweek UCL game
 # analysed 3 days early isn't missing its «разобран» mark (owner 2026-10-17).
@@ -202,7 +203,8 @@ async def daily_pushes(repo: Repository, bot, webapp_url: str, admin_chat_ids: f
     now = datetime.now(timezone.utc)
     local = now.astimezone(MSK)
     day = local.date().isoformat()
-    if local.hour >= MORNING_HOUR and local.hour < EVENING_HOUR and not repo.alert_sent(f"push_am_{day}"):
+    # Expresses removed from the product (owner 2026-10-19) -- no morning express push.
+    if EXPRESSES_ENABLED and local.hour >= MORNING_HOUR and local.hour < EVENING_HOUR and not repo.alert_sent(f"push_am_{day}"):
         expresses = build_expresses(upcoming_picks(repo, now, hours=24))
         if expresses:
             repo.mark_alert_sent(f"push_am_{day}")
