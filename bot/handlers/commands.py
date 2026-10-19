@@ -171,7 +171,7 @@ def _main_menu_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [icon_reply_button(AI_BUTTON_TEXT.get(language, AI_BUTTON_TEXT["ru"]))],
-            [icon_reply_button(_search_button_text(language)), icon_reply_button(_profile_button_text(language))],
+            [icon_reply_button(_profile_button_text(language))],  # vilki removed (owner 2026-10-19)
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -1358,10 +1358,9 @@ def register_handlers(
     async def on_search_button(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         await _dismiss(message)
-        user = repo.get_user(message.chat.id)
-        await _maybe_reattach_keyboard(bot, repo, user)
-        text, keyboard = _search_view(user, latest_state, poll_interval_seconds, repo, admin_chat_ids)
-        await _render(bot, repo, message.chat.id, user.menu_message_id, text, keyboard, photo_path=BANNER_SEARCH_PATH, fresh=True)
+        # Old keyboards may still show the button -- vilki are gone (owner 2026-10-19).
+        await bot.send_message(message.chat.id, "Поиск вилок отключён. Все прогнозы ИИ — в приложении «Матч Радар».",
+                               reply_markup=_main_menu_keyboard(repo.get_user(message.chat.id).language))
 
     @router.message(F.text == LANG_BUTTON_TEXT)
     async def on_open_language_menu(message: Message, state: FSMContext, bot: Bot) -> None:

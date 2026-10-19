@@ -65,6 +65,9 @@ def _open_app_markup(_language: str = "ru"):
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📡 Открыть Матч Радар", web_app=WebAppInfo(url=url))]])
 
 
+VILKI_ENABLED = False
+
+
 async def main() -> None:
     config = load_config()
     repo = Repository(config.db_path)
@@ -191,7 +194,11 @@ async def main() -> None:
         uv_config = uvicorn.Config(webapp_app, host="127.0.0.1", port=config.webapp_port, log_level="warning")
         webapp_task = asyncio.create_task(uvicorn.Server(uv_config).serve())
 
-    monitor_task = asyncio.create_task(
+    # Arbitrage ("вилки") search is switched off entirely (owner 2026-10-19: "вилки убери
+    # и не анализируй их вообще") -- the monitor loop that polls every bookmaker never starts.
+    monitor_task = None
+    if VILKI_ENABLED:
+      monitor_task = asyncio.create_task(
         run_monitor_loop(
             sources=sources,
             repo=repo,
@@ -263,7 +270,8 @@ async def main() -> None:
     try:
         await dp.start_polling(bot)
     finally:
-        monitor_task.cancel()
+        if monitor_task is not None:
+            monitor_task.cancel()
         if webapp_task is not None:
             webapp_task.cancel()
         if news_task is not None:
