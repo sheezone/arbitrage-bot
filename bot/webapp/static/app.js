@@ -3010,10 +3010,31 @@ an_news: "News (injuries, form, suspensions)",
 
   // Top matches get a second, final analysis ~60 min before kick-off (bot/analysis/final_pass.py).
   function finalNotice(a, m) {
-    if (a.final) return `<div class="an-block an-final">✅ <b>Финальный разбор</b> — сделан за час до матча, с учётом составов и движения линии.</div>`;
+    if (a.final) return `<div class="an-block an-final">✅ <b>Финальный разбор</b> — сделан за час до матча: составы, судья и движение линии учтены.</div>`;
     const left = m.start_utc ? (new Date(m.start_utc) - Date.now()) / 60000 : 0;
-    if (!m.popular || left < 40) return "";
-    return `<div class="an-block an-final">🔄 Более подробный и точный разбор появится <b>за 60 минут до начала матча</b> — с подтверждёнными составами и движением линии. Загляните ближе к игре.</div>`;
+    if (!m.id || left <= 0) return "";
+    const opens = new Date(new Date(m.start_utc).getTime() - 60 * 60000)
+      .toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
+    return `<button type="button" class="an-final-btn" id="final-btn" data-id="${esc(m.id)}">
+      <span>🔎 <b>Подробный разбор за 60 мин до матча</b></span>
+      <small>${left > 60 ? `Откроется в ${opens} МСК · ` : ""}составы, судья, движение линии</small></button>`;
+  }
+
+  async function openFinal(btn) {
+    haptic("light");
+    btn.disabled = true;
+    const small = btn.querySelector("small");
+    const was = small.textContent;
+    small.textContent = "⏳ ИИ готовит подробный разбор…";
+    try {
+      await api(`/api/ai/final?match_id=${encodeURIComponent(btn.dataset.id)}`, { method: "POST" });
+      renderAiAnalysis(`/api/ai/picks/view?match_id=${encodeURIComponent(btn.dataset.id)}`, analysisReturnTo);
+    } catch (e) {
+      toast(e.message);
+      if (e.status === 402) return go("sub");
+      small.textContent = was;
+      btn.disabled = false;
+    }
   }
 
   async function renderAiAnalysis(url, returnTo) {
@@ -3066,6 +3087,8 @@ an_news: "News (injuries, form, suspensions)",
       <button type="button" class="btn-ghost" id="an-back">${tr("back_list")}</button>`;
     document.getElementById("an-back").addEventListener("click", () => analysisReturnTo());
     content.querySelectorAll(".an-locked").forEach((el) => el.addEventListener("click", () => go("sub")));
+    const fb = document.getElementById("final-btn");
+    if (fb) fb.addEventListener("click", () => openFinal(fb));
   }
 
   // "Who wins" accuracy: the AI's own favourite (highest %) vs the final score.

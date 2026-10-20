@@ -113,6 +113,8 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
 - Основной состав: сравни ожидаемый состав с обычной основой (раздел «Травмы и дисквалификации»).
   Без лучшего бомбардира, основного вратаря или 2+ игроков основы шансы команды заметно ниже —
   учти это в probabilities и в пункте «Состав и травмы» назови фамилии и их вклад в цифрах.
+- Если есть раздел «Судья матча» — учти его: склонность к карточкам и пенальти влияет на тоталы
+  карточек/голов, перекос в пользу хозяев — на исход. Назови судью в factors, если это существенно.
 - Если списка доступных ставок нет (матча нет в линии), option_id — пустая строка, а
   reasoning объясняет, какой исход вероятнее и почему.
 - injuries — травмы, дисквалификации и ожидаемые составы по данным из раздела «Свежая
@@ -183,6 +185,13 @@ TENNIS_SYSTEM = ("Ты собираешь статистику перед тен
 # "Hidden" factors the line often underprices (owner 2026-10-15: altitude / climate of
 # the home ground, coach sacked, off-field news -- "не только на основе коэффициента БК").
 CONTEXT_SPORTS = ("football", "hockey", "basketball")
+REFEREE_SPORTS = ("football", "hockey", "basketball")
+REFEREE_SYSTEM = ("Найди в интернете, КТО СУДЬЯ этого матча (главный арбитр; в хоккее — главные судьи) и его "
+                  "статистику: сколько в среднем жёлтых/красных карточек и пенальти за матч (в хоккее — штрафных "
+                  "минут), процент побед хозяев в его матчах, как часто ставит спорные решения, результаты команд "
+                  "этого матча при нём раньше, громкие скандалы. Источники: transfermarkt (Schiedsrichter), "
+                  "worldfootball, сайты лиг и федераций, новости о назначении. Если назначение ещё не "
+                  "опубликовано — так и напиши. Только факты с цифрами, по-русски, до 10 пунктов.")
 CONTEXT_SYSTEM = ("Ты ищешь НЕОЧЕВИДНЫЕ факторы перед матчем, которые букмекеры часто недооценивают. "
                   "Найди в интернете и выпиши только то, что реально нашлось, с цифрами и источником:\n"
                   "1) Стадион и условия: город, высота над уровнем моря, климат и прогноз погоды на день "
@@ -326,7 +335,7 @@ class Analyzer:
                     return cached
             if match.id in self._adhoc and not final:
                 return self._adhoc[match.id]
-            data = await self._gather(match)
+            data = await self._gather(match, final=final)
             result = await self._ask(match, data)
             if result is None:
                 return None
@@ -380,7 +389,7 @@ class Analyzer:
             return None  # never talk itself into MORE confidence on a second pass
         return checked["confidence"]
 
-    async def _gather(self, match: FootballMatch) -> dict:
+    async def _gather(self, match: FootballMatch, final: bool = False) -> dict:
         async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Mozilla/5.0"}) as client:
             async def form(team: str):
                 try:
@@ -459,6 +468,12 @@ class Analyzer:
             general, stats, *ctx = await asyncio.gather(*passes)
             research = general + (f"\n\nСтатистика:\n{stats}" if stats else "") \
                 + (f"\n\nСкрытые факторы:\n{ctx[0]}" if ctx and ctx[0] else "")
+        # Referee (owner 2026-10-20: "судья тоже влияет, бывает подсуживает") -- only in the
+        # pre-kickoff pass: appointments are published a day or two before the match.
+        if final and match.sport in REFEREE_SPORTS:
+            ref = await self._research(match, REFEREE_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 4})
+            if ref:
+                research += f"\n\nСудья матча:\n{ref}"
         injuries = await inj_task if inj_task else ""
         if injuries:
             research += f"\n\nТравмы и дисквалификации (football-lineups / transfermarkt):\n{injuries}"

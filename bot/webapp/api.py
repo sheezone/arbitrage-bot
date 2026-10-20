@@ -534,6 +534,41 @@ def register_api(
             raise HTTPException(status_code=404, detail="Матч уже начался или пропал из линии")
         return await _run_analysis(chat_id, user, match)
 
+    @app.post("/api/ai/final")
+    async def post_ai_final(match_id: str, authorization: str | None = Header(default=None)):
+        """«Подробный разбор за 60 мин» button (owner 2026-10-20). The detailed pre-kickoff
+        analysis (confirmed lineups, referee, line moves) opens from 60 minutes before
+        the start: before that it says when; inside the window it's built on demand if
+        the scheduled pass hasn't reached this match yet. MAX only."""
+        chat_id = _auth(authorization)
+        await _require_subscribed(chat_id)
+        user = _get_user(repo, chat_id)
+        now = datetime.now(timezone.utc)
+        if not billing.has_access(user, now, admin_chat_ids):
+            raise HTTPException(status_code=402, detail="Подробный разбор за час до матча — в MAX")
+        match = await find_match(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Матч уже начался или пропал из линии")
+        row = repo.get_ai_analysis(match.id)
+        if row is None or not json.loads(row["payload"]).get("final"):
+            opens = match.start_utc - timedelta(minutes=60)
+            if now < opens:
+                raise HTTPException(status_code=425, detail=(
+                    f"Подробный разбор откроется в {opens.astimezone(MSK_TZ):%H:%M} МСК — за 60 минут до начала, "
+                    "когда известны составы, судья и движение линии."))
+            if analyzer is None:
+                raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
+            try:
+                if await analyzer.analyze(match, final=True) is None:
+                    raise HTTPException(status_code=424, detail="Не удалось сделать разбор, попробуйте позже")
+            except HTTPException:
+                raise
+            except Exception:
+                logger.exception("on-demand final analysis failed for %s", match.id)
+                raise HTTPException(status_code=424, detail="Не удалось сделать разбор, попробуйте позже")
+        _log(chat_id, "ai_final")
+        return {"ok": True}
+
     @app.get("/api/ai/analyze")
     async def get_ai_analyze(team_a: str, team_b: str, authorization: str | None = Header(default=None)):
         """Two user-typed (or screenshot-read) team names -> the line match if there is one
