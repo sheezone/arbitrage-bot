@@ -185,13 +185,52 @@ async def settle_pending(repo: Repository, client: httpx.AsyncClient) -> int:
     return settled
 
 
-async def run_settler(repo: Repository) -> None:
+
+async def report_losses(repo: Repository, bot, admin_chat_ids) -> int:
+    """Every lost pick that counts in the public stats goes to the admins' DMs with the
+    AI's own reasoning and the risks it named (owner 2026-10-21). The loss STAYS in the
+    statistics -- this is a report, not a filter. Each match is reported once."""
+    import html
+
+    if bot is None or not admin_chat_ids:
+        return 0
+    since = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    sent = 0
+    for row in repo.day_results(since, datetime.now(timezone.utc).isoformat()):
+        if row["stat_hit"] != "lose" or repo.alert_sent(f"loss_{row['match_id']}"):
+            continue
+        repo.mark_alert_sent(f"loss_{row['match_id']}")
+        try:
+            p = json.loads(row["payload"])
+        except ValueError:
+            p = {}
+        pr = p.get("probabilities") or {}
+        text = (
+            f"❌ <b>Прогноз не зашёл</b>\n\n"
+            f"<b>{html.escape(row['team_a'])} — {html.escape(row['team_b'])}</b>, счёт <b>{html.escape(row['score'] or '?')}</b>\n"
+            f"{html.escape(row['league'] or '')}\n\n"
+            f"Ставка ИИ: <b>{html.escape(row['option_label'] or '')}</b> @ {row['odds']:.2f} · уверенность {html.escape(row['confidence'] or '')}\n"
+            f"Шансы по ИИ: П1 {pr.get('p1')}% · Х {pr.get('x')}% · П2 {pr.get('p2')}%"
+            + (" · финальный разбор" if p.get("final") else "") + "\n\n"
+            f"<b>Почему ставил:</b> {html.escape((p.get('reasoning') or '')[:600])}\n\n"
+            f"<b>Риски, которые ИИ называл:</b> {html.escape((p.get('risks') or '')[:400])}"
+        )
+        for admin in admin_chat_ids:
+            try:
+                await bot.send_message(admin, text, parse_mode="HTML", disable_notification=True)
+            except Exception:
+                logger.warning("loss report to %s failed", admin)
+        sent += 1
+    return sent
+
+async def run_settler(repo: Repository, bot=None, admin_chat_ids=frozenset()) -> None:
     async with httpx.AsyncClient(timeout=60, headers={"User-Agent": "Mozilla/5.0"}) as client:
         while True:
             try:
                 n = await settle_pending(repo, client)
                 score_winners(repo)
                 await settle_ai_bets(repo)
+                await report_losses(repo, bot, admin_chat_ids)
                 if n:
                     logger.info("AI picks settled: %s", n)
             except Exception:

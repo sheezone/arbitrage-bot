@@ -135,7 +135,7 @@ async def main() -> None:
             openscores_api_key=config.openscores_api_key,
             bot=bot, admin_chat_ids=config.admin_chat_ids,
         )
-        settle_task = asyncio.create_task(run_settler(repo))
+        settle_task = asyncio.create_task(run_settler(repo, bot, config.admin_chat_ids))
         from bot.analysis.logos import run_logo_filler
 
         logos_task = asyncio.create_task(run_logo_filler(analyzer, repo, config.api_football_key))  # noqa: F841 (lives with the process)
