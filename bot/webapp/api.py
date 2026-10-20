@@ -264,11 +264,13 @@ def register_api(
             names = []
             for admin_id in sorted(admin_chat_ids):
                 try:
-                    chat = await bot.get_chat(admin_id) if bot is not None else None
+                    chat = await asyncio.wait_for(bot.get_chat(admin_id), 4) if bot is not None else None  # Telegram hiccups must not hang /api/home
                 except Exception:
                     chat = None
                 if chat is not None and chat.username:
                     names.append(chat.username)
+            if not names:
+                return None  # Telegram unavailable -- retry next time instead of caching nothing
             support_cache["u"] = names
         names = support_cache["u"]
         return names[chat_id % len(names)] if names else None
