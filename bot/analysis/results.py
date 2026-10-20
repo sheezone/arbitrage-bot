@@ -47,6 +47,14 @@ def parse_results(raw: dict, sport_id: str = FOOTBALL) -> list[tuple[str, str, d
                 continue
             if "(" in ev["name_ht"] or "(" in ev["name_at"]:
                 continue  # stat pseudo-events: "Авангард (бр)", "(штр)"...
+            ht, at = ev["name_ht"].split(), ev["name_at"].split()
+            # lowercase shared tail (stat words) or an all-caps shared head (УГЛ/ЖК) --
+            # never a capitalised shared word, so "Реал Мадрид — Реал Сосьедад" survives
+            if len(ht) > 1 and len(at) > 1 and ((ht[-1] == at[-1] and ht[-1].islower())
+                                                or (ht[0] == at[0] and ht[0].isupper() and len(ht[0]) <= 4)):
+                # football stat rows share a suffix/prefix: "Ливерпуль удары в створ" /
+                # "Вильярреал удары в створ", "УГЛ ПСЖ" / "УГЛ Барселона" (2026-10-21)
+                continue
             periods = REGULATION_PERIODS.get(sport_id)
             if periods:
                 parts = re.findall(r"(\d+)\s*:\s*(\d+)", str(ev.get("sc_ext_ev") or ""))
