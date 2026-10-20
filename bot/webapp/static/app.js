@@ -2410,7 +2410,7 @@ an_news: "News (injuries, form, suspensions)",
       conf_vlow: "очень низкая", conf_low: "низкая", conf_mid: "средняя", conf_high: "высокая", conf_vhigh: "очень высокая",
       quota: "Сегодня разобрано: <b>{u}/{l}</b>", unlimited: "Без ограничений",
       ask_h: "🧠 Узнать шансы на матч", team1: "Команда 1", team2: "Команда 2", shot: "📷 Скриншот",
-      analyze: "Анализировать", or_pick: "Или выберите матч из линии", no_matches: "Сейчас нет ближайших матчей в линии.",
+      analyze: "Анализировать", or_pick: "Или выберите матч из линии", no_matches: "Сейчас нет ближайших матчей в линии. Загляните чуть позже или выберите другой вид спорта ⬆️",
       analyzed: "✓ разобран", need_teams: "Введите обе команды или загрузите скриншот",
       reading: "Читаю скриншот…", found: "Нашёл матч: {a} — {b}",
       draw: "Ничья", loading: "ИИ анализирует матч…", loading_sub: "Форма, личные встречи, новости и линия. До минуты.",
@@ -2801,21 +2801,38 @@ an_news: "News (injuries, form, suspensions)",
   let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
   // Tournament logos next to the league name (owner 2026-10-17); emoji otherwise.
   const LEAGUE_LOGO = [["Лига Чемпионов УЕФА", "img/leagues/ucl.png"], ["Англия. Премьер-Лига", "img/leagues/epl.png"],
-    ["НХЛ", "img/leagues/nhl.svg"], ["Фонбет КХЛ", "img/leagues/khl.svg"], ["КХЛ", "img/leagues/khl.svg"]];
+    ["НХЛ", "img/leagues/nhl.svg"], ["Фонбет КХЛ", "img/leagues/khl.svg"], ["КХЛ", "img/leagues/khl.svg"],
+    ["Лига Конференций УЕФА", "img/leagues/uecl.png"], ["Лига конференций УЕФА", "img/leagues/uecl.png"],
+    ["Испания. Примера", "img/leagues/laliga.png"], ["Италия. Серия А", "img/leagues/seriea.png"],
+    ["Германия. Бундеслига", "img/leagues/bundesliga.png"], ["Россия. Премьер-Лига", "img/leagues/rpl.png"],
+    ["Франция. Лига 1", "img/leagues/ligue1.png"], ["НБА", "img/leagues/nba.png"]];
   function leagueIcon(league, sport) {
-    const hit = LEAGUE_LOGO.find(([p]) => String(league || "").startsWith(p));
+    const L = String(league || "");  // whole-league match: "Испания. Примера" must not catch "Примера RFEF"
+    const hit = LEAGUE_LOGO.find(([p]) => L === p || L.startsWith(p + "."));
     return hit ? `<img class="lg-logo" src="${hit[1]}" alt="">` : (SPORT_EMOJI[sport] || "🏆");
+  }
+
+  // "через 2 ч 15 мин" / "LIVE" instead of a bare date for matches within a day.
+  function relTime(iso, label) {
+    if (!iso) return esc(label || "");
+    const min = Math.round((new Date(iso) - Date.now()) / 60000);
+    if (min <= 0 && min > -150) return `<span class="live-dot">LIVE</span>`;
+    if (min > 0 && min < 60) return `через ${min} мин`;
+    if (min >= 60 && min < 24 * 60) return `через ${Math.floor(min / 60)} ч${min % 60 ? ` ${min % 60} мин` : ""}`;
+    return esc(label || "");
   }
 
   function matchBtn(m, extra) {
     const v = m.verdict;
     // «✓ разобран» on every already-analysed match (owner 2026-10-17), verdict after it
     const done = m.analyzed ? `<span class="ai-done">${tr("analyzed")}</span>` : "";
-    const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${done}${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b>${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>`
+    // chances as a bar under the teams, the AI's favourite highlighted (2026-10-20)
+    const bar = v && (v.p1 || v.p2) ? `<span class="ml-bar"><i class="b1${v.pred === "1" ? " on" : ""}" style="width:${v.p1}%"></i>${v.x ? `<i class="bx${v.pred === "X" ? " on" : ""}" style="width:${v.x}%"></i>` : ""}<i class="b2${v.pred === "2" ? " on" : ""}" style="width:${v.p2}%"></i></span>` : "";
+    const vline = v ? `<span class="ai-verdict${v.skip ? " skip" : ""}">${done}${v.skip ? "⛔" : CONF_DOT[v.confidence] || "🟡"} ${esc(v.who)} <b class="ml-pct">${v.pct}%</b>${v.skip ? ` · ${tr("ml_skip")}` : ""}</span>${bar}`
       : done ? `<span class="ai-verdict">${done}</span>` : "";
     return `<button type="button" class="ai-match${extra ? " ai-match-top" : ""}" data-id="${esc(m.id)}">${extra || ""}
         <span class="ai-teams">${teamsLine(m)}</span>
-        <span class="ai-meta">🕒 ${esc(m.start_label || "")}</span>${vline}</button>`;
+        <span class="ai-meta">🕒 ${relTime(m.start_utc, m.start_label)}</span>${vline}</button>`;
   }
 
   async function renderAiMatches() {
@@ -2971,6 +2988,15 @@ an_news: "News (injuries, form, suspensions)",
       ${row("П1 · " + m.team_a, p.p1)}${p.x ? row(tr("draw"), p.x) : ""}${row("П2 · " + m.team_b, p.p2)}</div>`;
   }
 
+  // Locked bet for free users: a blurred placeholder (NOT the real pick -- the server
+  // never sends it) + one clear unlock button (2026-10-20 redesign).
+  function lockedPick() {
+    return `<button type="button" class="vd-lock an-locked" data-go="sub">
+      <span class="vd-lock-k">🎯 Ставка ИИ</span>
+      <span class="vd-lock-blur" aria-hidden="true">П1 и тотал больше 2.5 @ 1.85 · уверенность высокая</span>
+      <span class="vd-lock-btn">🔓 Открыть ставку — MAX от 149 ₽</span></button>`;
+  }
+
   // Final verdict at the end of an analysis: who the AI expects to win and with what
   // probability, plus its pick -- explicitly labelled as the AI's own analysis.
   function verdictBlock(a, m) {
@@ -2989,7 +3015,7 @@ an_news: "News (injuries, form, suspensions)",
     const others = outcomes.slice(1).map((o) =>
       o.kind === "draw" ? tr("vd_other_draw", { p: o.v }) : tr("vd_other", { t: esc(o.name), p: o.v })).join("<br>");
     const sure = (CONF_LEVEL[a.confidence] || 0) >= 3;
-    const pick = a.pick_locked ? `<div class="vd-pick">🔒 Ставка ИИ — в MAX</div>` : a.pick
+    const pick = a.pick_locked ? lockedPick() : a.pick
       ? `<div class="vd-pick">🎯 ${tr(sure ? "vd_pick" : "vd_pick_risky")}: <b>${esc(a.pick.label)}</b> @ <b>${a.pick.odds.toFixed(2)}</b> · ${tr("confidence")} ${confMeter(a.confidence)}</div>`
       : "";
     return `<div class="an-block vd-block">
@@ -3053,10 +3079,7 @@ an_news: "News (injuries, form, suspensions)",
     }
     const a = data.analysis;
     const m = data.match;
-    const lockHtml = `<button type="button" class="an-pick an-locked" data-go="sub">
-          <div class="an-pick-k">🔒 Ставка ИИ и уверенность — в MAX</div>
-          <div class="ai-sub">Разбор и прогноз победителя ниже открыты. Какую ставку сделал бы ИИ и насколько он уверен — откройте MAX.</div>
-          <div class="an-unlock">Открыть MAX →</div></button>`;
+    const lockHtml = "";  // the blurred lockedPick() inside the verdict replaces this card
     const pickHtml = a.pick_locked ? lockHtml : a.pick
       ? `<div class="an-pick">
           <div class="an-pick-k">🎯 Почему эта ставка</div>

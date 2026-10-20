@@ -604,3 +604,19 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .an-final-btn { display: flex; flex-direction: column; gap: 4px; width: 100%; margin: 0 0 12px; padding: 14px 16px; border-radius: 16px; border: 1.5px solid rgba(178, 107, 255, 0.75); background: linear-gradient(135deg, rgba(139, 63, 240, 0.35), rgba(200, 79, 224, 0.2)), #170d2a; color: #fff; font: inherit; text-align: left; cursor: pointer; }
 .an-final-btn small { font-size: 12px; color: #cdbfe8; }
 .an-final-btn:disabled { opacity: 0.7; }
+
+/* 2026-10-20: chance bar on match cards, relative start time, blurred locked bet, empty states */
+.ml-pct { font-size: 15px; }
+.ml-bar { display: flex; gap: 2px; height: 6px; margin-top: 6px; border-radius: 3px; overflow: hidden; }
+.ml-bar i { display: block; height: 100%; background: #3a2a5a; }
+.ml-bar i.on { background: linear-gradient(90deg, #8b3ff0, #e05ce1); }
+.live-dot { color: #ff5a6e; font-weight: 800; }
+.live-dot::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #ff5a6e; animation: livePulse 1.2s ease-in-out infinite; vertical-align: 1px; }
+@keyframes livePulse { 50% { opacity: 0.3; } }
+.vd-lock { display: block; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 14px; border: 1px dashed rgba(178, 107, 255, 0.7); background: rgba(139, 63, 240, 0.12); color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.vd-lock-k { display: block; font-weight: 800; font-size: 13px; color: #d8c2ff; }
+.vd-lock-blur { display: block; margin: 6px 0 10px; font-size: 16px; font-weight: 800; filter: blur(6px); user-select: none; }
+.vd-lock-btn { display: block; text-align: center; padding: 10px; border-radius: 12px; font-weight: 800; background: linear-gradient(90deg, #8b3ff0, #c84fe0); }
+.ai-empty { padding: 28px 16px; text-align: center; color: #bfb0dd; border: 1px dashed #33244d; border-radius: 16px; }
+.ai-empty::before { content: "📡"; display: block; font-size: 34px; margin-bottom: 8px; }
+.lg-logo { width: 18px; height: 18px; }

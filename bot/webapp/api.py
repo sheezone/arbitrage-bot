@@ -311,7 +311,8 @@ def register_api(
             return None
         who = {"1": p["team_a"], "2": p["team_b"], "X": "Ничья"}[pred]
         pct = {"1": pr.get("p1"), "2": pr.get("p2"), "X": pr.get("x")}[pred]
-        return {"who": who, "pct": pct, "confidence": p["confidence"], "skip": p.get("skip", False)}
+        return {"who": who, "pct": pct, "confidence": p["confidence"], "skip": p.get("skip", False),
+                "pred": pred, "p1": pr.get("p1") or 0, "x": pr.get("x") or 0, "p2": pr.get("p2") or 0}
 
     _CONF_RANK = {"очень высокая": 0, "высокая": 1, "средняя": 2, "низкая": 3, "очень низкая": 4}
 
