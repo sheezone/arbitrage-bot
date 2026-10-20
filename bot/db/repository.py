@@ -228,7 +228,9 @@ class Repository:
         "SELECT CAST(json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.probabilities.x') AS REAL) UNION ALL "
         "SELECT CAST(json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.probabilities.p2') AS REAL))))"
     )
-    _FAV_SQL = f"IFNULL({_TOP_PROB_SQL}, 0) >= 0.60"
+    # owner 2026-10-21: "если выиграли — закинь в стату" -- the AI's favourite counts at any
+    # probability again (wins AND losses alike), no 60% cut-off.
+    _FAV_SQL = f"IFNULL({_TOP_PROB_SQL}, 0) > 0"
     _STAT_HIT_SQL = (
         # matches the AI itself advised to skip ("skip": true) don't count (2026-10-15)
         "CASE WHEN json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.skip') = 1 THEN NULL ELSE "
