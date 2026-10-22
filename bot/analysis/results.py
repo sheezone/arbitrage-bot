@@ -37,7 +37,7 @@ CHECK_EVERY_S = 1800
 MSK = timezone(timedelta(hours=3))
 
 
-def parse_results(raw: dict, sport_id: str = FOOTBALL) -> list[tuple[str, str, datetime, int, int]]:
+def parse_results(raw: dict, sport_id: str = FOOTBALL, regulation: bool = True) -> list[tuple[str, str, datetime, int, int]]:
     out = []
     sport = ((raw.get("reply") or {}).get("sports") or {}).get(sport_id) or {}
     for champ in (sport.get("chmps") or {}).values():
@@ -55,7 +55,7 @@ def parse_results(raw: dict, sport_id: str = FOOTBALL) -> list[tuple[str, str, d
                 # football stat rows share a suffix/prefix: "Ливерпуль удары в створ" /
                 # "Вильярреал удары в створ", "УГЛ ПСЖ" / "УГЛ Барселона" (2026-10-21)
                 continue
-            periods = REGULATION_PERIODS.get(sport_id)
+            periods = REGULATION_PERIODS.get(sport_id) if regulation else None
             if periods:
                 parts = re.findall(r"(\d+)\s*:\s*(\d+)", str(ev.get("sc_ext_ev") or ""))
                 if len(parts) < periods:
@@ -145,7 +145,8 @@ def score_winners(repo: Repository) -> int:
     """Record whether the predicted winner won, for every settled match not yet scored."""
     n = 0
     for row in repo.ai_winner_unscored():
-        res = winner_result(row["payload"], row["score"])
+        fin = row["final_score"] if "final_score" in row.keys() else None
+        res = winner_result(row["payload"], fin or row["score"])
         repo.set_ai_winner_result(row["match_id"], res or "unknown")
         n += res is not None
     return n
@@ -175,12 +176,21 @@ async def settle_pending(repo: Repository, client: httpx.AsyncClient) -> int:
         if sport not in by_sport:
             by_sport[sport] = [r for raw in raws for r in parse_results(raw, sid)]
         score = find_score(row["team_a"], row["team_b"], start, by_sport[sport])
+        final = None
+        if sid in REGULATION_PERIODS and score is not None:
+            # hockey: the winner stat counts who won the GAME (OT/shootout included,
+            # owner 2026-10-22); bets keep settling on regular time like the bookmaker
+            key = sport + ":final"
+            if key not in by_sport:
+                by_sport[key] = [r for raw in raws for r in parse_results(raw, sid, regulation=False)]
+            fs = find_score(row["team_a"], row["team_b"], start, by_sport[key])
+            final = f"{fs[0]}:{fs[1]}" if fs else None
         if score is None:
             if now - start > GIVE_UP_AFTER:
                 repo.settle_ai_analysis(row["match_id"], "unknown", "")
             continue
         option = Option(row["option_id"], row["option_label"], row["odds"], row["option_kind"], row["option_line"])
-        repo.settle_ai_analysis(row["match_id"], settle(option, *score), f"{score[0]}:{score[1]}")
+        repo.settle_ai_analysis(row["match_id"], settle(option, *score), f"{score[0]}:{score[1]}", final)
         settled += 1
     return settled
 

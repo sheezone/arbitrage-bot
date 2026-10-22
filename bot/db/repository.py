@@ -136,6 +136,9 @@ class Repository:
         if ai_cols and "winner_result" not in ai_cols:
             # did the AI's predicted winner (argmax of its probabilities) actually win
             self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN winner_result TEXT")
+        if ai_cols and "final_score" not in ai_cols:
+            # hockey: score incl. OT/shootout -- who won the game, for the winner stat
+            self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN final_score TEXT")
         if "vilki_until" not in columns:
             # Vilka search runs for VILKI_RUN_DAYS after the user presses «Запустить», then
             # switches itself off (owner, 2026-10-03). NULL = no expiry (users who had it
@@ -206,10 +209,10 @@ class Repository:
             "SELECT * FROM ai_analyses WHERE result IS NULL AND start_utc < ?", (started_before_iso,)
         ).fetchall()
 
-    def settle_ai_analysis(self, match_id: str, result: str, score: str) -> None:
+    def settle_ai_analysis(self, match_id: str, result: str, score: str, final_score: str | None = None) -> None:
         self._conn.execute(
-            "UPDATE ai_analyses SET result = ?, score = ?, settled_at = ? WHERE match_id = ?",
-            (result, score, datetime.now(timezone.utc).isoformat(), match_id),
+            "UPDATE ai_analyses SET result = ?, score = ?, final_score = ?, settled_at = ? WHERE match_id = ?",
+            (result, score, final_score, datetime.now(timezone.utc).isoformat(), match_id),
         )
         self._conn.commit()
 
