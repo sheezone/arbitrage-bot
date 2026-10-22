@@ -92,7 +92,7 @@ class Option:
     id: str      # stable within a match, e.g. "1", "X", "2", "TO2.5", "TU2.5", "H1-1.5"
     label: str   # human text, e.g. "П1", "Тотал больше 2.5", "Фора Реал (-1.5)"
     odds: float
-    kind: str    # "1x2" | "winner" | "total_over" | "total_under" | "handicap1" | "handicap2"
+    kind: str    # "1x2" | "winner" | "total_over" | "total_under" | "handicap1" | "handicap2" | "btts_yes" | "btts_no"
     line: float = 0.0
 
 
@@ -217,6 +217,8 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
             m.options += _totals(f, cfg["totals"])
         if cfg["hcp"]:
             m.options += _handicaps(f, a, b, cfg["hcp"])
+        if sport == "football":
+            m.options += _btts(f)
         matches.append(m)
     matches.sort(key=lambda m: (m.priority, m.start_utc))
     return matches[:limit] if limit else matches
@@ -236,6 +238,22 @@ def _totals(f: dict, rng: tuple[float, float] = (1.5, 4.5)) -> list[Option]:
         out.append(Option(f"TO{line:g}", f"Тотал больше {line:g}", float(over["v"]), "total_over", line))
         out.append(Option(f"TU{line:g}", f"Тотал меньше {line:g}", float(under["v"]), "total_under", line))
     return sorted(out, key=lambda o: (o.line, o.kind))
+
+
+# «Обе забьют» (owner 2026-10-22). Fonbet factor ids 4241 = да / 4242 = нет -- identified
+# live on Лилль — Ланс (1.57 / 2.35, a ~6% margin pair present only on football mains).
+BTTS_YES_FACTOR, BTTS_NO_FACTOR = 4241, 4242
+
+
+def _btts(f: dict) -> list[Option]:
+    yes, no = f.get(BTTS_YES_FACTOR), f.get(BTTS_NO_FACTOR)
+    try:
+        y, n = float(yes["v"]), float(no["v"])
+    except (TypeError, ValueError, KeyError):
+        return []
+    if not (1.0 < y < 10 and 1.0 < n < 10) or not 1.0 < 1 / y + 1 / n < 1.15:
+        return []  # not a sane two-way pair -- don't trust the ids for this event
+    return [Option("BTTSY", "Обе забьют — да", y, "btts_yes"), Option("BTTSN", "Обе забьют — нет", n, "btts_no")]
 
 
 def _handicaps(f: dict, a: str, b: str, max_abs: float = 2.5) -> list[Option]:
@@ -390,6 +408,10 @@ def settle(option: Option, goals_a: int, goals_b: int) -> str:
         won = diff + option.line > 0
     elif option.kind == "handicap2":
         won = -diff + option.line > 0
+    elif option.kind == "btts_yes":
+        won = goals_a > 0 and goals_b > 0
+    elif option.kind == "btts_no":
+        won = goals_a == 0 or goals_b == 0
     else:
         raise ValueError(option.kind)
     return "win" if won else "lose"
