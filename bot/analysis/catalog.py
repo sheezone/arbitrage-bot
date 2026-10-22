@@ -218,7 +218,7 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
         if cfg["hcp"]:
             m.options += _handicaps(f, a, b, cfg["hcp"])
         if sport == "football":
-            m.options += _btts(f)
+            m.options += _btts(f) + _double_chance(f, a, b) + _team_totals(f, a, b)
         matches.append(m)
     matches.sort(key=lambda m: (m.priority, m.start_utc))
     return matches[:limit] if limit else matches
@@ -254,6 +254,47 @@ def _btts(f: dict) -> list[Option]:
     if not (1.0 < y < 10 and 1.0 < n < 10) or not 1.0 < 1 / y + 1 / n < 1.15:
         return []  # not a sane two-way pair -- don't trust the ids for this event
     return [Option("BTTSY", "Обе забьют — да", y, "btts_yes"), Option("BTTSN", "Обе забьют — нет", n, "btts_no")]
+
+
+# Double chance and team totals (owner 2026-10-22), ids identified live on Лилль — Ланс:
+# 924 = 1X (1.40), 1571 = 12 (1.30), 925 = X2 (1.62) -- consistent with 1X2 2.30/3.60/3.00.
+DOUBLE_CHANCE_FACTORS = ((924, "1X"), (1571, "12"), (925, "X2"))
+# Individual totals, (over, under) per line: team 1 1809/1810 (0.5) ... 1821/1822 (2.5),
+# team 2 1854/1871 (0.5), 1873/1874, 1880/1881, 1883/1884, 1886/1887 (2.5).
+TEAM1_TOTAL_PAIRS = ((1809, 1810), (1815, 1816), (1821, 1822))
+TEAM2_TOTAL_PAIRS = ((1854, 1871), (1880, 1881), (1886, 1887))
+
+
+def _double_chance(f: dict, a: str, b: str) -> list[Option]:
+    names = {"1X": f"1X ({a} или ничья)", "12": "12 (без ничьей)", "X2": f"X2 ({b} или ничья)"}
+    out = []
+    for fid, code in DOUBLE_CHANCE_FACTORS:
+        try:
+            v = float(f[fid]["v"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 1.0 < v < 5:
+            out.append(Option(f"DC{code}", names[code], v, "dc_" + code.lower()))
+    return out
+
+
+def _team_totals(f: dict, a: str, b: str) -> list[Option]:
+    out = []
+    for team, pairs, name in ((1, TEAM1_TOTAL_PAIRS, a), (2, TEAM2_TOTAL_PAIRS, b)):
+        for over_id, under_id in pairs:
+            over, under = f.get(over_id), f.get(under_id)
+            try:
+                line = float(over["pt"])
+                if line != float(under["pt"]) or (line * 2) % 2 != 1:
+                    continue
+                vo, vu = float(over["v"]), float(under["v"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not 1.0 < 1 / vo + 1 / vu < 1.2:
+                continue
+            out.append(Option(f"IT{team}O{line:g}", f"ИТ{team} {name} больше {line:g}", vo, f"team{team}_over", line))
+            out.append(Option(f"IT{team}U{line:g}", f"ИТ{team} {name} меньше {line:g}", vu, f"team{team}_under", line))
+    return out
 
 
 def _handicaps(f: dict, a: str, b: str, max_abs: float = 2.5) -> list[Option]:
@@ -408,6 +449,16 @@ def settle(option: Option, goals_a: int, goals_b: int) -> str:
         won = diff + option.line > 0
     elif option.kind == "handicap2":
         won = -diff + option.line > 0
+    elif option.kind in ("dc_1x", "dc_12", "dc_x2"):
+        won = {"dc_1x": diff >= 0, "dc_12": diff != 0, "dc_x2": diff <= 0}[option.kind]
+    elif option.kind == "team1_over":
+        won = goals_a > option.line
+    elif option.kind == "team1_under":
+        won = goals_a < option.line
+    elif option.kind == "team2_over":
+        won = goals_b > option.line
+    elif option.kind == "team2_under":
+        won = goals_b < option.line
     elif option.kind == "btts_yes":
         won = goals_a > 0 and goals_b > 0
     elif option.kind == "btts_no":
