@@ -64,6 +64,16 @@ def parse_results(raw: dict, sport_id: str = FOOTBALL, regulation: bool = True) 
                 gb = sum(int(b) for _, b in parts[:periods])
             else:
                 ga, gb = int(m.group(1)), int(m.group(2))
+                if not regulation and sport_id in REGULATION_PERIODS:
+                    # hockey game result: sc_ev is regular time only; OT goals and the
+                    # shootout sit in sc_com_ev, e.g. "(ОТ 0:0, бул. 0:1)" (2026-10-22)
+                    com = str(ev.get("sc_com_ev") or "")
+                    ot = re.search(r"ОТ\s*(\d+)\s*:\s*(\d+)", com)
+                    if ot:
+                        ga, gb = ga + int(ot.group(1)), gb + int(ot.group(2))
+                    so = re.search(r"бул\.?\s*(\d+)\s*:\s*(\d+)", com)
+                    if so and ga == gb:
+                        ga, gb = (ga + 1, gb) if int(so.group(1)) > int(so.group(2)) else (ga, gb + 1)
             try:
                 when = datetime.strptime(ev.get("date_ev", "")[:16], "%Y-%m-%d %H:%M").replace(tzinfo=MSK)
             except ValueError:
