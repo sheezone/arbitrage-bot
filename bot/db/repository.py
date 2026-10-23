@@ -547,6 +547,10 @@ class Repository:
             "SELECT * FROM user_expresses ORDER BY found_at DESC LIMIT ?", (limit,)
         ).fetchall()
 
+    def ai_usage_matches(self, chat_id: int) -> set[str]:
+        """Every match this user ever opened an analysis of -- their «Готовые прогнозы»."""
+        return {r[0] for r in self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ?", (chat_id,))}
+
     def ai_usage_today(self, chat_id: int, day: str) -> set[str]:
         rows = self._conn.execute("SELECT match_id FROM ai_usage WHERE chat_id = ? AND day = ?", (chat_id, day)).fetchall()
         return {r[0] for r in rows}

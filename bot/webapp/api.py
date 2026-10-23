@@ -290,7 +290,7 @@ def register_api(
             "hit_rate": {"wins": wins, "total": total, "min_total": 20},
             "winner_rate": repo.ai_winner_rate(),
             "ai_quota": {"limit": limit, "used": len(used)},
-            "picks_count": len(picks),
+            "picks_count": len([p for p in picks if p["match_id"] in repo.ai_usage_matches(chat_id)]),
             "express_count": len(build_expresses(picks)),
             "vilki_count": len(state.matches),
             "bot_username": bot_username,
@@ -468,8 +468,10 @@ def register_api(
         # Opening a match the AI has ALREADY analysed (daily picks, other users, the
         # pre-kickoff pass) is just viewing -- it doesn't use up the daily quota (owner
         # 2026-10-17: "сделал 1 разбор, а показывает 2 из 5"). Only a fresh analysis counts.
-        cached = repo.get_ai_analysis(match.id) is not None
-        if not cached and limit is not None and match.id not in used and len(used) >= limit:
+        # Every match a user opens counts toward their daily limit and lands in THEIR
+        # «Готовые прогнозы» -- even when another user's analysis is reused instantly
+        # (owner 2026-10-23: "не более 5 готовых матчей у каждого человека").
+        if limit is not None and match.id not in used and len(used) >= limit:
             raise HTTPException(status_code=429, detail=(
                 f"Лимит на сегодня: {limit}. Оформите MAX — до {AI_PAID_PER_DAY} анализов в день."
                 if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
@@ -484,8 +486,7 @@ def register_api(
             result = None
         if result is None:
             raise HTTPException(status_code=424, detail="Не удалось разобрать этот матч, попробуйте позже")
-        if not cached:
-            repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
+        repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
         wins, total = repo.ai_hit_rate()
         in_line = bool(match.options)
         out = _match_out(match) if in_line else {
@@ -634,8 +635,10 @@ def register_api(
         user = _get_user(repo, chat_id)
         _log(chat_id, "picks")
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
-        upcoming = [_crests(p) for p in upcoming_picks(repo, hours=SHOWN_PICKS_HOURS)]
-        recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(20)]
+        # only the matches THIS user analysed (owner 2026-10-23)
+        mine = repo.ai_usage_matches(chat_id)
+        upcoming = [_crests(p) for p in upcoming_picks(repo, hours=SHOWN_PICKS_HOURS) if p["match_id"] in mine][:AI_PAID_PER_DAY]
+        recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(200) if r["match_id"] in mine][:20]
         return {"pro": pro, "upcoming": upcoming if pro else [_lock(p) for p in upcoming], "recent": recent}
 
     # «Найти экспресс» (owner 2026-10-03): free -- 1 per 3 days, MAX -- 2 per MSK day,
