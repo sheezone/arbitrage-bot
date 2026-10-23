@@ -92,6 +92,9 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   Двойной шанс (1X / X2) — когда фаворит есть, но ничья вероятна; индивидуальный тотал (ИТ1/ИТ2) —
   когда ясно, сколько забьёт конкретная команда, а исход матча неочевиден.
 - Коэффициент ставки — от 1.30 до 3.00. Выше 3.00 — только при уверенности «высокая» или «очень высокая».
+- Ставка (option_id) — НИКОГДА не чистая победа/исход: кто победит, ты уже показываешь в
+  probabilities. Выбирай тотал, индивидуальный тотал, фору, двойной шанс, «обе забьют» — то, что
+  лучше всего следует из разбора. Победа допустима, только если в списке ставок нет ничего другого.
 - ХОККЕЙ: все ставки считаются по ОСНОВНОМУ времени (60 минут), а ничья в основное время бывает в ~22%
   матчей. Поэтому П1/П2 в хоккее — только при явном фаворите (60%+ по твоей оценке). Если фаворит
   слабее — бери фору +1.5 на фаворита или аутсайдера, либо тотал, а не чистую победу. Ничью (X)
@@ -289,6 +292,17 @@ def market_probabilities(match: FootballMatch) -> dict | None:
     return {"p1": p1, "x": x, "p2": 100 - p1 - x}
 
 
+def _favourite_alternative(match: FootballMatch, favourite: str) -> Option | None:
+    """A non-win bet that still backs the AI's favourite: double chance, else the
+    smallest positive handicap on it (+0.5 / +1.5)."""
+    side = "1" if favourite in ("1", "X") else "2"
+    dc = match.option("DC1X" if side == "1" else "DCX2")
+    if dc is not None and dc.odds >= 1.25:
+        return dc
+    hcps = [o for o in match.options if o.kind == f"handicap{side}" and o.line > 0 and o.odds >= 1.25]
+    return min(hcps, key=lambda o: o.line) if hcps else dc
+
+
 def _consistent_option(match: FootballMatch, result: dict, option: Option | None) -> Option | None:
     """The pick must agree with the AI's own verdict: no betting on an outcome it rates
     below the favourite, and no long shots (> 3.00) without high confidence. Otherwise
@@ -298,6 +312,17 @@ def _consistent_option(match: FootballMatch, result: dict, option: Option | None
     ranked = sorted((("1", p.get("p1", 0)), ("X", p.get("x", 0)), ("2", p.get("p2", 0))), key=lambda t: -t[1])
     favourite = ranked[0][0]
     fav_option = match.option(favourite) or match.option("1" if p.get("p1", 0) >= p.get("p2", 0) else "2")
+    # The winner is already shown separately in «Итог ИИ» -- the bet itself must be a
+    # different market (owner 2026-10-23: "не делай победу, всё что угодно: тоталы, фору").
+    # Only sports with nothing but a winner line (esports, MMA...) keep a win bet.
+    has_alt = any(o.kind not in ("1x2", "winner") for o in match.options)
+    if has_alt:
+        alt = _favourite_alternative(match, favourite)
+        if option is None or option.kind in ("1x2", "winner"):
+            return alt or option
+        if option.odds > 3.0 and result.get("confidence") not in HIGH_CONFIDENCE:
+            return alt or option
+        return option
     if option is None:
         return fav_option
     contradicts = option.kind in ("1x2", "winner") and option.id != favourite
@@ -538,7 +563,9 @@ class Analyzer:
             return ""
 
     async def _ask(self, match: FootballMatch, data: dict) -> dict | None:
-        options = "\n".join(f"- id={o.id}: {o.label} @ {o.odds:.2f}" for o in match.options)
+        # the winner is shown separately -- offer win bets only when nothing else exists
+        bets = [o for o in match.options if o.kind not in ("1x2", "winner")] or match.options
+        options = "\n".join(f"- id={o.id}: {o.label} @ {o.odds:.2f}" for o in bets)
         line = (f"Доступные ставки (выбери одну по id):\n{options}\n\n" if options
                 else "Матча нет в линии букмекеров: коэффициентов нет, option_id оставь пустым.\n\n")
         market = market_probabilities(match)
