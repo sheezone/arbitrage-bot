@@ -620,3 +620,9 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .ai-empty { padding: 28px 16px; text-align: center; color: #bfb0dd; border: 1px dashed #33244d; border-radius: 16px; }
 .ai-empty::before { content: "📡"; display: block; font-size: 34px; margin-bottom: 8px; }
 .lg-logo { width: 18px; height: 18px; }
+
+/* admin: per-user analysed picks */
+.up-card { margin-bottom: 10px; border: 1px solid #33244d; border-radius: 14px; background: rgba(23, 13, 42, 0.85); }
+.up-card > summary { cursor: pointer; padding: 12px 14px; font-size: 14px; list-style: none; }
+.up-row { display: flex; gap: 8px; padding: 8px 14px; border-top: 1px solid #241838; font-size: 13px; }
+.up-main small { display: block; color: #a898c8; margin-top: 2px; }

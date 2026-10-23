@@ -1095,6 +1095,37 @@ def register_api(
         "express_find": "Искал экспресс", "settings": "Настройки",
     }
 
+    @app.get("/api/admin/user_picks")
+    async def get_admin_user_picks(authorization: str | None = Header(default=None)):
+        """Admin-only (owner 2026-10-23): which matches each user analysed and whether
+        those forecasts came in -- anonymised (stable alias, never the chat id/name),
+        admins excluded."""
+        import hashlib
+
+        chat_id = _auth(authorization)
+        if not billing.is_admin(_get_user(repo, chat_id), admin_chat_ids):
+            raise HTTPException(status_code=403, detail="Только для администраторов")
+        hit = repo._STAT_HIT_SQL
+        rows = repo._conn.execute(
+            f"SELECT u.chat_id, u.day, a.team_a, a.team_b, a.league, a.sport, a.start_utc, a.option_label, "
+            f"a.odds, a.score, {hit} AS stat_hit FROM ai_usage u JOIN ai_analyses a ON a.match_id = u.match_id "
+            f"ORDER BY u.day DESC, a.start_utc DESC"
+        ).fetchall()
+        users: dict[int, dict] = {}
+        for r in rows:
+            if r["chat_id"] in admin_chat_ids:
+                continue
+            u = users.setdefault(r["chat_id"], {
+                "alias": "Пользователь " + hashlib.sha256(f"mr-{r['chat_id']}".encode()).hexdigest()[:4].upper(),
+                "picks": [], "win": 0, "lose": 0})
+            u["picks"].append({"day": r["day"], "team_a": r["team_a"], "team_b": r["team_b"], "league": r["league"],
+                               "sport": r["sport"], "start_label": format_match_start(r["start_utc"]),
+                               "label": r["option_label"], "odds": r["odds"], "score": r["score"], "hit": r["stat_hit"]})
+            if r["stat_hit"] in ("win", "lose"):
+                u[r["stat_hit"]] += 1
+        out = sorted(users.values(), key=lambda u: -len(u["picks"]))
+        return {"users": out}
+
     @app.get("/api/admin/activity")
     async def get_admin_activity(authorization: str | None = Header(default=None)):
         """Admin-only: who actually used the app today and what they did most (owner

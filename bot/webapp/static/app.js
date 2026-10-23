@@ -2196,6 +2196,7 @@ an_news: "News (injuries, form, suspensions)",
     content.innerHTML = `
       <button type="button" class="pro-buy wide" id="admin-bank-btn" style="margin-bottom:10px">🤖 ИИ-банк — виртуальные 10 000 ₽</button>
       <button type="button" class="btn-ghost wide" id="admin-activity-btn" style="margin-bottom:10px">📊 Активность за сегодня</button>
+      <button type="button" class="btn-ghost wide" id="admin-userpicks-btn" style="margin-bottom:10px">📋 Разборы пользователей</button>
       
       <div class="section-title">${t("admin_users")}</div>
       <div class="stat-grid">
@@ -3263,6 +3264,8 @@ an_news: "News (injuries, form, suspensions)",
     if (b) b.addEventListener("click", () => { haptic("light"); renderAiBankroll(); });
     const a = document.getElementById("admin-activity-btn");
     if (a) a.addEventListener("click", () => { haptic("light"); renderAdminActivity(); });
+    const up = document.getElementById("admin-userpicks-btn");
+    if (up) up.addEventListener("click", () => { haptic("light"); renderAdminUserPicks(); });
     const x = document.getElementById("admin-expresses-btn");
     if (x) x.addEventListener("click", () => { haptic("light"); renderAdminExpresses(); });
   }
@@ -3299,6 +3302,25 @@ an_news: "News (injuries, form, suspensions)",
       ${foundCards}
       <button type="button" class="btn-ghost wide" id="expresses-back">← К админке</button>`;
     document.getElementById("expresses-back").addEventListener("click", renderAdmin);
+  }
+
+  // Admin: what each (anonymous) user analysed and whether it came in (owner 2026-10-23).
+  async function renderAdminUserPicks() {
+    const d = await api("/api/admin/user_picks");
+    const mark = (h) => (h === "win" ? "✅" : h === "lose" ? "❌" : "⏳");
+    const cards = d.users.length ? d.users.map((u) => {
+      const done = u.win + u.lose;
+      const head = `<b>${esc(u.alias)}</b> · разборов: ${u.picks.length}${done ? ` · зашло <b>${u.win} из ${done}</b> (${Math.round(u.win / done * 100)}%)` : ""}`;
+      const rows = u.picks.map((p) => `<div class="up-row"><span class="up-mark">${mark(p.hit)}</span>
+        <span class="up-main">${SPORT_EMOJI[p.sport] || "🏆"} ${esc(p.team_a)} — ${esc(p.team_b)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}
+        <small>${esc(p.label || "")}${p.odds ? ` @ ${Number(p.odds).toFixed(2)}` : ""} · ${esc(p.start_label || "")} · открыл ${esc(p.day)}</small></span></div>`).join("");
+      return `<details class="up-card"><summary>${head}</summary>${rows}</details>`;
+    }).join("") : `<div class="news-empty">Пользователи пока ничего не разбирали</div>`;
+    content.innerHTML = `<h3 class="sec-h">📋 Разборы пользователей</h3>
+      <p class="ai-sub">Анонимно: у каждого постоянный код, без имени и ID. Админы не учитываются. ✅ зашло · ❌ не зашло · ⏳ ещё не сыграно</p>
+      ${cards}
+      <button type="button" class="btn-ghost wide" id="up-back">← К админке</button>`;
+    document.getElementById("up-back").addEventListener("click", renderAdmin);
   }
 
   // Who actually used the app today and what they did most, admins excluded entirely
