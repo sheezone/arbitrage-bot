@@ -193,7 +193,8 @@ async def _broadcast(repo: Repository, bot, webapp_url: str, text_for) -> int:
     return sent
 
 
-async def daily_pushes(repo: Repository, bot, webapp_url: str, admin_chat_ids: frozenset[int]) -> None:
+async def daily_pushes(repo: Repository, bot, webapp_url: str, admin_chat_ids: frozenset[int],
+                       news_chat_id: int | None = None) -> None:
     """A reason to open the app every day (owner 2026-10-12): 10:00 MSK «экспресс дня
     готов» (full for MAX, total-odds teaser for free), 21:00 MSK «итог дня» -- how
     many of today's AI forecasts came in. Each fires once per day."""
@@ -230,6 +231,53 @@ async def daily_pushes(repo: Repository, bot, webapp_url: str, admin_chat_ids: f
             text = "\n".join(lines)
             n = await _broadcast(repo, bot, webapp_url, lambda u: text)
             logger.info("Evening results push: %s", n)
+            if news_chat_id is not None and wins:
+                await post_day_results_to_channel(bot, news_chat_id, rows, wins)
+
+
+async def post_day_results_to_channel(bot, chat_id: int, rows, wins: int) -> None:
+    """Evening «Итог дня» in the channel (owner 2026-10-23): the forecasts that came in,
+    with the AI's bet and the real score, plus the honest day total."""
+    import html
+
+    lines = ["📊 <b>Итог дня от ИИ Матч Радар</b>", ""]
+    for r in rows:
+        if r["stat_hit"] != "win":
+            continue
+        lines.append(f"✅ <b>{html.escape(r['team_a'])} — {html.escape(r['team_b'])}</b> {html.escape(r['score'] or '')}\n"
+                     f"     {html.escape(r['option_label'] or '')} @ {r['odds']:.2f}")
+    lines += ["", f"Всего за день: <b>{wins} из {len(rows)}</b> прогнозов зашли.",
+              "Разбор любого матча — в приложении Матч Радар 👇"]
+    try:
+        await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    except Exception:
+        logger.exception("Channel day results post failed")
+
+
+# One football + one hockey match of the day analysed automatically every morning (owner
+# 2026-10-23) -- they open instantly; everything else is analysed only on a user's tap.
+FEATURED_HOUR = 9
+FEATURED_SPORTS = ("football", "hockey")
+
+
+async def featured_daily(analyzer: Analyzer, repo: Repository, now: datetime) -> None:
+    local = now.astimezone(MSK)
+    key = f"featured_{local.date().isoformat()}"
+    if local.hour < FEATURED_HOUR or repo.alert_sent(key):
+        return
+    repo.mark_alert_sent(key)
+    line = await get_full_line()
+    for sport in FEATURED_SPORTS:
+        pool = [m for m in line if m.sport == sport and m.is_popular and m.options
+                and now < m.start_utc <= now + timedelta(hours=24)]
+        if not pool:
+            continue
+        m = min(pool, key=lambda m: (m.priority, m.start_utc))
+        try:
+            await analyzer.analyze(m)
+            logger.info("Featured %s of the day analysed: %s — %s", sport, m.team_a, m.team_b)
+        except Exception:
+            logger.exception("Featured analysis failed for %s", m.id)
 
 
 def popular_to_analyse(matches, have: set[str], now: datetime) -> list:
@@ -303,10 +351,11 @@ async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp
                         await analyzer.analyze(match)
                     except Exception:
                         logger.exception("Daily analysis failed for %s", match.id)
+            await featured_daily(analyzer, repo, now)
             if bot is not None:
                 # Scheduled 10:00 / 21:00 pushes replace the old "every new express"
                 # stream (owner 2026-10-12).
-                await daily_pushes(repo, bot, webapp_url, admin_chat_ids)
+                await daily_pushes(repo, bot, webapp_url, admin_chat_ids, news_chat_id)
                 if news_chat_id is not None and await post_fight_highlight(repo, bot, news_chat_id, now):
                     logger.info("Fight highlight posted to the channel")
         except Exception:

@@ -2683,6 +2683,7 @@ an_news: "News (injuries, form, suspensions)",
           <h2 class="home-welcome">${tr("welcome")}</h2>
         </div>
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
+        ${yesterdayFeed(h.yesterday)}
         <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
           <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">${icon("trophy", 34)}</span><span class="tile-label">${tr("tile_stats")}</span></button>
           ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">${icon("wrench", 34)}</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
@@ -2695,6 +2696,14 @@ an_news: "News (injuries, form, suspensions)",
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
     loadTicker();
     maybeOnboarding();
+  }
+
+  // «Вчера ИИ угадал» (owner 2026-10-23): yesterday's real hits -- match, AI bet, score.
+  function yesterdayFeed(y) {
+    if (!y || !y.feed || !y.feed.length) return "";
+    return `<div class="yd-feed"><div class="yd-h">✅ Вчера ИИ угадал <span>${y.wins} из ${y.total}</span></div>
+      ${y.feed.map((p) => `<div class="yd-row"><span class="yd-teams">${SPORT_EMOJI[p.sport] || "🏆"} ${teamsLine(p)}</span>
+        <span class="yd-sub">${esc(p.label || "")}${p.odds ? ` @ ${Number(p.odds).toFixed(2)}` : ""} · счёт <b>${esc(p.score || "")}</b></span></div>`).join("")}</div>`;
   }
 
   // First launch: 3 short slides "what the app does" (per-viewer, localStorage).

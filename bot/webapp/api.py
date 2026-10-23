@@ -346,7 +346,11 @@ def register_api(
         day0 = now.astimezone(msk).replace(hour=0, minute=0, second=0, microsecond=0)
         rows = repo.day_results((day0 - timedelta(days=1)).astimezone(timezone.utc).isoformat(),
                                 day0.astimezone(timezone.utc).isoformat())
-        return {"wins": sum(r["stat_hit"] == "win" for r in rows), "total": len(rows)}
+        wins = [r for r in rows if r["stat_hit"] == "win"]
+        # «Вчера ИИ угадал» feed on the home screen (owner 2026-10-23): real hits only
+        feed = [_crests({"team_a": r["team_a"], "team_b": r["team_b"], "sport": r["sport"], "league": r["league"],
+                         "label": r["option_label"], "odds": r["odds"], "score": r["score"]}) for r in wins[:6]]
+        return {"wins": len(wins), "total": len(rows), "feed": feed}
 
     ticker_cache: dict[str, object] = {"at": 0.0, "items": []}
 
@@ -494,7 +498,14 @@ def register_api(
             "start_utc": "", "start_label": "", "team_a_flag": get_team_flag(match.team_a),
             "team_b_flag": get_team_flag(match.team_b),
         }
-        if not billing.has_access(user, now, admin_chat_ids) and result.get("pick"):
+        # A free user's very FIRST analysis shows the AI's bet in full (owner 2026-10-23):
+        # let them see one forecast come in before asking to pay. That match stays open.
+        free_key = f"free_open_{chat_id}"
+        free_open = repo.get_ai_note(free_key)
+        if not free_open and not billing.has_access(user, now, admin_chat_ids):
+            repo.set_ai_note(free_key, match.id)
+            free_open = match.id
+        if free_open != match.id and not billing.has_access(user, now, admin_chat_ids) and result.get("pick"):
             # Free tier teases (owner 2026-10-12): who wins + the full разбор, but the
             # AI's bet and its confidence stay behind MAX.
             result = {**result, "pick": None, "confidence": None, "reasoning": "", "pick_locked": True}

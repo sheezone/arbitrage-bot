@@ -626,3 +626,11 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .up-card > summary { cursor: pointer; padding: 12px 14px; font-size: 14px; list-style: none; }
 .up-row { display: flex; gap: 8px; padding: 8px 14px; border-top: 1px solid #241838; font-size: 13px; }
 .up-main small { display: block; color: #a898c8; margin-top: 2px; }
+
+/* «Вчера ИИ угадал» feed on home */
+.yd-feed { margin: 0 0 14px; padding: 12px 14px; border-radius: 16px; border: 1px solid rgba(90, 210, 150, 0.45); background: linear-gradient(160deg, rgba(40, 120, 80, 0.18), rgba(20, 10, 38, 0.9)); }
+.yd-h { font-weight: 800; font-size: 15px; display: flex; justify-content: space-between; margin-bottom: 6px; }
+.yd-h span { color: #6fe0a8; }
+.yd-row { padding: 7px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.yd-teams { display: block; font-size: 13.5px; font-weight: 700; }
+.yd-sub { display: block; font-size: 12px; color: #b9cfc2; margin-top: 2px; }
