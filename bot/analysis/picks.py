@@ -33,7 +33,8 @@ ACTIVE_HOURS = range(8, 23)
 EXPRESS_LEG_ODDS = (1.3, 2.4)
 EXPRESS_TOTAL = (1.8, 6.0)  # 2 safe legs (~1.35 each) still make an express
 EXPRESS_COUNT = 3
-EXPRESSES_ENABLED = False  # owner 2026-10-19: "не делай больше экспрессы и удали их"
+EXPRESSES_ENABLED = False
+AUTO_ANALYSIS = False  # owner 2026-10-23: tokens only when a user taps «Анализировать»  # owner 2026-10-19: "не делай больше экспрессы и удали их"
 # How far ahead the app shows already-analysed matches (list verdicts, «Готовые
 # прогнозы») -- as far as the «Главные матчи» block reaches, so a midweek UCL game
 # analysed 3 days early isn't missing its «разобран» mark (owner 2026-10-17).
@@ -295,7 +296,7 @@ async def run_daily_picks(analyzer: Analyzer, repo: Repository, bot=None, webapp
     while True:
         try:
             now = datetime.now(timezone.utc)
-            if now.astimezone(MSK).hour in ACTIVE_HOURS:
+            if AUTO_ANALYSIS and now.astimezone(MSK).hour in ACTIVE_HOURS:
                 have = {p["match_id"] for p in upcoming_picks(repo, now, hours=24)}
                 for match in popular_to_analyse(await get_full_line(), have, now)[:PER_RUN]:
                     try:

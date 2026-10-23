@@ -66,6 +66,11 @@ def _open_app_markup(_language: str = "ru"):
 
 
 VILKI_ENABLED = False
+# Claude is spent ONLY when a user taps «Анализировать» (owner 2026-10-23: the hourly
+# auto-analysis, scheduled pre-kickoff pass, AI news posts and AI logo lookups burned
+# ~19M tokens a day, mostly on minor matches nobody opened). On-demand stays: the
+# analysis itself and the «Подробный разбор за 60 мин» button.
+AI_ON_DEMAND_ONLY = True
 
 
 async def main() -> None:
@@ -138,10 +143,10 @@ async def main() -> None:
         settle_task = asyncio.create_task(run_settler(repo, bot, config.admin_chat_ids))
         from bot.analysis.logos import run_logo_filler
 
-        logos_task = asyncio.create_task(run_logo_filler(analyzer, repo, config.api_football_key))  # noqa: F841 (lives with the process)
+        logos_task = asyncio.create_task(run_logo_filler(None if AI_ON_DEMAND_ONLY else analyzer, repo, config.api_football_key))  # noqa: F841 (lives with the process)
         from bot.analysis.final_pass import run_final_pass
 
-        final_task = asyncio.create_task(run_final_pass(analyzer, repo))  # noqa: F841 (lives with the process)
+        final_task = None if AI_ON_DEMAND_ONLY else asyncio.create_task(run_final_pass(analyzer, repo))  # noqa: F841 (lives with the process)
         from bot.analysis.picks import run_daily_picks
 
         picks_task = asyncio.create_task(run_daily_picks(
@@ -224,7 +229,7 @@ async def main() -> None:
 
 
     news_task: asyncio.Task | None = None
-    if config.news_chat_id and config.anthropic_api_key:
+    if config.news_chat_id and config.anthropic_api_key and not AI_ON_DEMAND_ONLY:
         from bot.core.news_channel import NewsPoster
 
         news_task = asyncio.create_task(

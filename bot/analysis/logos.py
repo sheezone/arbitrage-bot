@@ -100,7 +100,7 @@ async def fill_logos(analyzer, repo: Repository, client: httpx.AsyncClient, api_
                     pending.append(name)
             if not pending:
                 continue
-            english = await _translate(analyzer, [base_name(n) for n in pending], sport)
+            english = await _translate(analyzer, [base_name(n) for n in pending], sport) if analyzer is not None else {}
             for name in pending:
                 url = ""
                 for variant in english.get(base_name(name), []):
