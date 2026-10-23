@@ -318,11 +318,12 @@ def _consistent_option(match: FootballMatch, result: dict, option: Option | None
     has_alt = any(o.kind not in ("1x2", "winner") for o in match.options)
     if has_alt:
         alt = _favourite_alternative(match, favourite)
-        if option is None or option.kind in ("1x2", "winner"):
-            return alt or option
-        if option.odds > 3.0 and result.get("confidence") not in HIGH_CONFIDENCE:
-            return alt or option
-        return option
+        if option is not None and option.kind not in ("1x2", "winner") and not (
+                option.odds > 3.0 and result.get("confidence") not in HIGH_CONFIDENCE):
+            return option
+        if alt is not None:
+            return alt
+        # no non-win alternative on the favourite: fall through to the old consistency rule
     if option is None:
         return fav_option
     contradicts = option.kind in ("1x2", "winner") and option.id != favourite

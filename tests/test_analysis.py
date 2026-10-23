@@ -142,3 +142,8 @@ def test_pick_must_agree_with_verdict():
     long = {"probabilities": {"p1": 20, "x": 25, "p2": 55}, "confidence": "средняя"}
     m2 = FootballMatch("2", "A", "B", NOW, "L", [Option("1", "П1", 5.0, "1x2"), Option("X", "X", 4.0, "1x2"), Option("2", "П2", 3.5, "1x2")])
     assert _consistent_option(m2, long, m2.option("2")).id == "2"  # favourite itself, even if > 3.00
+    m3 = FootballMatch("3", "A", "B", NOW, "L", [Option("1", "П1", 1.8, "1x2"), Option("X", "X", 3.5, "1x2"), Option("2", "П2", 4.5, "1x2"),
+        Option("DC1X", "1X", 1.3, "dc_1x"), Option("TO2.5", "ТБ 2.5", 1.9, "total_over", 2.5)])
+    fav1 = {"probabilities": {"p1": 55, "x": 25, "p2": 20}, "confidence": "средняя"}
+    assert _consistent_option(m3, fav1, m3.option("1")).id == "DC1X"     # no plain win when other markets exist
+    assert _consistent_option(m3, fav1, m3.option("TO2.5")).id == "TO2.5"
