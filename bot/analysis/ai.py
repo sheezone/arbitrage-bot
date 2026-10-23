@@ -27,6 +27,7 @@ from bot.db.repository import Repository
 from bot.webapp.football_data import get_team_form as fd_team_form
 from bot.webapp.football_stats import get_match_h2h
 from bot.webapp.hockey_stats import get_match_h2h as hockey_h2h
+from bot.webapp.nhl_stats import match_nhl as nhl_match
 from bot.webapp.tennis_elo import match_elo as tennis_elo
 from bot.webapp.news import fetch_team_news
 from bot.webapp.openligadb import get_team_form as openligadb_form
@@ -99,6 +100,10 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   матчей. Поэтому П1/П2 в хоккее — только при явном фаворите (60%+ по твоей оценке). Если фаворит
   слабее — бери фору +1.5 на фаворита или аутсайдера, либо тотал, а не чистую победу. Ничью (X)
   в хоккее всегда оценивай не ниже 20%.
+- ХОККЕЙ, вратари и усталость: стартовый вратарь — главный фактор (разница в % отражённых 0.010 —
+  это много). Если основной вратарь не играет или команда играет второй матч подряд
+  (back-to-back) — заметно снижай её шансы и сдвигай тотал вверх. Тотал считай от % отражённых
+  обоих вратарей и средних заброшенных/пропущенных, а не на глаз.
 - confidence: «очень низкая» / «низкая» / «средняя» / «высокая» / «очень высокая» — честно.
   «Очень высокая» — редкость: только когда почти все факторы и линия единодушны. «Высокая» только когда
   несколько независимых факторов сходятся.
@@ -197,6 +202,12 @@ TENNIS_SYSTEM = ("Ты собираешь статистику перед тен
 # the home ground, coach sacked, off-field news -- "не только на основе коэффициента БК").
 CONTEXT_SPORTS = ("football", "hockey", "basketball")
 REFEREE_SPORTS = ("football", "hockey", "basketball")
+KHL_SYSTEM = ("Ты собираешь данные перед матчем КХЛ только с сайта khl.ru. Найди для обеих команд: кто "
+              "вратари и их статистика в сезоне (игры, % отражённых бросков, коэффициент надёжности), кто "
+              "вероятно выйдет в старте (кто играл последние матчи), результаты последних 5 матчей со счётом, "
+              "место и очки в таблице, реализация большинства и игра в меньшинстве (%), когда команда играла "
+              "прошлый матч и где (перелёт, усталость), личные встречи в этом сезоне. Только факты с цифрами, "
+              "по-русски, до 15 пунктов. Если ничего не нашлось — так и напиши.")
 REFEREE_SYSTEM = ("Найди в интернете, КТО СУДЬЯ этого матча (главный арбитр; в хоккее — главные судьи) и его "
                   "статистику: сколько в среднем жёлтых/красных карточек и пенальти за матч (в хоккее — штрафных "
                   "минут), процент побед хозяев в его матчах, как часто ставит спорные решения, результаты команд "
@@ -480,6 +491,17 @@ class Analyzer:
         inj_task = asyncio.create_task(self._research(
             match, INJURIES_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 4, "allowed_domains": INJURY_DOMAINS},
         )) if match.sport == "football" else None
+        # Hockey depth (owner 2026-10-23): NHL -- goalies, standings, back-to-back from the
+        # league's open API; KHL -- a khl.ru-restricted pass focused on goalies and fatigue.
+        hockey_task = None
+        if match.sport == "hockey" and match.league.startswith("НХЛ"):
+            async def _nhl() -> str:
+                async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as c:
+                    return await nhl_match(c, match.team_a, match.team_b, match.start_utc)
+            hockey_task = asyncio.create_task(_nhl())
+        elif match.sport == "hockey" and "КХЛ" in match.league:
+            hockey_task = asyncio.create_task(self._research(
+                match, KHL_SYSTEM, {**WEB_SEARCH_TOOL, "max_uses": 5, "allowed_domains": ["khl.ru"]}))
         if match.sport == "esports" and match.league.startswith("Counter-Strike"):
             # CS2: HLTV is the reference source (ranking, map pool, recent results, H2H).
             # hltv.org is behind Cloudflare bot protection for direct requests, so it's
@@ -502,6 +524,9 @@ class Analyzer:
             general, stats, *ctx = await asyncio.gather(*passes)
             research = general + (f"\n\nСтатистика:\n{stats}" if stats else "") \
                 + (f"\n\nСкрытые факторы:\n{ctx[0]}" if ctx and ctx[0] else "")
+        hockey_extra = await hockey_task if hockey_task else ""
+        if hockey_extra:
+            research = hockey_extra + "\n\n" + research
         # Referee (owner 2026-10-20: "судья тоже влияет, бывает подсуживает") -- only in the
         # pre-kickoff pass: appointments are published a day or two before the match.
         if final and match.sport in REFEREE_SPORTS:
