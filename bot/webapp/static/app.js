@@ -2771,10 +2771,7 @@ an_news: "News (injuries, form, suspensions)",
     try { d = await api("/api/showcase"); } catch (e) { return maybeOnboarding(); }
     const box = document.getElementById("win-carousel");
     const pct = d.hit && d.hit.total ? Math.round(d.hit.wins / d.hit.total * 100) : null;
-    if (box && d.wins.length >= 2) {
-      box.innerHTML = `<div class="wc-h">🔥 Прогнозы ИИ, которые зашли${pct != null ? ` <span>${d.hit.wins} из ${d.hit.total}</span>` : ""}</div>
-        <div class="wc-scroll">${d.wins.map((w) => winCoupon(w, true)).join("")}</div>`;
-    }
+    // AI wins carousel lives on the statistics screen now (owner 2026-10-24)
     if (box) {
       const users = (d.users || []).map((u) => `<div class="wc wc-mini wc-user"><div class="wc-top"><span>👤 Выигрыш пользователя</span><span class="wc-ok">✅</span></div>
         ${u.legs.map((l) => `<div class="wc-leg">${esc(l.team_a)} — ${esc(l.team_b)}<br><b>${esc(l.bet)}</b> @ ${l.odds}</div>`).join("")}
@@ -2906,11 +2903,15 @@ an_news: "News (injuries, form, suspensions)",
         <div class="st-cell"><b>${h.total}</b><span>${tr("st_played")}</span></div>
         <div class="st-cell"><b>${h.wins}</b><span>${tr("st_win")}</span></div>
         <div class="st-cell"><b>${h.total - h.wins}</b><span>${tr("st_lose")}</span></div>
-      </div>${winnerStats(home.winner_rate)}<div id="st-charts"></div>`;
+      </div>${winnerStats(home.winner_rate)}<div id="st-wins"></div><div id="st-charts"></div>`;
     html += data.recent.length ? `<h3 class="sec-h">${tr("recent")}</h3>` + data.recent.map(pickCard).join("")
       : `<div class="ai-empty">${tr("st_none")}</div>`;
     content.innerHTML = html;
     try {
+      api("/api/showcase").then((sc) => {
+        const el = document.getElementById("st-wins");
+        if (el && sc.wins.length) el.innerHTML = `<div class="wc-h">🔥 Прогнозы ИИ, которые зашли</div><div class="wc-scroll">${sc.wins.map((w) => winCoupon(w, true)).join("")}</div>`;
+      }).catch(() => {});
       const ser = await api("/api/ai/stats_series");
       const ds = ser.days || [], lab = ds.map((x) => x.d.slice(8, 10) + "." + x.d.slice(5, 7));
       const box = document.getElementById("st-charts");
