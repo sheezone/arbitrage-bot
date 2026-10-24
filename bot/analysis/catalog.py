@@ -13,6 +13,7 @@ that don't exist, and every option is settleable from the final score.
 """
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -60,7 +61,7 @@ MAX_MATCHES = 80
 # shared default is plenty.
 SPORT_MAX_MATCHES = {"football": 150}
 
-SKIP_SEGMENT_WORDS = ("Mobile Legends", "CrossFire", "Rainbow Six", "Overwatch", "KoG", "Honor of Kings", "Standoff", "Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер",
+SKIP_SEGMENT_WORDS = ("Кто выше", "Mobile Legends", "CrossFire", "Rainbow Six", "Overwatch", "KoG", "Honor of Kings", "Standoff", "Итоги", "Лучший бомбардир", "Сезон", "Статистическ", "Специальные", "FC 26", "Кибер",
                       "NBA 2K", "NHL 2", "FIFA", "eFootball", "Виртуал", "Победитель", "Специальн")
 # Shown first, in this order; anything else that's a real match comes after.
 TOP_LEAGUES = (
@@ -174,14 +175,26 @@ def popular_league(sport: str, league: str) -> bool:
     return False
 
 
+_SEASON_SUFFIX = re.compile(r"\.\s*Сезон\s+\d{2}/\d{2}\s*$")
+
+
+def league_name(name: str) -> str:
+    """Fonbet started suffixing the big leagues with the season (2026-10-24: «Англия.
+    Премьер-Лига. Сезон 26/27», «Испания. Примера дивизион. Сезон 26/27»), and "Сезон" is a
+    skip word for season outrights -- so the whole of the EPL, La Liga, Bundesliga, RPL...
+    vanished. Strip the suffix and keep the names our whitelists use."""
+    name = _SEASON_SUFFIX.sub("", name.strip())
+    return name.replace("Испания. Примера дивизион", "Испания. Примера")
+
+
 def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = HORIZON,
                   limit: int | None = MAX_MATCHES) -> list[FootballMatch]:
     now = now or datetime.now(timezone.utc)
     segments = {
-        s["id"]: (s.get("name") or "", PARENT_TO_SPORT[s.get("parentId")], s.get("parentId"))
+        s["id"]: (league_name(s.get("name") or ""), PARENT_TO_SPORT[s.get("parentId")], s.get("parentId"))
         for s in raw.get("sports", [])
         if s.get("kind") == "segment" and s.get("parentId") in PARENT_TO_SPORT
-        and not any(w in (s.get("name") or "") for w in SKIP_SEGMENT_WORDS)
+        and not any(w in league_name(s.get("name") or "") for w in SKIP_SEGMENT_WORDS)
     }
     factors = {
         cf.get("e"): {f["f"]: f for f in cf.get("factors", [])}
