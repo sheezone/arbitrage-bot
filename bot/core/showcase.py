@@ -69,7 +69,7 @@ def wins_card_png(repo: Repository) -> bytes | None:
         d.text((100, y + 118), f"Прогноз ИИ: {w['label']} @ {w['odds']:.2f}", font=F(FONT, 30), fill=(230, 219, 247))
         d.rounded_rectangle([100, y + 158, 230, y + 194], radius=10, fill=(30, 70, 55))
         d.text((165, y + 176), w["score"] or "", font=F(FONT_BOLD, 26), fill=(90, 210, 150), anchor="mm")
-        d.text((W - 100, y + 176), f"1 000 ₽ → {round(1000 * w['odds']):,} ₽".replace(",", " "),
+        d.text((W - 100, y + 176), f"10 000 ₽ → {round(10000 * w['odds']):,} ₽".replace(",", " "),
                font=F(FONT_BOLD, 30), fill=(90, 210, 150), anchor="rm")
         y += 222
     if total:

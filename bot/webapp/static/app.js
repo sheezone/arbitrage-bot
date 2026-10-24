@@ -2718,12 +2718,12 @@ an_news: "News (injuries, form, suspensions)",
   // «Прогнозы ИИ, которые зашли» (owner 2026-10-24): the bot's own verified wins -- a
   // full-screen intro on the first launch, a swipeable carousel on home afterwards.
   function winCoupon(w, mini) {
-    const profit = Math.round(1000 * w.odds - 1000).toLocaleString("ru-RU");
-    const ret = Math.round(1000 * w.odds).toLocaleString("ru-RU");
+    const profit = Math.round(10000 * w.odds - 10000).toLocaleString("ru-RU");
+    const ret = Math.round(10000 * w.odds).toLocaleString("ru-RU");
     return `<div class="wc ${mini ? "wc-mini" : ""}"><div class="wc-top"><span>${SPORT_EMOJI[w.sport] || "🏆"} ${esc(w.league)} · ${esc(w.date)}</span><span class="wc-ok">✅${mini ? "" : " ЗАШЛО"}</span></div>
       <div class="wc-teams">${esc(w.team_a)} — ${esc(w.team_b)}</div>
       <div class="wc-bet">${mini ? "" : "Прогноз ИИ: "}<b>${esc(w.label)}</b> @ <b>${Number(w.odds).toFixed(2)}</b></div>
-      <div class="wc-row"><span class="wc-score">${esc(w.score || "")}</span><span class="wc-money">${mini ? `<span>+${profit} ₽</span>` : `<i>1 000 ₽ →</i> <span>${ret} ₽</span>`}</span></div></div>`;
+      <div class="wc-row"><span class="wc-score">${esc(w.score || "")}</span><span class="wc-money">${mini ? `<span>+${profit} ₽</span>` : `<i>10 000 ₽ →</i> <span>${ret} ₽</span>`}</span></div></div>`;
   }
 
   // «Поделиться выигрышем» (owner 2026-10-24): coupon screenshot + consent -> the AI reads
