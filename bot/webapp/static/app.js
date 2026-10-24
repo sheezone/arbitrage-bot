@@ -2618,7 +2618,25 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   // Support = a direct DM with an admin (their @username comes from /api/home).
+  // «Поддержка» = a small menu: contact a manager, or replay the tutorial (owner 2026-10-24).
   function openSupport() {
+    const ov = document.createElement("div");
+    ov.className = "onb";
+    ov.innerHTML = `<div class="onb-card"><div class="onb-emoji">🎧</div><div class="onb-t">Поддержка</div>
+      <button type="button" class="pro-buy onb-btn" data-a="mgr">💬 Связаться с менеджером</button>
+      <button type="button" class="btn-ghost wide" data-a="tour" style="margin-top:10px">🎓 Пройти обучение заново</button>
+      <button type="button" class="btn-ghost wide" data-a="x" style="margin-top:10px">Закрыть</button></div>`;
+    ov.addEventListener("click", (e) => {
+      const a = e.target.closest("[data-a]");
+      if (!a && e.target !== ov) return;
+      ov.remove();
+      if (a && a.dataset.a === "mgr") contactManager();
+      if (a && a.dataset.a === "tour") { switchTab("home"); setTimeout(() => startTour(true), 900); }
+    });
+    document.body.appendChild(ov);
+  }
+
+  function contactManager() {
     const admin = homeCache && homeCache.support_username;
     const u = admin || (homeCache && homeCache.bot_username) || "";
     if (u && tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${u}`);
@@ -2766,9 +2784,71 @@ an_news: "News (injuries, form, suspensions)",
     });
   }
 
+  // Guided tour (owner 2026-10-24): on the first launch everything is dimmed and blurred
+  // except the element being explained; «Далее» moves on, «Поздравляем» at the end.
+  // Replayable from «Поддержка → Пройти обучение заново».
+  const TOUR = [
+    { sel: ".pro-card[data-go=\"ai\"]", t: "🧠 ИИ-прогнозы", s: "Выберите любой матч — ИИ соберёт форму, травмы, составы, судью и линию букмекера и даст прогноз со ставкой." },
+    { sel: ".bn-item[data-go=\"ai\"]", t: "📋 Все матчи здесь", s: "Футбол, хоккей, баскетбол, теннис, киберспорт и бои. Сверху — главные матчи дня, ✓ — уже разобранные." },
+    { sel: ".pro-card[data-go=\"picks\"]", t: "🎯 Готовые прогнозы", s: "Здесь хранятся матчи, которые вы разобрали: удобно вернуться к прогнозу перед игрой." },
+    { sel: ".tile[data-go=\"aistats\"]", t: "🏆 Честная статистика", s: "Все прогнозы ИИ — и те, что зашли, и те, что нет. Плюс выигрыши за последние дни." },
+    { sel: "#share-win", t: "📸 Поделитесь выигрышем", s: "Выиграли по прогнозу? Загрузите купон — после проверки получите +3 разбора." },
+    { sel: ".bn-item[data-go=\"sub\"]", t: "💎 MAX", s: "5 разборов в день, ставка ИИ и уверенность, подробный разбор за 60 минут до матча." },
+    { sel: ".bn-item[data-go=\"support\"]", t: "🎧 Поддержка", s: "Связь с менеджером. И здесь же можно пройти это обучение заново." },
+  ];
+  function tourDone() {
+    try { return localStorage.getItem("tour_v1") === "1"; } catch (e) { return true; }
+  }
+  function startTour(force) {
+    if (!force && tourDone()) return;
+    if (document.getElementById("tour")) return;
+    const steps = TOUR.filter((x) => document.querySelector(x.sel));
+    let i = 0;
+    const root = document.createElement("div");
+    root.id = "tour";
+    document.body.appendChild(root);
+    const finish = (congrats) => {
+      try { localStorage.setItem("tour_v1", "1"); localStorage.setItem("onboarded_v1", "1"); } catch (e) { /* ignore */ }
+      root.remove();
+      if (!congrats) return;
+      const ov = document.createElement("div");
+      ov.className = "onb";
+      ov.innerHTML = `<div class="onb-card"><div class="onb-emoji">🎉</div><div class="onb-t">Поздравляем!</div>
+        <div class="onb-s">Вы прошли обучение. Выберите матч — ИИ разберёт его за вас. Удачи! 🍀</div>
+        <button type="button" class="pro-buy onb-btn">Начать</button></div>`;
+      ov.querySelector("button").addEventListener("click", () => { ov.remove(); go("ai"); });
+      document.body.appendChild(ov);
+    };
+    const draw = () => {
+      const st = steps[i];
+      const el = st && document.querySelector(st.sel);
+      if (!el) return finish(true);
+      el.scrollIntoView({ block: "center" });
+      setTimeout(() => {
+        const r = el.getBoundingClientRect(), pad = 8;
+        const x = Math.max(0, r.left - pad), y = Math.max(0, r.top - pad);
+        const w = Math.min(innerWidth - x, r.width + pad * 2), h = r.height + pad * 2;
+        const below = y + h + 190 < innerHeight;
+        root.innerHTML = `
+          <div class="tr-dim" style="left:0;top:0;width:100%;height:${y}px"></div>
+          <div class="tr-dim" style="left:0;top:${y + h}px;width:100%;bottom:0"></div>
+          <div class="tr-dim" style="left:0;top:${y}px;width:${x}px;height:${h}px"></div>
+          <div class="tr-dim" style="left:${x + w}px;top:${y}px;right:0;height:${h}px"></div>
+          <div class="tr-ring" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"></div>
+          <div class="tr-tip" style="${below ? `top:${y + h + 12}px` : `bottom:${innerHeight - y + 12}px`}">
+            <div class="tr-n">${i + 1} / ${steps.length}</div><div class="tr-t">${st.t}</div><div class="tr-s">${st.s}</div>
+            <div class="tr-btns"><button type="button" class="btn-ghost tr-skip">Пропустить</button>
+            <button type="button" class="pro-buy tr-next">${i < steps.length - 1 ? "Далее →" : "Готово"}</button></div></div>`;
+        root.querySelector(".tr-next").addEventListener("click", () => { haptic("light"); i++; if (i < steps.length) draw(); else finish(true); });
+        root.querySelector(".tr-skip").addEventListener("click", () => finish(false));
+      }, 350);
+    };
+    draw();
+  }
+
   async function loadShowcase() {
     let d;
-    try { d = await api("/api/showcase"); } catch (e) { return maybeOnboarding(); }
+    try { d = await api("/api/showcase"); } catch (e) { return startTour(false); }
     const box = document.getElementById("win-carousel");
     const pct = d.hit && d.hit.total ? Math.round(d.hit.wins / d.hit.total * 100) : null;
     // AI wins carousel lives on the statistics screen now (owner 2026-10-24)
@@ -2783,6 +2863,7 @@ an_news: "News (injuries, form, suspensions)",
     }
     let seen = false;
     try { seen = localStorage.getItem("wins_intro_v1") === "1" || localStorage.getItem("onboarded_v1") === "1"; } catch (e) { seen = true; }
+    if (!tourDone()) return startTour(false);  // the guided tour comes first on the very first launch
     if (seen || d.wins.length < 2 || document.getElementById("onb")) return;
     const ov = document.createElement("div");
     ov.id = "onb";
