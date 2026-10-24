@@ -46,7 +46,7 @@ def wins_card_png(repo: Repository) -> bytes | None:
     if len(wins) < 2:
         return None
     wins_n, total = repo.ai_hit_rate()
-    W, H = 1080, 1350
+    W, H = 1080, 1440
     img = Image.new("RGB", (W, H), (11, 6, 20))
     glow = Image.new("RGB", (W, H))
     ImageDraw.Draw(glow).ellipse([W - 620, -360, W + 260, 420], fill=(96, 40, 170))
@@ -71,12 +71,12 @@ def wins_card_png(repo: Repository) -> bytes | None:
         d.text((165, y + 176), w["score"] or "", font=F(FONT_BOLD, 26), fill=(90, 210, 150), anchor="mm")
         d.text((W - 100, y + 176), f"1 000 ₽ → {round(1000 * w['odds']):,} ₽".replace(",", " "),
                font=F(FONT_BOLD, 30), fill=(90, 210, 150), anchor="rm")
-        y += 225
+        y += 222
     if total:
         d.rounded_rectangle([60, y + 10, W - 60, y + 110], radius=26, fill=(70, 32, 120))
         d.text((W // 2, y + 60), f"Всего ИИ угадал {wins_n} из {total} — {round(wins_n / total * 100)}%",
                font=F(FONT_BOLD, 38), fill=(255, 255, 255), anchor="mm")
-    d.text((W // 2, H - 50), "Реальные прогнозы ИИ из бота. Результат не гарантирован. 18+",
+    d.text((W // 2, H - 45), "Реальные прогнозы ИИ из бота. Результат не гарантирован. 18+",
            font=F(FONT, 24), fill=(143, 127, 176), anchor="mm")
     buf = io.BytesIO()
     img.save(buf, "PNG", optimize=True)
