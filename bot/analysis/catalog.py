@@ -45,7 +45,7 @@ SPORTS: dict[str, dict] = {
     # MMA + boxing share one tab in the app (owner 2026-10-07: "объедени в единоборства,
     # нажимаешь и выбираешь бокс, там UFC и т.д.") -- two Fonbet top-level sports folded
     # into one here, split back out by discipline (see combat_discipline/combat_disciplines).
-    "combat":       {"parents": (37145, 1436), "draw": False, "totals": None, "hcp": None, "emoji": "🥊", "name": "Единоборства"},
+    "combat":       {"parents": (37145, 1436), "draw": False, "totals": (1.5, 4.5), "hcp": None, "emoji": "🥊", "name": "Единоборства"},
 }
 PARENT_TO_SPORT = {p: k for k, v in SPORTS.items() for p in (v["parents"] if "parents" in v else (v["parent"],))}
 COMBAT_ORG_KEYWORDS = ("UFC", "Bellator", "PFL", "ACA", "KSW", "Fight Nights", "Contender Series", "Oktagon")
@@ -227,7 +227,10 @@ def parse_catalog(raw: dict, now: datetime | None = None, horizon: timedelta = H
         else:
             m.options += [Option("1", f"Победа {a}", float(w1), "winner"), Option("2", f"Победа {b}", float(w2), "winner")]
         if cfg["totals"]:
-            m.options += _totals(f, cfg["totals"])
+            tots = _totals(f, cfg["totals"])
+            if sport == "combat":  # fights: the total is ROUNDS (owner 2026-10-24)
+                tots = [Option(o.id, o.label.replace("Тотал", "Тотал раундов"), o.odds, o.kind, o.line) for o in tots]
+            m.options += tots
         if cfg["hcp"]:
             m.options += _handicaps(f, a, b, cfg["hcp"])
         if sport == "football":
