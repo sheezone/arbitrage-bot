@@ -239,7 +239,8 @@ class Repository:
     _FAV_SQL = f"IFNULL({_TOP_PROB_SQL}, 0) > 0"
     _STAT_HIT_SQL = (
         # matches the AI itself advised to skip ("skip": true) don't count (2026-10-15)
-        "CASE WHEN json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.skip') = 1 THEN NULL ELSE "
+        # esports temporarily out of the public statistics (owner 2026-10-25)
+        "CASE WHEN sport IN ('esports') THEN NULL WHEN json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, '$.skip') = 1 THEN NULL ELSE "
         # a bet on the winner itself is the same coin-flip, so it's filtered too
         f"CASE WHEN (winner_result = 'win' AND {_FAV_SQL}) OR (result = 'win' AND ({_FAV_SQL} "
         f"OR option_kind NOT IN ('1x2','winner'))) THEN 'win' "

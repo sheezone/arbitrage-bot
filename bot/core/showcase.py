@@ -21,7 +21,7 @@ def recent_wins(repo: Repository, n: int = 6, min_odds: float = 1.4) -> list[dic
     since = (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).isoformat()
     rows = repo._conn.execute(
         "SELECT match_id, sport, league, team_a, team_b, option_label, odds, score, start_utc FROM ai_analyses "
-        "WHERE popular = 1 AND result = 'win' AND odds >= ? AND start_utc >= ? ORDER BY odds DESC LIMIT ?",
+        "WHERE popular = 1 AND sport != 'esports' AND result = 'win' AND odds >= ? AND start_utc >= ? ORDER BY odds DESC LIMIT ?",
         (min_odds, since, n)).fetchall()
     msk = timezone(timedelta(hours=3))
     return [{"sport": r["sport"], "league": (r["league"] or "").split(".")[0], "team_a": r["team_a"],
