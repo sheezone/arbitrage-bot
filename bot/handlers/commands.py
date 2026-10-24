@@ -1178,11 +1178,11 @@ def register_handlers(
                 return
         ref = f"https://t.me/{bot_username}?start={chat_id}" if bot_username else ""
         text = (
-            "📡 <b>Матч Радар</b> — ИИ-аналитика футбольных матчей\n\n"
-            "🧠 Шансы в процентах на любой матч — по названиям или скриншоту\n"
-            "📋 Готовые прогнозы и 📈 экспрессы каждый день\n"
-            "⚡ Вилки у 9 лицензированных букмекеров\n\n"
-            "Всё — в приложении 👇"
+            "📡 <b>Матч Радар</b> — ИИ разбирает матчи за вас\n\n"
+            "🧠 Футбол, хоккей, баскетбол, теннис, киберспорт, бои\n"
+            "📊 Форма, травмы, составы, судья, вратари — и готовая ставка\n"
+            "✅ На картинке — реальные прогнозы ИИ, которые зашли\n\n"
+            "Разберите свой матч в приложении 👇"
             + (f"\n\n🎁 Пригласите друга — <b>+{billing.REFERRAL_BONUS_DAYS} дня</b> бесплатно:\n{ref}" if ref else "")
             + "\n\n<i>Аналитика, а не гарантия выигрыша. 18+</i>"
         )
@@ -1197,8 +1197,17 @@ def register_handlers(
                 await bot.delete_message(chat_id, user.menu_message_id)
             except Exception:
                 pass
+        # The start card shows the bot's own recent wins (owner 2026-10-24); the plain
+        # radar picture stays as the fallback when there aren't enough settled wins yet.
+        from aiogram.types import BufferedInputFile
+        from bot.core.showcase import wins_card_png
+
+        png = wins_card_png(repo)
+        photo = BufferedInputFile(png, "matchradar_wins.png") if png else FSInputFile(RADAR_PATH)
+        if not png:
+            text = text.replace("✅ На картинке — реальные прогнозы ИИ, которые зашли\n", "")
         sent = await bot.send_photo(
-            chat_id, FSInputFile(RADAR_PATH), caption=text, parse_mode="HTML",
+            chat_id, photo, caption=text, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if rows else None,
         )
         repo.set_menu_message_id(chat_id, sent.message_id)

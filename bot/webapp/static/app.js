@@ -2691,6 +2691,7 @@ an_news: "News (injuries, form, suspensions)",
         </div>
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
         ${yesterdayFeed(h.yesterday)}
+        <div id="win-carousel"></div>
         <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
           <button type="button" class="tile art-t-stats" data-go="aistats"><span class="tile-emoji">${icon("trophy", 34)}</span><span class="tile-label">${tr("tile_stats")}</span></button>
           ${h.is_admin ? `<button type="button" class="tile art-t-admin" data-go="admin"><span class="tile-emoji">${icon("wrench", 34)}</span><span class="tile-label">${tr("tile_admin")}</span></button>` : ""}
@@ -2702,7 +2703,7 @@ an_news: "News (injuries, form, suspensions)",
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
     loadTicker();
-    maybeOnboarding();
+    loadShowcase();
   }
 
   // «Вчера ИИ угадал» (owner 2026-10-23): yesterday's real hits -- match, AI bet, score.
@@ -2714,6 +2715,47 @@ an_news: "News (injuries, form, suspensions)",
   }
 
   // First launch: 3 short slides "what the app does" (per-viewer, localStorage).
+  // «Прогнозы ИИ, которые зашли» (owner 2026-10-24): the bot's own verified wins -- a
+  // full-screen intro on the first launch, a swipeable carousel on home afterwards.
+  function winCoupon(w, mini) {
+    const profit = Math.round(1000 * w.odds - 1000).toLocaleString("ru-RU");
+    const ret = Math.round(1000 * w.odds).toLocaleString("ru-RU");
+    return `<div class="wc ${mini ? "wc-mini" : ""}"><div class="wc-top"><span>${SPORT_EMOJI[w.sport] || "🏆"} ${esc(w.league)} · ${esc(w.date)}</span><span class="wc-ok">✅${mini ? "" : " ЗАШЛО"}</span></div>
+      <div class="wc-teams">${esc(w.team_a)} — ${esc(w.team_b)}</div>
+      <div class="wc-bet">${mini ? "" : "Прогноз ИИ: "}<b>${esc(w.label)}</b> @ <b>${Number(w.odds).toFixed(2)}</b></div>
+      <div class="wc-row"><span class="wc-score">${esc(w.score || "")}</span><span class="wc-money">${mini ? `<span>+${profit} ₽</span>` : `<i>1 000 ₽ →</i> <span>${ret} ₽</span>`}</span></div></div>`;
+  }
+
+  async function loadShowcase() {
+    let d;
+    try { d = await api("/api/showcase"); } catch (e) { return maybeOnboarding(); }
+    const box = document.getElementById("win-carousel");
+    const pct = d.hit && d.hit.total ? Math.round(d.hit.wins / d.hit.total * 100) : null;
+    if (box && d.wins.length >= 2) {
+      box.innerHTML = `<div class="wc-h">🔥 Прогнозы ИИ, которые зашли${pct != null ? ` <span>${d.hit.wins} из ${d.hit.total}</span>` : ""}</div>
+        <div class="wc-scroll">${d.wins.map((w) => winCoupon(w, true)).join("")}</div>`;
+    }
+    let seen = false;
+    try { seen = localStorage.getItem("wins_intro_v1") === "1" || localStorage.getItem("onboarded_v1") === "1"; } catch (e) { seen = true; }
+    if (seen || d.wins.length < 2 || document.getElementById("onb")) return;
+    const ov = document.createElement("div");
+    ov.id = "onb";
+    ov.className = "onb wins-intro";
+    ov.innerHTML = `<div class="wi-card"><div class="wi-h">ИИ <b>Матч Радар</b> уже угадывает</div>
+      <div class="wi-s">Реальные прогнозы ИИ из бота и итоговый счёт. Всё можно проверить в статистике.</div>
+      ${d.wins.slice(0, 4).map((w) => winCoupon(w, false)).join("")}
+      ${pct != null ? `<div class="wi-total">📊 Всего ИИ угадал <b>${d.hit.wins} из ${d.hit.total}</b> матчей — ${pct}%</div>` : ""}
+      <button type="button" class="pro-buy wi-btn">Смотреть прогнозы на сегодня →</button>
+      <div class="wi-note">Прогнозы ИИ из бота, результат матчей — официальный. Прошлые результаты не гарантируют будущих. 18+</div></div>`;
+    ov.querySelector(".wi-btn").addEventListener("click", () => {
+      haptic("light");
+      try { localStorage.setItem("wins_intro_v1", "1"); localStorage.setItem("onboarded_v1", "1"); } catch (e) { /* ignore */ }
+      ov.remove();
+      go("ai");
+    });
+    document.body.appendChild(ov);
+  }
+
   function maybeOnboarding() {
     let seen = false;
     try { seen = localStorage.getItem("onboarded_v1") === "1"; } catch (e) { seen = true; }

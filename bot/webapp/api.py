@@ -1032,6 +1032,16 @@ def register_api(
             "daily_limit": billing.FREE_DAILY_VILKI_LIMIT if not billing.has_access(user, now, admin_chat_ids) else None,
         }
 
+    @app.get("/api/showcase")
+    async def get_showcase(authorization: str | None = Header(default=None)):
+        """«Прогнозы ИИ, которые зашли» for the first-launch screen and the home carousel
+        (owner 2026-10-24): the bot's own verified wins only."""
+        _auth(authorization)
+        from bot.core.showcase import recent_wins
+
+        wins, total = repo.ai_hit_rate()
+        return {"wins": [_crests(w) for w in recent_wins(repo, 6)], "hit": {"wins": wins, "total": total}}
+
     @app.get("/api/ai/stats_series")
     async def get_stats_series(authorization: str | None = Header(default=None)):
         """Chart data for the statistics screen (owner 2026-10-24): per MSK day over the

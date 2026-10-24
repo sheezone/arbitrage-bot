@@ -659,3 +659,29 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .nc-grid { stroke: rgba(255, 255, 255, 0.07); stroke-width: 1; }
 .nc-t { fill: #a898c8; font-size: 9px; }
 .nc-v { fill: #fff; font-size: 10px; font-weight: 800; }
+
+/* «Прогнозы ИИ, которые зашли»: first-launch intro + home carousel (2026-10-24) */
+.wins-intro { align-items: flex-start; overflow-y: auto; }
+.wi-card { width: 100%; max-width: 400px; margin: 10px auto; padding: 22px 16px; border-radius: 26px; background: radial-gradient(circle at 80% 0%, rgba(178, 107, 255, 0.25), transparent 50%), #0b0614; border: 1.5px solid #2a1c44; }
+.wi-h { font-size: 24px; font-weight: 900; line-height: 1.15; margin-bottom: 4px; }
+.wi-h b { background: linear-gradient(90deg, #b26bff, #ff5ce1); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wi-s { color: #cdbfe8; font-size: 13.5px; margin-bottom: 14px; }
+.wc { border-radius: 16px; background: linear-gradient(160deg, #22123d, #140a26); border: 1px solid #33244d; padding: 12px 14px; margin-bottom: 10px; position: relative; text-align: left; }
+.wc::before { content: ""; position: absolute; left: -1px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: #5ad296; }
+.wc-top { display: flex; justify-content: space-between; font-size: 11px; color: #a898c8; }
+.wc-ok { color: #5ad296; font-weight: 800; }
+.wc-teams { font-weight: 800; font-size: 15px; margin: 6px 0 2px; }
+.wc-bet { font-size: 13px; color: #e6dbf7; }
+.wc-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-size: 12.5px; }
+.wc-score { background: rgba(90, 210, 150, 0.15); color: #5ad296; padding: 3px 8px; border-radius: 8px; font-weight: 800; }
+.wc-money { font-weight: 800; } .wc-money i { font-style: normal; color: #a898c8; font-weight: 600; } .wc-money span { color: #5ad296; }
+.wi-total { margin: 12px 0; padding: 12px 14px; border-radius: 16px; background: linear-gradient(90deg, rgba(139, 63, 240, 0.35), rgba(224, 92, 225, 0.25)); font-size: 14px; }
+.wi-total b { font-size: 19px; }
+.wi-btn { width: 100%; padding: 14px; font-size: 15px; }
+.wi-note { font-size: 10.5px; color: #8f7fb0; text-align: center; margin-top: 10px; }
+.wc-h { display: flex; justify-content: space-between; align-items: center; font-weight: 900; font-size: 16px; margin: 4px 0 10px; }
+.wc-h span { font-size: 12px; color: #5ad296; }
+.wc-scroll { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -2px 14px; padding: 0 2px 4px; }
+.wc-scroll::-webkit-scrollbar { display: none; }
+.wc.wc-mini { flex: 0 0 200px; margin-bottom: 0; scroll-snap-align: start; border-color: rgba(90, 210, 150, 0.35); background: linear-gradient(160deg, #25124a, #140a26); }
+.wc-mini .wc-teams { font-size: 13.5px; }
