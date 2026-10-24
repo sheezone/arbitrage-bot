@@ -136,6 +136,12 @@ async def _user_out(
     }
 
 
+class CouponIn(BaseModel):
+    image: str  # base64, no data: prefix
+    media_type: str
+    consent: bool = False
+
+
 class ScreenshotIn(BaseModel):
     image: str  # base64, no data: prefix
     media_type: str
@@ -475,6 +481,10 @@ def register_api(
         # Every match a user opens counts toward their daily limit and lands in THEIR
         # «Готовые прогнозы» -- even when another user's analysis is reused instantly
         # (owner 2026-10-23: "не более 5 готовых матчей у каждого человека").
+        if limit is not None and match.id not in used and len(used) >= limit and repo.bonus_analyses(chat_id) > 0:
+            # daily limit used up -- spend a bonus analysis (+3 per approved winning coupon)
+            repo.add_bonus_analyses(chat_id, -1)
+            used = set()
         if limit is not None and match.id not in used and len(used) >= limit:
             raise HTTPException(status_code=429, detail=(
                 f"Лимит на сегодня: {limit}. Оформите MAX — до {AI_PAID_PER_DAY} анализов в день."
@@ -616,6 +626,77 @@ def register_api(
             key = "custom:" + "|".join(sorted([team_a.lower(), team_b.lower()]))
             match = FootballMatch(key, team_a, team_b, datetime(1970, 1, 1, tzinfo=timezone.utc), "")
         return await _run_analysis(chat_id, user, match)
+
+    WIN_BONUS_ANALYSES = 3
+    WINS_DIR = Path(os.environ.get("WINS_DIR", "data/wins"))
+
+    @app.post("/api/wins/upload")
+    async def post_win_upload(body: CouponIn, authorization: str | None = Header(default=None)):
+        """«Поделиться выигрышем» (owner 2026-10-24): the AI reads the coupon, each leg is
+        checked against the bot's own picks, admins approve/reject in the bot; approval
+        gives the user +3 analyses and puts the win (as text, no screenshot) in the
+        showcase. Explicit consent required; max 3 uploads a day."""
+        import base64
+        import uuid
+
+        from bot.analysis.catalog import _name_score
+
+        chat_id = _auth(authorization)
+        _get_user(repo, chat_id)
+        if not body.consent:
+            raise HTTPException(status_code=400, detail="Отметьте согласие на публикацию выигрыша")
+        if body.media_type not in ("image/jpeg", "image/png", "image/webp") or len(body.image) > 6_000_000:
+            raise HTTPException(status_code=400, detail="Нужна картинка JPG/PNG до 4 МБ")
+        since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        if repo.user_wins_since(chat_id, since) >= 3:
+            raise HTTPException(status_code=429, detail="Не больше 3 купонов в день")
+        if analyzer is None:
+            raise HTTPException(status_code=424, detail="ИИ временно недоступен")
+        try:
+            c = await analyzer.read_coupon(body.image, body.media_type)
+        except Exception:
+            logger.exception("coupon read failed")
+            c = None
+        if not c or not c.get("is_coupon") or not c.get("legs"):
+            raise HTTPException(status_code=422, detail="Не удалось распознать купон — пришлите чёткий скриншот")
+        if not c.get("won"):
+            raise HTTPException(status_code=422, detail="Похоже, этот купон не выигрышный")
+        since14 = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        rows = repo._conn.execute("SELECT team_a, team_b, option_label, start_utc FROM ai_analyses WHERE start_utc >= ?",
+                                  (since14,)).fetchall()
+        matched = 0
+        for leg in c["legs"]:
+            best = max(rows, key=lambda r: _name_score(leg["team_a"], r["team_a"]) + _name_score(leg["team_b"], r["team_b"]),
+                       default=None)
+            if best is not None and _name_score(leg["team_a"], best["team_a"]) >= 0.8 and _name_score(leg["team_b"], best["team_b"]) >= 0.8:
+                leg["bot_pick"] = best["option_label"]
+                matched += 1
+            else:
+                leg["bot_pick"] = None
+        c["matched"] = matched
+        WINS_DIR.mkdir(parents=True, exist_ok=True)
+        path = WINS_DIR / f"{uuid.uuid4().hex}.{body.media_type.split('/')[1]}"
+        path.write_bytes(base64.b64decode(body.image))
+        win_id = repo.add_user_win(chat_id, str(path), json.dumps(c, ensure_ascii=False))
+        lines = [f"📸 <b>Новый выигрыш на проверку #{win_id}</b>",
+                 f"Кэф {c['total_odds']:.2f} · {c['stake']:g} ₽ → {c['payout']:g} ₽",
+                 f"Совпало с матчами бота: <b>{matched} из {len(c['legs'])}</b>", ""]
+        for leg in c["legs"]:
+            mark = f"🤖 бот: {leg['bot_pick']}" if leg["bot_pick"] else "— бот не разбирал"
+            lines.append(f"• {leg['team_a']} — {leg['team_b']}: {leg['bet']} @ {leg['odds']} ({mark})")
+        from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Одобрить (+3 разбора)", callback_data=f"uwin:ok:{win_id}"),
+            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"uwin:no:{win_id}")]])
+        for admin in admin_chat_ids:
+            try:
+                await bot.send_photo(admin, BufferedInputFile(path.read_bytes(), path.name),
+                                     caption="\n".join(lines)[:1000], reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                logger.warning("win review to %s failed", admin)
+        _log(chat_id, "win_upload")
+        return {"ok": True, "matched": matched, "legs": len(c["legs"])}
 
     @app.post("/api/ai/screenshot")
     async def post_ai_screenshot(body: ScreenshotIn, authorization: str | None = Header(default=None)):
@@ -1040,7 +1121,15 @@ def register_api(
         from bot.core.showcase import recent_wins
 
         wins, total = repo.ai_hit_rate()
-        return {"wins": [_crests(w) for w in recent_wins(repo, 6)], "hit": {"wins": wins, "total": total}}
+        users = []
+        for r in repo.approved_user_wins(6):
+            d = json.loads(r["data"])
+            users.append({"legs": [{"team_a": l["team_a"], "team_b": l["team_b"], "bet": l["bet"], "odds": l["odds"]}
+                                   for l in d.get("legs", [])][:4],
+                          "total_odds": d.get("total_odds"), "stake": d.get("stake"), "payout": d.get("payout"),
+                          "matched": d.get("matched", 0), "n": len(d.get("legs", []))})
+        return {"wins": [_crests(w) for w in recent_wins(repo, 6)], "hit": {"wins": wins, "total": total},
+                "users": users}
 
     @app.get("/api/ai/stats_series")
     async def get_stats_series(authorization: str | None = Header(default=None)):

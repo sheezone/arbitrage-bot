@@ -2726,6 +2726,46 @@ an_news: "News (injuries, form, suspensions)",
       <div class="wc-row"><span class="wc-score">${esc(w.score || "")}</span><span class="wc-money">${mini ? `<span>+${profit} ₽</span>` : `<i>1 000 ₽ →</i> <span>${ret} ₽</span>`}</span></div></div>`;
   }
 
+  // «Поделиться выигрышем» (owner 2026-10-24): coupon screenshot + consent -> the AI reads
+  // it, an admin approves it in the bot -> +3 analyses and the win shows in the showcase.
+  function openShareWin() {
+    haptic("light");
+    const ov = document.createElement("div");
+    ov.className = "onb";
+    ov.innerHTML = `<div class="onb-card sw-card"><div class="onb-emoji">📸</div>
+      <div class="onb-t">Поделитесь выигрышем</div>
+      <div class="onb-s">Загрузите скриншот выигрышного купона. Мы проверим его и покажем в витрине анонимно — без номера купона, баланса и имени. За одобренный выигрыш — <b>+3 разбора</b>.</div>
+      <label class="sw-file"><input type="file" accept="image/*" id="sw-file" hidden><span id="sw-fname">🖼 Выбрать скриншот</span></label>
+      <label class="sw-consent"><input type="checkbox" id="sw-consent"> Разрешаю показать мой выигрыш анонимно</label>
+      <button type="button" class="pro-buy onb-btn" id="sw-send">Отправить на проверку</button>
+      <button type="button" class="btn-ghost wide" id="sw-close">Отмена</button></div>`;
+    document.body.appendChild(ov);
+    let file = null;
+    ov.querySelector("#sw-file").addEventListener("change", (e) => {
+      file = e.target.files && e.target.files[0];
+      if (file) ov.querySelector("#sw-fname").textContent = "✅ " + file.name;
+    });
+    ov.querySelector("#sw-close").addEventListener("click", () => ov.remove());
+    ov.querySelector("#sw-send").addEventListener("click", async (e) => {
+      if (!file) return toast("Выберите скриншот купона");
+      if (!ov.querySelector("#sw-consent").checked) return toast("Отметьте согласие на публикацию");
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = "⏳ ИИ читает купон…";
+      try {
+        const image = await imageToJpegBase64(file);
+        const r = await api("/api/wins/upload", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image, media_type: "image/jpeg", consent: true }) });
+        ov.remove();
+        toast(`Отправлено на проверку ✅ Совпало с матчами бота: ${r.matched} из ${r.legs}`);
+      } catch (err) {
+        toast(err.message);
+        btn.disabled = false;
+        btn.textContent = "Отправить на проверку";
+      }
+    });
+  }
+
   async function loadShowcase() {
     let d;
     try { d = await api("/api/showcase"); } catch (e) { return maybeOnboarding(); }
@@ -2734,6 +2774,15 @@ an_news: "News (injuries, form, suspensions)",
     if (box && d.wins.length >= 2) {
       box.innerHTML = `<div class="wc-h">🔥 Прогнозы ИИ, которые зашли${pct != null ? ` <span>${d.hit.wins} из ${d.hit.total}</span>` : ""}</div>
         <div class="wc-scroll">${d.wins.map((w) => winCoupon(w, true)).join("")}</div>`;
+    }
+    if (box) {
+      const users = (d.users || []).map((u) => `<div class="wc wc-mini wc-user"><div class="wc-top"><span>👤 Выигрыш пользователя</span><span class="wc-ok">✅</span></div>
+        ${u.legs.map((l) => `<div class="wc-leg">${esc(l.team_a)} — ${esc(l.team_b)}<br><b>${esc(l.bet)}</b> @ ${l.odds}</div>`).join("")}
+        <div class="wc-row"><span class="wc-score">кэф ${Number(u.total_odds).toFixed(2)}</span><span class="wc-money"><i>${Math.round(u.stake)} →</i> <span>${Math.round(u.payout).toLocaleString("ru-RU")} ₽</span></span></div>
+        ${u.matched ? `<div class="wc-match">🤖 совпало с прогнозами бота: ${u.matched} из ${u.n}</div>` : ""}</div>`).join("");
+      if (users) box.insertAdjacentHTML("beforeend", `<div class="wc-h">👥 Выигрыши пользователей</div><div class="wc-scroll">${users}</div>`);
+      box.insertAdjacentHTML("beforeend", `<button type="button" class="share-win" id="share-win">📸 Поделиться выигрышем — <b>+3 разбора</b></button>`);
+      document.getElementById("share-win").addEventListener("click", openShareWin);
     }
     let seen = false;
     try { seen = localStorage.getItem("wins_intro_v1") === "1" || localStorage.getItem("onboarded_v1") === "1"; } catch (e) { seen = true; }

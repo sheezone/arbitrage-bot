@@ -133,6 +133,9 @@ class Repository:
         if "bonus_expresses" not in columns:
             # «Найти экспресс» credits earned by inviting friends (+1 per friend)
             self._conn.execute("ALTER TABLE users ADD COLUMN bonus_expresses INTEGER NOT NULL DEFAULT 0")
+        if "bonus_analyses" not in columns:
+            # extra AI analyses on top of the daily limit (+3 per approved winning coupon)
+            self._conn.execute("ALTER TABLE users ADD COLUMN bonus_analyses INTEGER NOT NULL DEFAULT 0")
         if ai_cols and "winner_result" not in ai_cols:
             # did the AI's predicted winner (argmax of its probabilities) actually win
             self._conn.execute("ALTER TABLE ai_analyses ADD COLUMN winner_result TEXT")
@@ -331,6 +334,36 @@ class Repository:
             "pending_bets": pending[0] or 0,
             "pending_stake": round(pending[1] or 0.0, 2),
         }
+
+    def bonus_analyses(self, chat_id: int) -> int:
+        row = self._conn.execute("SELECT bonus_analyses FROM users WHERE chat_id = ?", (chat_id,)).fetchone()
+        return int(row[0]) if row else 0
+
+    def add_bonus_analyses(self, chat_id: int, n: int) -> None:
+        self._conn.execute("UPDATE users SET bonus_analyses = MAX(0, bonus_analyses + ?) WHERE chat_id = ?", (n, chat_id))
+        self._conn.commit()
+
+    def add_user_win(self, chat_id: int, image_path: str, data: str) -> int:
+        cur = self._conn.execute(
+            "INSERT INTO user_wins (chat_id, image_path, data, created_at) VALUES (?, ?, ?, ?)",
+            (chat_id, image_path, data, datetime.now(timezone.utc).isoformat()))
+        self._conn.commit()
+        return int(cur.lastrowid)
+
+    def get_user_win(self, win_id: int) -> sqlite3.Row | None:
+        return self._conn.execute("SELECT * FROM user_wins WHERE id = ?", (win_id,)).fetchone()
+
+    def set_user_win_status(self, win_id: int, status: str) -> None:
+        self._conn.execute("UPDATE user_wins SET status = ? WHERE id = ?", (status, win_id))
+        self._conn.commit()
+
+    def user_wins_since(self, chat_id: int, since_iso: str) -> int:
+        return self._conn.execute("SELECT COUNT(*) FROM user_wins WHERE chat_id = ? AND created_at >= ?",
+                                  (chat_id, since_iso)).fetchone()[0]
+
+    def approved_user_wins(self, limit: int = 6) -> list[sqlite3.Row]:
+        return self._conn.execute("SELECT * FROM user_wins WHERE status = 'approved' ORDER BY id DESC LIMIT ?",
+                                  (limit,)).fetchall()
 
     def bonus_expresses(self, chat_id: int) -> int:
         row = self._conn.execute("SELECT bonus_expresses FROM users WHERE chat_id = ?", (chat_id,)).fetchone()

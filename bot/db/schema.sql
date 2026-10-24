@@ -182,3 +182,14 @@ CREATE INDEX IF NOT EXISTS idx_user_activity_created ON user_activity (created_a
 
 -- small text notes the AI keeps for itself, e.g. weekly "lessons from misses" (2026-10-15)
 CREATE TABLE IF NOT EXISTS ai_notes (key TEXT PRIMARY KEY, text TEXT NOT NULL, updated_at TEXT NOT NULL);
+
+-- winning coupons users share for the «выигрыши» showcase (owner 2026-10-24): read by the
+-- AI, checked against the bot's own picks, approved by an admin; approval = +3 analyses
+CREATE TABLE IF NOT EXISTS user_wins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    image_path TEXT NOT NULL,
+    data TEXT NOT NULL,            -- JSON: legs, odds, stake, payout, matched bot picks
+    status TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
+    created_at TEXT NOT NULL
+);

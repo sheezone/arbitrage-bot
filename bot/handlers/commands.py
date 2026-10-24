@@ -1382,6 +1382,38 @@ def register_handlers(
         text, keyboard = _language_menu_view()
         await message.answer(text, reply_markup=keyboard)
 
+    @router.callback_query(F.data.startswith("uwin:"))
+    async def on_user_win_review(callback: CallbackQuery, bot: Bot) -> None:
+        """Admin approves/rejects a shared winning coupon (owner 2026-10-24). Approval =
+        +3 bonus analyses for the user and the win appears in the app's showcase."""
+        if callback.from_user.id not in admin_chat_ids:
+            await callback.answer("Только для админов", show_alert=True)
+            return
+        _, action, raw_id = callback.data.split(":")
+        win = repo.get_user_win(int(raw_id))
+        if win is None or win["status"] != "pending":
+            await callback.answer("Уже рассмотрено")
+            return
+        if action == "ok":
+            repo.set_user_win_status(win["id"], "approved")
+            repo.add_bonus_analyses(win["chat_id"], 3)
+            note = "✅ Ваш выигрыш одобрен и попал в витрину «Выигрыши». Начислено <b>+3 разбора</b> — спасибо!"
+            verdict = "✅ Одобрено, +3 разбора начислено"
+        else:
+            repo.set_user_win_status(win["id"], "rejected")
+            note = "Ваш купон не прошёл проверку. Присылайте выигрыши по прогнозам Матч Радар — за каждый +3 разбора."
+            verdict = "❌ Отклонено"
+        try:
+            await bot.send_message(win["chat_id"], note, parse_mode="HTML")
+        except Exception:
+            pass
+        try:
+            await callback.message.edit_caption(caption=(callback.message.caption or "") + f"\n\n{verdict}",
+                                                reply_markup=None)
+        except Exception:
+            pass
+        await callback.answer(verdict)
+
     @router.callback_query(F.data == NAV_LANGUAGE)
     async def on_nav_language(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         await state.clear()

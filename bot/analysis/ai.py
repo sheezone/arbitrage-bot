@@ -295,6 +295,23 @@ SELF_CHECK_SCHEMA = {
     "required": ["confidence"], "additionalProperties": False,
 }
 
+COUPON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_coupon": {"type": "boolean"},
+        "won": {"type": "boolean"},
+        "legs": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"team_a": {"type": "string"}, "team_b": {"type": "string"}, "bet": {"type": "string"},
+                           "odds": {"type": "number"}, "score": {"type": "string"}},
+            "required": ["team_a", "team_b", "bet", "odds", "score"], "additionalProperties": False}},
+        "total_odds": {"type": "number"},
+        "stake": {"type": "number"},
+        "payout": {"type": "number"},
+    },
+    "required": ["is_coupon", "won", "legs", "total_odds", "stake", "payout"], "additionalProperties": False,
+}
+
 SCREENSHOT_SCHEMA = {
     "type": "object",
     "properties": {"team_a": {"type": "string"}, "team_b": {"type": "string"}, "found": {"type": "boolean"}},
@@ -698,6 +715,22 @@ class Analyzer:
                 {"type": "text", "text": "Какой матч на скриншоте?"},
             ],
             SCREENSHOT_SCHEMA,
+        )
+
+    async def read_coupon(self, image_b64: str, media_type: str) -> dict | None:
+        """A bookmaker coupon screenshot -> its legs, odds, stake and payout (2026-10-24,
+        «Поделиться выигрышем»). Personal data (coupon number, balance, names) is ignored."""
+        return await self._json_call(
+            "Прочитай скриншот купона букмекера. Выпиши каждое событие (команды как на купоне, "
+            "по-русски; ставку как написано, например «Поб 1», «Тотал больше 2.5», «ПСЖ > 3»; "
+            "коэффициент; счёт если указан), общий коэффициент, сумму ставки и выплату, и выигрыш ли это. "
+            "НЕ выписывай номер купона, баланс, имена и другие личные данные. Если это не купон — "
+            "is_coupon=false.",
+            [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": "Что в этом купоне?"},
+            ],
+            COUPON_SCHEMA,
         )
 
     async def resolve_teams(self, team_a: str, team_b: str, candidates: list[FootballMatch]) -> str:
