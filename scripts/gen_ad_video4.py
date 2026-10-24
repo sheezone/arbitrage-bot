@@ -122,11 +122,11 @@ def scene_hook(img, t):
     s = 1 + 0.25 * (1 - eob(t / 0.45))
     text_c(d, 760, "Ставишь", int(120 * s), WHITE, a1)
     text_c(d, 900, "наугад?", int(150 * s), PINK, eo((t - 0.25) / 0.35), weight=900)
-    if t > 1.35:
-        p = eo((t - 1.35) / 0.25)
+    if t > 1.0:
+        p = eo((t - 1.0) / 0.2)
         d.line([(170, 905), (170 + (W - 340) * p, 895)], fill=RED, width=16)
-    if t > 1.8:
-        glow_text(img, 1180, "Пусть решает ИИ.", 88, VIOLET, eo((t - 1.8) / 0.35))
+    if t > 1.2:
+        glow_text(img, 1180, "Хватит.", 110, VIOLET, eo((t - 1.2) / 0.25))
 
 
 def scene_analysis(img, t):  # t: 0..4.7
@@ -140,7 +140,7 @@ def scene_analysis(img, t):  # t: 0..4.7
     text_c(d, y0 + 150, "Ростов — Локомотив", 60, WHITE, a)
     items = ["Форма команд", "Травмы и составы", "Судья матча", "Погода и усталость", "Линия букмекера"]
     for i, it in enumerate(items):
-        p = eo((t - 0.7 - i * 0.38) / 0.3)
+        p = eo((t - 3.6 - i * 0.75) / 0.3)
         if p <= 0:
             continue
         yy = y0 + 260 + i * 105
@@ -148,7 +148,7 @@ def scene_analysis(img, t):  # t: 0..4.7
         d.rounded_rectangle([x, yy, W - 150, yy + 82], radius=20, fill=mix((44, 26, 80), p))
         d.text((x + 34, yy + 41), it, font=F(40, 700), fill=mix(WHITE, p), anchor="lm")
         check(d, W - 215, yy + 41, 34, mix(GREEN, p))
-    p = eob((t - 3.0) / 0.45)
+    p = eob((t - 7.0) / 0.45)
     if p > 0:
         yy = y0 + 810
         d.rounded_rectangle([140, yy, W - 140, yy + 150], radius=26, fill=mix((120, 50, 220), cl(p)))
@@ -163,7 +163,7 @@ def scene_wins(img, t):  # t: 0..5.6
     glow_text(img, 355, "которые зашли", 90, GREEN, a)
     d = ImageDraw.Draw(img)
     for i, (lg, teams, bet, odds, score) in enumerate(WINS):
-        start = 0.45 + i * 1.05
+        start = 0.15 + i * 1.0
         p = eob((t - start) / 0.45)
         if p <= 0:
             continue
@@ -232,9 +232,11 @@ def scene_cta(img, t):  # t: 0..4.0
     text_c(d, 1820, "Аналитика, а не гарантия выигрыша. 18+", 30, GREY, eo((t - 1.0) / 0.5), weight=500)
 
 
-SCENES = [(0.0, 2.7, scene_hook), (2.7, 7.3, scene_analysis), (7.3, 12.9, scene_wins),
-          (12.9, 15.9, scene_rate), (15.9, 20.0, scene_cta)]
-HITS = [0.05, 2.7, 7.3, 12.9, 15.9]  # impacts on scene changes
+# scene bounds follow the ElevenLabs voice-over pauses (2026-10-24)
+T1, T2, T3, T4 = 2.1, 10.2, 15.0, 16.9
+SCENES = [(0.0, T1, scene_hook), (T1, T2, scene_analysis), (T2, T3, scene_wins),
+          (T3, T4, scene_rate), (T4, 20.0, scene_cta)]
+HITS = [0.05, T1, T2, T3, T4]  # impacts on scene changes
 
 
 def frame(i: int) -> Image.Image:
@@ -284,7 +286,7 @@ def soundtrack(path: str) -> None:
     rng = np.random.default_rng(7)
     hat = rng.uniform(-1, 1, int(0.05 * SR)) * env(0.05, 0.001, 0.012) * 0.18
     clap = rng.uniform(-1, 1, int(0.2 * SR)) * env(0.2, 0.001, 0.06) * 0.35
-    start_beat = 2.7  # full beat drops after the hook
+    start_beat = T1  # full beat drops after the hook
     k = 0
     while k * beat < DUR - 0.3:
         tb = k * beat
@@ -307,8 +309,8 @@ def soundtrack(path: str) -> None:
         sig = np.sign(np.sin(2 * np.pi * f * tt)) * 0.12 * (1 - np.exp(-tt * 40)) * np.exp(-tt * 2.5)
         add(sig, tb + 0.03)
     # pad chords
-    for (a, b, freqs) in [(2.7, 7.3, (220, 277.2, 329.6)), (7.3, 12.9, (246.9, 311.1, 370)),
-                          (12.9, 15.9, (196, 246.9, 293.7)), (15.9, 20.0, (220, 277.2, 329.6, 440))]:
+    for (a, b, freqs) in [(T1, T2, (220, 277.2, 329.6)), (T2, T3, (246.9, 311.1, 370)),
+                          (T3, T4, (196, 246.9, 293.7)), (T4, 20.0, (220, 277.2, 329.6, 440))]:
         tt = np.arange(int((b - a) * SR)) / SR
         sig = sum(np.sin(2 * np.pi * fr * tt) + 0.3 * np.sin(2 * np.pi * fr * 2.01 * tt) for fr in freqs)
         sig *= 0.03 * np.minimum(tt / 0.3, 1) * np.minimum((b - a - tt) / 0.3, 1)
@@ -321,16 +323,16 @@ def soundtrack(path: str) -> None:
         add(boom + noise, h)
     # "ding" + cash on each win stamp
     for i in range(len(WINS)):
-        st = 7.3 + 0.45 + i * 1.05 + 0.35
+        st = T2 + 0.15 + i * 1.0 + 0.35
         tt = np.arange(int(0.6 * SR)) / SR
         ding = (np.sin(2 * np.pi * 1318.5 * tt) + 0.6 * np.sin(2 * np.pi * 1975.5 * tt)) * np.exp(-tt * 6) * 0.22
         add(ding, st)
     # counter ticks during the hit-rate scene
     for j in range(16):
         tt = np.arange(int(0.03 * SR)) / SR
-        add(np.sin(2 * np.pi * 2400 * tt) * np.exp(-tt * 120) * 0.15, 12.9 + j * 0.085)
+        add(np.sin(2 * np.pi * 2400 * tt) * np.exp(-tt * 120) * 0.15, T3 + j * 0.085)
     # riser into the CTA
-    a, b = 13.9, 15.9
+    a, b = T4 - 1.6, T4
     tt = np.arange(int((b - a) * SR)) / SR
     riser = rng.uniform(-1, 1, len(tt)) * (tt / (b - a)) ** 2 * 0.25
     riser += np.sin(2 * np.pi * (200 + 900 * (tt / (b - a)) ** 2) * tt) * (tt / (b - a)) ** 2 * 0.12
@@ -351,8 +353,11 @@ def main() -> None:
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     proc = subprocess.Popen(
         [ff, "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-         "-i", "ad4_audio.wav", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
-         "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "ad_video4.mp4"],
+         "-i", "ad4_audio.wav", "-i", "voice.mp3",
+         # ElevenLabs voice-over on top, music ducked under it
+         "-filter_complex", "[1:a]volume=0.32[m];[2:a]volume=1.5,apad[v];[m][v]amix=inputs=2:duration=first:normalize=0[a]",
+         "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
+         "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "ad_video4_voice.mp4"],
         stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
     for i in range(N):
         proc.stdin.write(frame(i).tobytes())
