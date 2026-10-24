@@ -634,3 +634,20 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .yd-row { padding: 7px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .yd-teams { display: block; font-size: 13.5px; font-weight: 700; }
 .yd-sub { display: block; font-size: 12px; color: #b9cfc2; margin-top: 2px; }
+
+/* 2026-10-24: step-by-step loading + «Ключевые цифры» */
+.ld-steps { margin: 18px auto 0; max-width: 340px; text-align: left; }
+.ld-step { padding: 7px 10px; margin-bottom: 6px; border-radius: 10px; font-size: 13.5px; color: #6f5f90; background: rgba(23, 13, 42, 0.6); transition: color 0.3s, background 0.3s; }
+.ld-step.on { color: #f1e8ff; background: rgba(139, 63, 240, 0.22); }
+.ld-ico { display: inline-block; width: 22px; }
+.ks-form { margin-bottom: 10px; }
+.ks-fr { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 13px; }
+.fds { display: flex; gap: 4px; }
+.fd { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 800; color: #fff; }
+.fd-W { background: #2fa36b; } .fd-D { background: #6b6b7e; } .fd-L { background: #d14b5c; }
+.ks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ks-tile { padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); border-left: 3px solid #6b6b7e; }
+.ks-a { border-left-color: #8b3ff0; } .ks-b { border-left-color: #e05ce1; }
+.ks-v { display: block; font-size: 16px; font-weight: 800; }
+.ks-l { display: block; font-size: 11.5px; color: #b9a8d8; margin-top: 2px; }
+.ks-who { display: block; font-size: 10.5px; color: #8f7fb0; margin-top: 3px; }

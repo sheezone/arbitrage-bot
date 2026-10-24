@@ -3073,16 +3073,53 @@ an_news: "News (injuries, form, suspensions)",
     }
   }
 
+  // «Ключевые цифры» card + form circles at the top of an analysis (2026-10-24).
+  function formDots(f) {
+    return String(f || "").toUpperCase().split("").filter((c) => "WDL".includes(c)).slice(-5)
+      .map((c) => `<i class="fd fd-${c}">${c === "W" ? "В" : c === "D" ? "Н" : "П"}</i>`).join("");
+  }
+  function keyStatsBlock(a, m) {
+    const stats = a.key_stats || [];
+    const fa = formDots(a.form_a), fb = formDots(a.form_b);
+    if (!stats.length && !fa && !fb) return "";
+    const form = fa || fb ? `<div class="ks-form">
+        <div class="ks-fr"><span>${esc(m.team_a)}</span><span class="fds">${fa || "—"}</span></div>
+        <div class="ks-fr"><span>${esc(m.team_b)}</span><span class="fds">${fb || "—"}</span></div></div>` : "";
+    const tiles = stats.slice(0, 6).map((k) => `<div class="ks-tile ks-${k.favours === "1" ? "a" : k.favours === "2" ? "b" : "n"}">
+        <span class="ks-v">${esc(k.value)}</span><span class="ks-l">${esc(k.label)}</span>
+        ${k.favours !== "none" ? `<span class="ks-who">в пользу ${esc(k.favours === "1" ? m.team_a : m.team_b)}</span>` : ""}</div>`).join("");
+    return `<div class="an-block ks-block"><div class="an-h">📊 Ключевые цифры</div>${form}${tiles ? `<div class="ks-grid">${tiles}</div>` : ""}</div>`;
+  }
+
   async function renderAiAnalysis(url, returnTo) {
     aiInAnalysis = true;
     analysisReturnTo = returnTo || renderAiMatches;
     haptic("light");
-    content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div><div class="ai-sub">${tr("loading_sub")}</div></div>`;
+    // Step-by-step progress while a fresh analysis runs (~1 min) instead of one static
+    // "loading" line (2026-10-24). Steps advance on a timer; a cached analysis returns
+    // before the first tick, so it just flashes past.
+    const steps = ["🔎 Ищу форму и результаты команд", "📊 Собираю статистику и таблицу", "🩹 Проверяю травмы и составы",
+      "🧩 Ищу скрытые факторы: погода, усталость, тренер", "⚖️ Сравниваю с линией букмекера", "🧠 ИИ делает вывод"];
+    content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div>
+      <div class="ld-steps">${steps.map((t, i) => `<div class="ld-step" data-i="${i}"><span class="ld-ico">⏳</span>${t}</div>`).join("")}</div></div>`;
     window.scrollTo(0, 0);
+    let stepI = 0;
+    const tick = () => {
+      const el = content.querySelector(`.ld-step[data-i="${stepI}"]`);
+      if (!el) return;
+      el.classList.add("on");
+      const prev = content.querySelector(`.ld-step[data-i="${stepI - 1}"] .ld-ico`);
+      if (prev) prev.textContent = "✅";
+      if (stepI < steps.length - 1) stepI++;
+    };
+    tick();
+    const stepTimer = setInterval(tick, 9000);
     let data;
     try {
       data = await api(url);
+      clearInterval(stepTimer);
     } catch (e) {
+      clearInterval(stepTimer);
       toast(e.message);
       if (e.status === 429 && homeCache && !homeCache.has_access) return switchTab("sub");
       return analysisReturnTo();
@@ -3108,6 +3145,7 @@ an_news: "News (injuries, form, suspensions)",
         ${m.start_label ? `<div class="an-time">🕒 ${esc(m.start_label)}</div>` : ""}
       </div>
       ${verdictBlock(a, m)}
+      ${keyStatsBlock(a, m)}
       ${pickHtml}
       ${finalNotice(a, m)}
       <div class="an-block"><div class="an-h">${tr("summary")}</div><div>${esc(a.summary)}</div></div>

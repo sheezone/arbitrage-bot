@@ -69,11 +69,23 @@ SCHEMA = {
         "risks": {"type": "string"},
         "injuries": {"type": "string"},
         "motivation": {"type": "string"},
+        "key_stats": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"label": {"type": "string"}, "value": {"type": "string"},
+                               "favours": {"type": "string", "enum": ["1", "2", "none"]}},
+                "required": ["label", "value", "favours"],
+                "additionalProperties": False,
+            },
+        },
+        "form_a": {"type": "string"},
+        "form_b": {"type": "string"},
         "skip": {"type": "boolean"},
         "skip_reason": {"type": "string"},
     },
     "required": ["summary", "factors", "probabilities", "option_id", "confidence", "reasoning", "risks",
-                 "injuries", "motivation", "skip", "skip_reason"],
+                 "injuries", "motivation", "skip", "skip_reason", "key_stats", "form_a", "form_b"],
     "additionalProperties": False,
 }
 
@@ -138,6 +150,14 @@ SYSTEM = """Ты — спортивный аналитик (футбол, хок
   карточек/голов, перекос в пользу хозяев — на исход. Назови судью в factors, если это существенно.
 - Если списка доступных ставок нет (матча нет в линии), option_id — пустая строка, а
   reasoning объясняет, какой исход вероятнее и почему.
+- key_stats — 4–6 главных цифр для карточки наверху разбора (2026-10-24): короткая подпись и значение
+  из собранных данных, например {"label": "Форма (5 матчей)", "value": "4В 1П — 2В 3П"},
+  {"label": "Голы за матч", "value": "2.1 — 0.9"}, {"label": "Личные встречи", "value": "3:1"},
+  {"label": "Вратарь, % отражённых", "value": "91.5 — 89.0"}. favours — в пользу кого цифра: "1" (первая
+  команда), "2" (вторая) или "none". Только реальные цифры из данных, ничего не выдумывай; если цифр
+  мало — дай сколько есть (можно пустой список).
+- form_a / form_b — последние до 5 результатов каждой команды/участника из данных, от старых к новым,
+  буквами: W — победа, D — ничья, L — поражение (например "WWLDW"). Нет данных — пустая строка.
 - injuries — травмы, дисквалификации и ожидаемые составы по данным из раздела «Свежая
   информация из интернета», 1–3 предложения; если таких данных нет — так и напиши.
 - motivation — турнирная мотивация: за что борются команды, ротация, график, 1–2
