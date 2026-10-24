@@ -2153,10 +2153,17 @@ an_news: "News (injuries, form, suspensions)",
       <div class="ws-block"><div class="an-h">📅 За эту неделю</div>
         <div class="ws-main"><b>${weekSign}${Math.round(s.week_profit).toLocaleString("ru-RU")} ₽</b> · ${s.week_bets} ставок</div></div>
       ${s.pending_bets ? `<div class="ai-sub">⏳ В игре: ${s.pending_bets} ставок на ${Math.round(s.pending_stake).toLocaleString("ru-RU")} ₽</div>` : ""}
+      <div id="bank-chart"></div>
       <h3 class="sec-h">Лента ставок</h3>
       ${rows || `<div class="ai-empty">Пока ни одной ставки</div>`}
       <button type="button" class="btn-ghost wide" id="bank-back">← К админке</button>`;
     document.getElementById("bank-back").addEventListener("click", renderAdmin);
+    try {
+      const ser = await api("/api/ai/stats_series");
+      const bk = ser.bank || [];
+      const el = document.getElementById("bank-chart");
+      if (el && bk.length >= 2) el.innerHTML = neonChart(bk.map((x) => x.v), { title: "💰 Банк ИИ, ₽", labels: bk.map((x) => x.d.slice(8, 10) + "." + x.d.slice(5, 7)), c1: "#ffb347", c2: "#ff5ce1" });
+    } catch (e) { /* chart is extra */ }
   }
 
   async function renderAdmin() {
@@ -2748,6 +2755,52 @@ an_news: "News (injuries, form, suspensions)",
     } catch (e) { /* ticker is decoration -- stay hidden on any error */ }
   }
 
+  // Neon SVG charts (owner 2026-10-24, "графики для удобства"): smooth glowing line
+  // with a gradient area, optional bars behind, dots and a bubble on the last value.
+  let chartSeq = 0;
+  function neonChart(vals, o) {
+    o = o || {};
+    if (!vals || vals.length < 2) return "";
+    const W = 340, H = 150, P = 18, id = "nc" + (++chartSeq);
+    const max = o.max != null ? o.max : Math.max(...vals), min = o.min != null ? o.min : Math.min(...vals);
+    const span = max - min || 1;
+    const X = (i) => P + (i * (W - 2 * P)) / (vals.length - 1);
+    const Y = (v) => H - P - ((v - min) / span) * (H - 2 * P - 12);
+    const pts = vals.map((v, i) => [X(i), Y(v)]);
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], cx = (x0 + x1) / 2;
+      d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+    }
+    const area = `${d} L${pts[pts.length - 1][0]},${H - P} L${pts[0][0]},${H - P} Z`;
+    const c1 = o.c1 || "#b26bff", c2 = o.c2 || "#ff5ce1";
+    const bars = o.bars ? o.bars.map((b, i) => {
+      const bw = Math.max(4, (W - 2 * P) / o.bars.length * 0.55), bh = (b / (Math.max(...o.bars) || 1)) * (H - 2 * P - 20);
+      return `<rect x="${X(i) - bw / 2}" y="${H - P - bh}" width="${bw}" height="${bh}" rx="2" fill="url(#${id}b)"/>`;
+    }).join("") : "";
+    const last = pts[pts.length - 1];
+    const lab = (o.labels || []);
+    const ticks = lab.length ? [0, Math.floor((lab.length - 1) / 2), lab.length - 1].map((i) =>
+      `<text x="${X(i)}" y="${H - 3}" text-anchor="middle" class="nc-t">${esc(lab[i])}</text>`).join("") : "";
+    return `<div class="nc-card"><div class="nc-h">${o.title || ""}</div>
+      <svg viewBox="0 0 ${W} ${H}" class="nc-svg" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>
+          <linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c2}" stop-opacity=".35"/><stop offset="1" stop-color="${c1}" stop-opacity="0"/></linearGradient>
+          <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}" stop-opacity=".55"/><stop offset="1" stop-color="${c1}" stop-opacity=".08"/></linearGradient>
+          <filter id="${id}f" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        ${[0.25, 0.5, 0.75].map((f) => `<line x1="${P}" x2="${W - P}" y1="${P + f * (H - 2 * P)}" y2="${P + f * (H - 2 * P)}" class="nc-grid"/>`).join("")}
+        ${bars}
+        <path d="${area}" fill="url(#${id}a)"/>
+        <path d="${d}" fill="none" stroke="url(#${id}g)" stroke-width="3" filter="url(#${id}f)"/>
+        ${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff" opacity=".8"/>`).join("")}
+        <circle cx="${last[0]}" cy="${last[1]}" r="5" fill="${c2}" filter="url(#${id}f)"/>
+        <g transform="translate(${Math.min(last[0], W - 34)},${Math.max(last[1] - 16, 12)})"><rect x="-22" y="-11" width="44" height="18" rx="9" fill="${c2}"/><text x="0" y="2" text-anchor="middle" class="nc-v">${esc(String(vals[vals.length - 1]))}${o.suffix || ""}</text></g>
+        ${ticks}
+      </svg></div>`;
+  }
+
   async function renderAiStats() {
     const [home, data] = await Promise.all([api("/api/home"), api("/api/ai/picks")]);
     homeCache = home;
@@ -2762,10 +2815,20 @@ an_news: "News (injuries, form, suspensions)",
         <div class="st-cell"><b>${h.total}</b><span>${tr("st_played")}</span></div>
         <div class="st-cell"><b>${h.wins}</b><span>${tr("st_win")}</span></div>
         <div class="st-cell"><b>${h.total - h.wins}</b><span>${tr("st_lose")}</span></div>
-      </div>${winnerStats(home.winner_rate)}`;
+      </div>${winnerStats(home.winner_rate)}<div id="st-charts"></div>`;
     html += data.recent.length ? `<h3 class="sec-h">${tr("recent")}</h3>` + data.recent.map(pickCard).join("")
       : `<div class="ai-empty">${tr("st_none")}</div>`;
     content.innerHTML = html;
+    try {
+      const ser = await api("/api/ai/stats_series");
+      const ds = ser.days || [], lab = ds.map((x) => x.d.slice(8, 10) + "." + x.d.slice(5, 7));
+      const box = document.getElementById("st-charts");
+      if (box && ds.length >= 2) box.innerHTML =
+        neonChart(ds.map((x) => x.cum), { title: "📈 Общий процент угаданных", suffix: "%", labels: lab, min: 0, max: 100 }) +
+        neonChart(ds.map((x) => Math.round(x.wins / x.total * 100)), { title: "🎯 Точность по дням (столбцы — число матчей)", suffix: "%", labels: lab,
+          bars: ds.map((x) => x.total), min: 0, max: 100, c1: "#5ad296", c2: "#b26bff" });
+    } catch (e) { /* charts are extra */ }
+
   }
 
   function confMeter(c) {

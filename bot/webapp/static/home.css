@@ -651,3 +651,11 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .ks-v { display: block; font-size: 16px; font-weight: 800; }
 .ks-l { display: block; font-size: 11.5px; color: #b9a8d8; margin-top: 2px; }
 .ks-who { display: block; font-size: 10.5px; color: #8f7fb0; margin-top: 3px; }
+
+/* neon charts (stats screen, AI bankroll) */
+.nc-card { margin: 0 0 14px; padding: 12px 12px 6px; border-radius: 18px; border: 1px solid rgba(178, 107, 255, 0.35); background: radial-gradient(circle at 80% 0%, rgba(178, 107, 255, 0.18), transparent 60%), linear-gradient(160deg, #2a1350, #160b2c); box-shadow: 0 8px 24px rgba(80, 30, 160, 0.3); }
+.nc-h { font-weight: 800; font-size: 14px; margin: 0 4px 6px; color: #f1e8ff; }
+.nc-svg { width: 100%; height: 160px; display: block; }
+.nc-grid { stroke: rgba(255, 255, 255, 0.07); stroke-width: 1; }
+.nc-t { fill: #a898c8; font-size: 9px; }
+.nc-v { fill: #fff; font-size: 10px; font-weight: 800; }

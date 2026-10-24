@@ -1032,6 +1032,34 @@ def register_api(
             "daily_limit": billing.FREE_DAILY_VILKI_LIMIT if not billing.has_access(user, now, admin_chat_ids) else None,
         }
 
+    @app.get("/api/ai/stats_series")
+    async def get_stats_series(authorization: str | None = Header(default=None)):
+        """Chart data for the statistics screen (owner 2026-10-24): per MSK day over the
+        last 21 days -- hits / judged among the stat matches, plus the cumulative rate;
+        for admins also the AI bankroll curve."""
+        chat_id = _auth(authorization)
+        user = _get_user(repo, chat_id)
+        hit = repo._STAT_HIT_SQL
+        rows = repo._conn.execute(
+            f"SELECT date(start_utc, '+3 hours') AS d, SUM({hit} = 'win') AS w, COUNT(*) AS n FROM ai_analyses "
+            f"WHERE popular = 1 AND {hit} IN ('win','lose') AND start_utc >= datetime('now', '-21 days') "
+            f"GROUP BY d ORDER BY d").fetchall()
+        days, cw, cn = [], 0, 0
+        for r in rows:
+            cw, cn = cw + int(r["w"] or 0), cn + int(r["n"])
+            days.append({"d": r["d"], "wins": int(r["w"] or 0), "total": int(r["n"]), "cum": round(cw / cn * 100)})
+        out = {"days": days}
+        if billing.is_admin(user, admin_chat_ids):
+            from bot.analysis.bankroll import START_BANKROLL
+
+            bal, bank = START_BANKROLL, []
+            for r in repo._conn.execute("SELECT start_utc, payout, stake FROM ai_bets WHERE result IS NOT NULL "
+                                        "ORDER BY start_utc").fetchall():
+                bal += (r["payout"] or 0) - r["stake"]
+                bank.append({"d": r["start_utc"][:10], "v": round(bal)})
+            out["bank"] = bank
+        return out
+
     @app.get("/api/admin/ai_bankroll")
     async def get_ai_bankroll(authorization: str | None = Header(default=None)):
         """Admin-only: the AI's own virtual 10 000-rub bankroll (owner 2026-10-06) --
