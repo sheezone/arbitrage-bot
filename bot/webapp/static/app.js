@@ -2824,9 +2824,7 @@ an_news: "News (injuries, form, suspensions)",
       const ds = ser.days || [], lab = ds.map((x) => x.d.slice(8, 10) + "." + x.d.slice(5, 7));
       const box = document.getElementById("st-charts");
       if (box && ds.length >= 2) box.innerHTML =
-        neonChart(ds.map((x) => x.cum), { title: "📈 Общий процент угаданных", suffix: "%", labels: lab, min: Math.max(0, Math.min(...ds.map((x) => x.cum)) - 15), max: 100 }) +
-        neonChart(ds.map((x) => Math.round(x.wins / x.total * 100)), { title: "🎯 Точность по дням (столбцы — число матчей)", suffix: "%", labels: lab,
-          bars: ds.map((x) => x.total), min: 0, max: 100, c1: "#5ad296", c2: "#b26bff" });
+        neonChart(ds.map((x) => x.cum), { title: "📈 Общий процент угаданных", suffix: "%", labels: lab, min: Math.max(0, Math.min(...ds.map((x) => x.cum)) - 15), max: 100 });
     } catch (e) { /* charts are extra */ }
 
   }
