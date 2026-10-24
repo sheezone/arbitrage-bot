@@ -397,6 +397,30 @@ def _consistent_option(match: FootballMatch, result: dict, option: Option | None
     return option
 
 
+def _parse_json_object(text: str) -> dict | None:
+    """JSON from a model reply that may be wrapped in ``` fences or prose (gateways that
+    ignore structured output). None if there's no parseable object."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else t
+        t = t.rsplit("```", 1)[0]
+    try:
+        out = json.loads(t)
+        return out if isinstance(out, dict) else None
+    except ValueError:
+        pass
+    start, end = t.find("{"), t.rfind("}")
+    if start == -1 or end <= start:
+        logger.warning("AI reply has no JSON: %s", t[:200])
+        return None
+    try:
+        out = json.loads(t[start:end + 1])
+        return out if isinstance(out, dict) else None
+    except ValueError:
+        logger.warning("AI reply JSON unparseable: %s", t[:200])
+        return None
+
+
 def _normalise(probs: dict) -> dict:
     vals = [max(0, int(probs.get(k, 0))) for k in ("p1", "x", "p2")]
     total = sum(vals) or 1
@@ -684,7 +708,10 @@ class Analyzer:
                 response = await self.claude.beta.messages.create(
                     model=self.model,
                     max_tokens=8000,
-                    system=system,
+                    # Some gateways (relaymodels, 2026-10-24) ignore output_config's JSON
+                    # schema and answer free text -- so the schema is also spelled out here.
+                    system=system + "\n\nОТВЕТ: только один JSON-объект строго по этой JSON-схеме, без "
+                    "пояснений и без ```:\n" + json.dumps(schema, ensure_ascii=False),
                     messages=[{"role": "user", "content": content}],
                     output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
                     betas=["server-side-fallback-2026-07-01"],
@@ -701,8 +728,8 @@ class Analyzer:
         if response.stop_reason in ("refusal", "max_tokens"):
             logger.warning("AI call stopped: %s", response.stop_reason)
             return None
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        return json.loads(text)
+        text = "".join(b.text for b in response.content if b.type == "text").strip()
+        return _parse_json_object(text)
 
     async def read_screenshot(self, image_b64: str, media_type: str) -> dict | None:
         """Team names of the football match shown on a screenshot (bookmaker app, TV, ...)."""
