@@ -262,6 +262,11 @@ def frame(i: int) -> Image.Image:
 
 # ---------- soundtrack ----------
 SR = 44100
+# MUSIC=0 -> voice + sound effects only (owner 2026-10-25 didn't like the generated beat);
+# a music.mp3 next to the script, if present, is mixed in quietly instead.
+import os  # noqa: E402
+
+MUSIC = os.environ.get("MUSIC", "1") != "0"
 
 
 def soundtrack(path: str) -> None:
@@ -286,9 +291,9 @@ def soundtrack(path: str) -> None:
     rng = np.random.default_rng(7)
     hat = rng.uniform(-1, 1, int(0.05 * SR)) * env(0.05, 0.001, 0.012) * 0.18
     clap = rng.uniform(-1, 1, int(0.2 * SR)) * env(0.2, 0.001, 0.06) * 0.35
-    start_beat = T1  # full beat drops after the hook
+    start_beat = T1 if MUSIC else DUR + 1  # full beat drops after the hook
     k = 0
-    while k * beat < DUR - 0.3:
+    while MUSIC and k * beat < DUR - 0.3:
         tb = k * beat
         if tb >= start_beat - 0.01 or k % 2 == 0:
             add(kick, tb)
@@ -313,7 +318,7 @@ def soundtrack(path: str) -> None:
                           (T3, T4, (196, 246.9, 293.7)), (T4, 20.0, (220, 277.2, 329.6, 440))]:
         tt = np.arange(int((b - a) * SR)) / SR
         sig = sum(np.sin(2 * np.pi * fr * tt) + 0.3 * np.sin(2 * np.pi * fr * 2.01 * tt) for fr in freqs)
-        sig *= 0.03 * np.minimum(tt / 0.3, 1) * np.minimum((b - a - tt) / 0.3, 1)
+        sig *= (0.03 if MUSIC else 0.0) * np.minimum(tt / 0.3, 1) * np.minimum((b - a - tt) / 0.3, 1)
         add(sig, a)
     # impacts
     for h in HITS:
@@ -353,11 +358,13 @@ def main() -> None:
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     proc = subprocess.Popen(
         [ff, "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-         "-i", "ad4_audio.wav", "-i", "voice.mp3",
+         "-i", "ad4_audio.wav", "-i", "voice.mp3", *(["-i", "music.mp3"] if os.path.exists("music.mp3") else []),
          # ElevenLabs voice-over on top, music ducked under it
-         "-filter_complex", "[1:a]volume=0.32[m];[2:a]volume=1.5,apad[v];[m][v]amix=inputs=2:duration=first:normalize=0[a]",
+         "-filter_complex", ("[1:a]volume=0.55[s];[3:a]volume=0.22,atrim=0:20,afade=t=out:st=19:d=1[mu];[2:a]volume=1.5,apad[v];"
+                            "[s][mu][v]amix=inputs=3:duration=first:normalize=0[a]") if os.path.exists("music.mp3") else
+                           "[1:a]volume=0.32[m];[2:a]volume=1.5,apad[v];[m][v]amix=inputs=2:duration=first:normalize=0[a]",
          "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
-         "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "ad_video4_voice.mp4"],
+         "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", os.environ.get("OUT", "ad_video4_voice.mp4")],
         stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
     for i in range(N):
         proc.stdin.write(frame(i).tobytes())
