@@ -21,7 +21,7 @@ import os as _os
 
 # SHORT=1 -> the 14 s cut (owner 2026-10-25: "20 сек много?") with the short voice-over
 SHORT = _os.environ.get("SHORT") == "1"
-W, H, FPS, DUR = 1080, 1920, 30, (14.0 if SHORT else 20.0)
+W, H, FPS, DUR = 1080, 1920, 30, (15.0 if SHORT else 20.0)
 N = int(FPS * DUR)
 FONT = "Montserrat.ttf"
 WHITE, GREY, VIOLET, PINK, GREEN, RED = (255, 255, 255), (170, 160, 195), (178, 107, 255), (255, 92, 225), (90, 210, 150), (255, 80, 100)
@@ -36,8 +36,8 @@ HIT_WINS, HIT_TOTAL = 51, 63
 if SHORT:
     WINS = WINS[:2]
 # scene-internal timings (full cut / short cut), seconds from the scene start
-ANA_ITEM0, ANA_STEP, ANA_VERDICT = (0.4, 0.33, 2.15) if SHORT else (3.6, 0.75, 7.0)
-WIN0, WIN_STEP = (0.1, 1.75) if SHORT else (0.15, 1.0)
+ANA_ITEM0, ANA_STEP, ANA_VERDICT = (3.0, 0.5, 5.3) if SHORT else (3.6, 0.75, 7.0)
+WIN0, WIN_STEP = (0.0, 0.7) if SHORT else (0.15, 1.0)
 
 _fc: dict = {}
 
@@ -242,7 +242,7 @@ def scene_cta(img, t):  # t: 0..4.0
 
 
 # scene bounds follow the ElevenLabs voice-over pauses (2026-10-24)
-T1, T2, T3, T4 = (2.1, 5.1, 8.5, 11.1) if SHORT else (2.1, 10.2, 15.0, 16.9)
+T1, T2, T3, T4 = (2.1, 8.0, 9.7, 12.6) if SHORT else (2.1, 10.2, 15.0, 16.9)
 SCENES = [(0.0, T1, scene_hook), (T1, T2, scene_analysis), (T2, T3, scene_wins),
           (T3, T4, scene_rate), (T4, 20.0, scene_cta)]
 HITS = [0.05, T1, T2, T3, T4]  # impacts on scene changes
