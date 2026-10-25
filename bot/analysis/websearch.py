@@ -16,6 +16,7 @@ Pages behind bot protection (Cloudflare 403 etc.) simply come back as an error s
 from __future__ import annotations
 
 import html as _html
+import os
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -59,7 +60,40 @@ def _allowed(url: str, domains: list[str] | None) -> bool:
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
+SEARCH_MODEL = os.environ.get("WEBSEARCH_MODEL", "gpt-5.6-luna")
+
+
+async def _gateway_search(client: httpx.AsyncClient, query: str, domains: list[str] | None) -> str:
+    """Web search through the gateway's OpenAI-compatible Responses API with the
+    built-in web_search tool (2026-10-25): DuckDuckGo and Bing started serving the
+    server a captcha, so this is the primary search now. Cheap model (×0.38)."""
+    base = os.environ.get("ANTHROPIC_BASE_URL", "").rstrip("/")
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not base or not key:
+        return ""
+    tool: dict = {"type": "web_search"}
+    if domains:
+        tool["filters"] = {"allowed_domains": domains[:10]}
+    prompt = (f"Найди в интернете: {query}\n"
+              + (f"Ищи только на сайтах: {', '.join(domains)}.\n" if domains else "")
+              + "Дай 5-8 самых полезных результатов: заголовок, ссылка и ключевые факты с цифрами "
+                "(счета, даты, статистика). Только найденное, без выдумок, по-русски.")
+    try:
+        r = await client.post(f"{base}/v1/responses", headers={"Authorization": f"Bearer {key}"},
+                              json={"model": SEARCH_MODEL, "tools": [tool], "input": prompt}, timeout=120)
+        r.raise_for_status()
+        data = r.json()
+    except (httpx.HTTPError, ValueError):
+        return ""
+    texts = [c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
+             for c in o.get("content", []) if c.get("text")]
+    return "\n".join(texts).strip()
+
+
 async def search(client: httpx.AsyncClient, query: str, domains: list[str] | None = None) -> str:
+    found = await _gateway_search(client, query, domains)
+    if found:
+        return found
     q = query
     if domains:
         q += " " + " OR ".join(f"site:{d}" for d in domains[:3])
