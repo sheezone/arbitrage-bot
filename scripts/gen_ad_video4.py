@@ -323,22 +323,55 @@ def soundtrack(path: str) -> None:
     prog = [(57, 60, 64), (53, 57, 60), (48, 52, 55), (55, 59, 62)]
     mtof = lambda m: 440 * 2 ** ((m - 69) / 12)  # noqa: E731
     bar = beat * 4
-    pad = np.zeros(n)
+    padL = np.zeros(n)
+    padR = np.zeros(n)
     k = 0
     while k * bar < DUR:
         chord = prog[k % 4]
         tt = tt_(bar)
-        sig = np.zeros(len(tt))
-        for m in chord:
-            for det in (-0.12, -0.05, 0.0, 0.06, 0.11):  # supersaw: detuned in semitones
-                sig += _saw(mtof(m + det), tt, rng.random())
-        sig /= 15
         env = np.minimum(tt / 0.4, 1) * np.minimum((bar - tt) / 0.3, 1)
-        add(pad, sig * env, k * bar)
+        for buf in (padL, padR):  # different detune phases per side -> wide stereo
+            sig = np.zeros(len(tt))
+            for m in chord:
+                for det in (-0.12, -0.05, 0.0, 0.06, 0.11):
+                    sig += _saw(mtof(m + det), tt, rng.random())
+            add(buf, sig / 15 * env, k * bar)
         k += 1
-    pad = _lowpass(pad, 900)
-    pad *= np.minimum(t / 1.5, 1)  # fade in from the very start
-    music += pad * 0.9
+    padL, padR = _lowpass(padL, 900), _lowpass(padR, 900)
+    # sidechain "pumping": the pad ducks on every beat after the drop
+    duck = np.ones(n)
+    kb = 0
+    while kb * beat < DUR:
+        st = kb * beat
+        if st >= T1:
+            s0 = int(st * SR)
+            seg = np.arange(min(int(beat * SR), n - s0)) / SR
+            duck[s0:s0 + len(seg)] = 1 - 0.6 * np.exp(-seg * 9)
+        kb += 1
+    fadein = np.minimum(t / 1.5, 1)
+    padL *= duck * fadein
+    padR *= duck * fadein
+
+
+    # --- arp lead: plucked chord tones in 1/8, wins scene + CTA (the "hook") ---
+    leadL = np.zeros(n)
+    leadR = np.zeros(n)
+    pattern = (0, 1, 2, 1, 2, 0, 2, 1)
+    e8 = beat / 2
+    j = 0
+    while j * e8 < DUR:
+        st = j * e8
+        if (T2 <= st < T3) or st >= T4 + 0.05:
+            chord = prog[int(st // bar) % 4]
+            m = chord[pattern[j % 8]] + 12
+            pt = tt_(e8 * 0.95)
+            f = mtof(m)
+            pl = (_saw(f, pt) * 0.5 + np.sin(2 * np.pi * f * pt)) * np.exp(-pt * 9) * 0.16
+            add(leadL, pl, st)
+            add(leadR, pl * 0.35, st + e8 * 0.75)  # ping-pong echo to the right
+            add(leadL, pl * 0.18, st + e8 * 1.5)
+        j += 1
+    leadL, leadR = _lowpass(leadL, 4200), _lowpass(leadR, 4200)
 
     # --- 808 sub with glide, starts on the drop ---
     drop = T1
@@ -417,11 +450,17 @@ def soundtrack(path: str) -> None:
 
     fx = _reverb(fx, 2.2, 0.3, seed=5)
     music = _reverb(music, 2.5, 0.22, seed=9)
-    out = drums * 0.8 + music * 0.75 + fx * 0.9
-    out *= np.minimum(1, (DUR - t) / 1.0)  # fade-out
-    out = np.tanh(out * 1.2) * 0.8
-    pcm = (out / max(1e-9, np.max(np.abs(out))) * 0.92 * 32767).astype(np.int16)
-    stereo = np.stack([pcm, pcm], axis=1)
+    padL, padR = _reverb(padL, 2.5, 0.25, seed=21), _reverb(padR, 2.5, 0.25, seed=22)
+    leadL, leadR = _reverb(leadL, 1.6, 0.2, seed=23), _reverb(leadR, 1.6, 0.2, seed=24)
+    gap = np.ones(n)  # "drop": 0.3 s of silence right before the CTA hit
+    g0, g1 = int((T4 - 0.3) * SR), int(T4 * SR)
+    gap[g0:g1] = np.linspace(1, 0, g1 - g0) ** 3
+    L = (drums * 0.8 + music * 0.75) * gap + padL * 0.8 * gap + leadL * 0.9 * gap + fx * 0.9
+    R = (drums * 0.8 + music * 0.75) * gap + padR * 0.8 * gap + leadR * 0.9 * gap + fx * 0.9
+    fade = np.minimum(1, (DUR - t) / 1.0)
+    L, R = np.tanh(L * fade * 1.2) * 0.8, np.tanh(R * fade * 1.2) * 0.8
+    peak = max(1e-9, np.max(np.abs(L)), np.max(np.abs(R)))
+    stereo = np.stack([(L / peak * 0.92 * 32767).astype(np.int16), (R / peak * 0.92 * 32767).astype(np.int16)], axis=1)
     with wave.open(path, "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
