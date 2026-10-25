@@ -495,7 +495,7 @@ def register_api(
             result = await analyzer.analyze(match)
         except Exception as e:
             logger.exception("AI analysis failed for %s", match.id)
-            if getattr(e, "status_code", None) == 402:
+            if getattr(e, "status_code", None) in (402, 403) or "quota" in str(e).lower() or "balance" in str(e).lower():
                 raise HTTPException(status_code=424, detail="ИИ временно недоступен — ведутся технические работы. Попробуйте позже.")
             result = None
         if result is None:
