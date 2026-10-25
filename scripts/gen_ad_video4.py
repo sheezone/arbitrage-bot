@@ -17,7 +17,11 @@ import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-W, H, FPS, DUR = 1080, 1920, 30, 20.0
+import os as _os
+
+# SHORT=1 -> the 14 s cut (owner 2026-10-25: "20 сек много?") with the short voice-over
+SHORT = _os.environ.get("SHORT") == "1"
+W, H, FPS, DUR = 1080, 1920, 30, (14.0 if SHORT else 20.0)
 N = int(FPS * DUR)
 FONT = "Montserrat.ttf"
 WHITE, GREY, VIOLET, PINK, GREEN, RED = (255, 255, 255), (170, 160, 195), (178, 107, 255), (255, 92, 225), (90, 210, 150), (255, 80, 100)
@@ -29,6 +33,11 @@ WINS = [("НХЛ", "Лос-Анджелес — Бостон", "П2 Бостон
         ("Лига чемпионов", "Ланс — Спортинг", "П2 Спортинг", 2.60, "0:2"),
         ("Лига чемпионов", "Комо — Ман Юнайтед", "П1 Комо", 2.40, "4:1")]
 HIT_WINS, HIT_TOTAL = 51, 63
+if SHORT:
+    WINS = WINS[:2]
+# scene-internal timings (full cut / short cut), seconds from the scene start
+ANA_ITEM0, ANA_STEP, ANA_VERDICT = (0.4, 0.33, 2.15) if SHORT else (3.6, 0.75, 7.0)
+WIN0, WIN_STEP = (0.1, 1.75) if SHORT else (0.15, 1.0)
 
 _fc: dict = {}
 
@@ -140,7 +149,7 @@ def scene_analysis(img, t):  # t: 0..4.7
     text_c(d, y0 + 150, "Ростов — Локомотив", 60, WHITE, a)
     items = ["Форма команд", "Травмы и составы", "Судья матча", "Погода и усталость", "Линия букмекера"]
     for i, it in enumerate(items):
-        p = eo((t - 3.6 - i * 0.75) / 0.3)
+        p = eo((t - ANA_ITEM0 - i * ANA_STEP) / 0.3)
         if p <= 0:
             continue
         yy = y0 + 260 + i * 105
@@ -148,7 +157,7 @@ def scene_analysis(img, t):  # t: 0..4.7
         d.rounded_rectangle([x, yy, W - 150, yy + 82], radius=20, fill=mix((44, 26, 80), p))
         d.text((x + 34, yy + 41), it, font=F(40, 700), fill=mix(WHITE, p), anchor="lm")
         check(d, W - 215, yy + 41, 34, mix(GREEN, p))
-    p = eob((t - 7.0) / 0.45)
+    p = eob((t - ANA_VERDICT) / 0.45)
     if p > 0:
         yy = y0 + 810
         d.rounded_rectangle([140, yy, W - 140, yy + 150], radius=26, fill=mix((120, 50, 220), cl(p)))
@@ -163,7 +172,7 @@ def scene_wins(img, t):  # t: 0..5.6
     glow_text(img, 355, "которые зашли", 90, GREEN, a)
     d = ImageDraw.Draw(img)
     for i, (lg, teams, bet, odds, score) in enumerate(WINS):
-        start = 0.15 + i * 1.0
+        start = WIN0 + i * WIN_STEP
         p = eob((t - start) / 0.45)
         if p <= 0:
             continue
@@ -233,7 +242,7 @@ def scene_cta(img, t):  # t: 0..4.0
 
 
 # scene bounds follow the ElevenLabs voice-over pauses (2026-10-24)
-T1, T2, T3, T4 = 2.1, 10.2, 15.0, 16.9
+T1, T2, T3, T4 = (2.1, 5.1, 8.5, 11.1) if SHORT else (2.1, 10.2, 15.0, 16.9)
 SCENES = [(0.0, T1, scene_hook), (T1, T2, scene_analysis), (T2, T3, scene_wins),
           (T3, T4, scene_rate), (T4, 20.0, scene_cta)]
 HITS = [0.05, T1, T2, T3, T4]  # impacts on scene changes
@@ -449,7 +458,7 @@ def soundtrack(path: str) -> None:
 
     # --- soft bell pluck + coin shimmer on each «ЗАШЛО» ---
     for i in range(len(WINS)):
-        st = T2 + 0.15 + i * 1.0 + 0.35
+        st = T2 + WIN0 + i * WIN_STEP + 0.35
         bt = tt_(1.2)
         f = mtof(76 + (0, 3, 7, 12)[i])
         bell = (np.sin(2 * np.pi * f * bt) + 0.4 * np.sin(2 * np.pi * f * 2.76 * bt)
@@ -493,7 +502,7 @@ def main() -> None:
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     proc = subprocess.Popen(
         [ff, "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-         "-i", "ad4_audio.wav", "-i", "voice.mp3", *(["-i", "music.mp3"] if os.path.exists("music.mp3") else []),
+         "-i", "ad4_audio.wav", "-i", ("voice_short.mp3" if SHORT else "voice.mp3"), *(["-i", "music.mp3"] if os.path.exists("music.mp3") else []),
          # ElevenLabs voice-over on top, music ducked under it
          "-filter_complex", ("[1:a]volume=0.55[s];[3:a]volume=0.22,atrim=0:20,afade=t=out:st=19:d=1[mu];[2:a]volume=1.5,apad[v];"
                             "[s][mu][v]amix=inputs=3:duration=first:normalize=0[a]") if os.path.exists("music.mp3") else
