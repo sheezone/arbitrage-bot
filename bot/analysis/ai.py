@@ -700,7 +700,7 @@ class Analyzer:
         )
         return await self._json_call(SYSTEM, content, SCHEMA, effort="high")
 
-    async def _json_call(self, system: str, content, schema: dict, effort: str = "low") -> dict | None:
+    async def _json_call(self, system: str, content, schema: dict, effort: str = "low", _retry: bool = True) -> dict | None:
         # The gateway sometimes answers 504 "request timed out" on long prompts (it cost
         # the pre-kickoff pass of Сибирь — Барыс, 2026-10-17) -- retry those a couple of times.
         for attempt in range(3):
@@ -729,7 +729,10 @@ class Analyzer:
             logger.warning("AI call stopped: %s", response.stop_reason)
             return None
         text = "".join(b.text for b in response.content if b.type == "text").strip()
-        return _parse_json_object(text)
+        parsed = _parse_json_object(text)
+        if parsed is None and _retry:  # malformed JSON from a gateway without structured output: ask once more
+            return await self._json_call(system, content, schema, effort, _retry=False)
+        return parsed
 
     async def read_screenshot(self, image_b64: str, media_type: str) -> dict | None:
         """Team names of the football match shown on a screenshot (bookmaker app, TV, ...)."""
