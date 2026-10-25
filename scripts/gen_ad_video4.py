@@ -257,7 +257,27 @@ def frame(i: int) -> Image.Image:
             k = 1 + 0.04 * (1 - (t - h) / 0.25)
             z = img.resize((int(W * k), int(H * k)))
             img = z.crop(((z.width - W) // 2, (z.height - H) // 2, (z.width - W) // 2 + W, (z.height - H) // 2 + H))
+    brand_plate(img, t)
     return img
+
+
+def brand_plate(img, t):
+    """Name + bot handle pinned at the top for the whole video (2026-10-25): whoever
+    scrolls away at second 5 has still seen what this is and where to find it."""
+    if t >= SCENES[-1][0]:
+        return  # the CTA shows the name big anyway
+    a = eo(t / 0.4)
+    d = ImageDraw.Draw(img)
+    label = f"МАТЧ РАДАР  ·  {BOT}"
+    f = F(34, 800)
+    tw = d.textlength(label, font=f)
+    w, h = int(tw + 110), 70
+    x, y = (W - w) // 2, 60
+    d.rounded_rectangle([x, y, x + w, y + h], radius=35, fill=mix((40, 20, 70), a), outline=mix(VIOLET, a), width=2)
+    cx, cy = x + 42, y + h // 2  # small radar mark
+    for r in (16, 10, 4):
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=mix(PINK, a), width=3)
+    d.text((x + 72, cy), label, font=f, fill=mix(WHITE, a), anchor="lm")
 
 
 # ---------- soundtrack ----------
