@@ -269,82 +269,158 @@ import os  # noqa: E402
 MUSIC = os.environ.get("MUSIC", "1") != "0"
 
 
+def _lowpass(x, cutoff):
+    """One-pole low-pass (cutoff Hz) -- tames raw saws into a warm pad."""
+    a = math.exp(-2 * math.pi * cutoff / SR)
+    y = np.empty_like(x)
+    acc = 0.0
+    b = 1 - a
+    for i in range(len(x)):  # fine for 20 s of audio
+        acc = b * x[i] + a * acc
+        y[i] = acc
+    return y
+
+
+def _reverb(x, seconds=1.8, wet=0.25, seed=3):
+    """Convolution reverb with a decaying-noise impulse (FFT)."""
+    rng = np.random.default_rng(seed)
+    n = int(seconds * SR)
+    ir = rng.standard_normal(n) * np.exp(-np.arange(n) / SR * 4.0)
+    ir /= np.sqrt(np.sum(ir ** 2))
+    size = 1 << int(np.ceil(np.log2(len(x) + n)))
+    wetsig = np.fft.irfft(np.fft.rfft(x, size) * np.fft.rfft(ir, size), size)[: len(x)]
+    return x * (1 - wet) + wetsig * wet
+
+
+def _saw(f, tt, phase=0.0):
+    return 2 * ((f * tt + phase) % 1.0) - 1
+
+
 def soundtrack(path: str) -> None:
+    """Modern trap / cinematic bed (2026-10-25 rewrite: the first version sounded like
+    an 8-bit game). Detuned-saw pad through a low-pass + reverb, gliding 808 sub, punchy
+    kick, trap hats with rolls, clap with reverb, sub-boom impacts with reverse swells,
+    soft bell plucks on every «ЗАШЛО», a filtered riser into the CTA."""
     n = int(SR * DUR)
     t = np.arange(n) / SR
-    out = np.zeros(n)
-    bpm = 124
+    drums = np.zeros(n)
+    music = np.zeros(n)
+    fx = np.zeros(n)
+    rng = np.random.default_rng(11)
+    bpm = 140
     beat = 60 / bpm
 
-    def add(sig, start):
+    def add(buf, sig, start):
         s = int(start * SR)
         e = min(n, s + len(sig))
-        if s < n:
-            out[s:e] += sig[: e - s]
+        if 0 <= s < n:
+            buf[s:e] += sig[: e - s]
 
-    def env(length, attack=0.002, decay=0.2):
-        tt = np.arange(int(length * SR)) / SR
-        return np.minimum(tt / attack, 1) * np.exp(-tt / decay)
+    def tt_(sec):
+        return np.arange(int(sec * SR)) / SR
 
-    kick_t = np.arange(int(0.35 * SR)) / SR
-    kick = np.sin(2 * np.pi * (45 + 120 * np.exp(-kick_t * 30)) * kick_t) * np.exp(-kick_t * 9) * 0.9
-    rng = np.random.default_rng(7)
-    hat = rng.uniform(-1, 1, int(0.05 * SR)) * env(0.05, 0.001, 0.012) * 0.18
-    clap = rng.uniform(-1, 1, int(0.2 * SR)) * env(0.2, 0.001, 0.06) * 0.35
-    start_beat = T1 if MUSIC else DUR + 1  # full beat drops after the hook
+    # --- chords: A minor progression Am - F - C - G (dark, modern) ---
+    prog = [(57, 60, 64), (53, 57, 60), (48, 52, 55), (55, 59, 62)]
+    mtof = lambda m: 440 * 2 ** ((m - 69) / 12)  # noqa: E731
+    bar = beat * 4
+    pad = np.zeros(n)
     k = 0
-    while MUSIC and k * beat < DUR - 0.3:
-        tb = k * beat
-        if tb >= start_beat - 0.01 or k % 2 == 0:
-            add(kick, tb)
-        if tb >= start_beat:
-            add(hat, tb + beat / 2)
-            if k % 2 == 1:
-                add(clap, tb)
+    while k * bar < DUR:
+        chord = prog[k % 4]
+        tt = tt_(bar)
+        sig = np.zeros(len(tt))
+        for m in chord:
+            for det in (-0.12, -0.05, 0.0, 0.06, 0.11):  # supersaw: detuned in semitones
+                sig += _saw(mtof(m + det), tt, rng.random())
+        sig /= 15
+        env = np.minimum(tt / 0.4, 1) * np.minimum((bar - tt) / 0.3, 1)
+        add(pad, sig * env, k * bar)
         k += 1
-    # bass line (sidechained feel)
-    notes = [55.0, 55.0, 65.41, 49.0]
-    for k in range(int(DUR / beat)):
-        tb = k * beat
-        if tb < start_beat:
+    pad = _lowpass(pad, 900)
+    pad *= np.minimum(t / 1.5, 1)  # fade in from the very start
+    music += pad * 0.9
+
+    # --- 808 sub with glide, starts on the drop ---
+    drop = T1
+    roots = [45, 41, 36, 43]  # A1 F1 C1 G1
+    for b in range(int(DUR / bar) + 1):
+        for step, length in ((0, 1.5), (1.75, 0.75), (2.5, 1.5)):
+            st = b * bar + step * beat
+            if st < drop or st >= DUR:
+                continue
+            f0 = mtof(roots[b % 4])
+            tt = tt_(length * beat)
+            glide = f0 * (1 + 0.25 * np.exp(-tt * 30))
+            ph = 2 * np.pi * np.cumsum(glide) / SR
+            sig = np.tanh(np.sin(ph) * 2.2) * np.exp(-tt * 1.2) * np.minimum(tt / 0.005, 1)
+            add(music, sig * 0.55, st)
+
+    # --- drums ---
+    kt = tt_(0.4)
+    kick = (np.sin(2 * np.pi * np.cumsum(50 + 160 * np.exp(-kt * 35)) / SR) * np.exp(-kt * 7)
+            + rng.standard_normal(len(kt)) * np.exp(-kt * 300) * 0.3)
+    ht = tt_(0.06)
+    hat_raw = rng.standard_normal(len(ht))
+    hat = (hat_raw - _lowpass(hat_raw, 7000)) * np.exp(-ht * 70) * 0.35
+    ct = tt_(0.35)
+    clap_raw = rng.standard_normal(len(ct)) * (np.exp(-ct * 25) + 0.4 * np.exp(-((ct - 0.012) ** 2) / 1e-5))
+    clap = (clap_raw - _lowpass(clap_raw, 1200)) * 0.5
+    steps = int(DUR / (beat / 4))
+    for s16 in range(steps):
+        st = s16 * beat / 4
+        if st < drop:
+            # intro: only a heartbeat kick on the hook
+            if s16 % 8 == 0:
+                add(drums, kick * 0.6, st)
             continue
-        f = notes[(k // 4) % 4]
-        ln = beat * 0.9
-        tt = np.arange(int(ln * SR)) / SR
-        sig = np.sign(np.sin(2 * np.pi * f * tt)) * 0.12 * (1 - np.exp(-tt * 40)) * np.exp(-tt * 2.5)
-        add(sig, tb + 0.03)
-    # pad chords
-    for (a, b, freqs) in [(T1, T2, (220, 277.2, 329.6)), (T2, T3, (246.9, 311.1, 370)),
-                          (T3, T4, (196, 246.9, 293.7)), (T4, 20.0, (220, 277.2, 329.6, 440))]:
-        tt = np.arange(int((b - a) * SR)) / SR
-        sig = sum(np.sin(2 * np.pi * fr * tt) + 0.3 * np.sin(2 * np.pi * fr * 2.01 * tt) for fr in freqs)
-        sig *= (0.03 if MUSIC else 0.0) * np.minimum(tt / 0.3, 1) * np.minimum((b - a - tt) / 0.3, 1)
-        add(sig, a)
-    # impacts
+        pos = s16 % 16
+        if pos in (0, 10):
+            add(drums, kick, st)
+        if pos in (4, 12):
+            add(drums, clap, st)
+        roll = (s16 // 16) % 4 == 3 and pos >= 12  # hat roll at the end of every 4th bar
+        if pos % 2 == 0 or roll:
+            add(drums, hat * (0.6 if roll else 1.0), st)
+    drums = _reverb(drums, 0.9, 0.12)
+
+    # --- impacts on scene changes: sub boom + reverse swell before it ---
     for h in HITS:
-        tt = np.arange(int(0.8 * SR)) / SR
-        boom = np.sin(2 * np.pi * (38 + 60 * np.exp(-tt * 12)) * tt) * np.exp(-tt * 4) * 0.8
-        noise = rng.uniform(-1, 1, len(tt)) * np.exp(-tt * 14) * 0.25
-        add(boom + noise, h)
-    # "ding" + cash on each win stamp
+        bt = tt_(1.4)
+        boom = np.sin(2 * np.pi * np.cumsum(32 + 70 * np.exp(-bt * 9)) / SR) * np.exp(-bt * 2.5)
+        hitn = rng.standard_normal(len(bt)) * np.exp(-bt * 18) * 0.35
+        add(fx, (boom + _lowpass(hitn, 3000)) * 0.8, h)
+        if h > 0.6:
+            sw = tt_(0.5)
+            swell = _lowpass(rng.standard_normal(len(sw)), 2500) * (sw / 0.5) ** 3 * 0.5
+            add(fx, swell, h - 0.5)
+
+    # --- soft bell pluck + coin shimmer on each «ЗАШЛО» ---
     for i in range(len(WINS)):
         st = T2 + 0.15 + i * 1.0 + 0.35
-        tt = np.arange(int(0.6 * SR)) / SR
-        ding = (np.sin(2 * np.pi * 1318.5 * tt) + 0.6 * np.sin(2 * np.pi * 1975.5 * tt)) * np.exp(-tt * 6) * 0.22
-        add(ding, st)
-    # counter ticks during the hit-rate scene
-    for j in range(16):
-        tt = np.arange(int(0.03 * SR)) / SR
-        add(np.sin(2 * np.pi * 2400 * tt) * np.exp(-tt * 120) * 0.15, T3 + j * 0.085)
-    # riser into the CTA
+        bt = tt_(1.2)
+        f = mtof(76 + (0, 3, 7, 12)[i])
+        bell = (np.sin(2 * np.pi * f * bt) + 0.4 * np.sin(2 * np.pi * f * 2.76 * bt)
+                + 0.2 * np.sin(2 * np.pi * f * 5.4 * bt)) * np.exp(-bt * 3.5) * 0.18
+        add(fx, bell, st)
+
+    # --- soft ticks while the % counter runs ---
+    for j in range(14):
+        tk = tt_(0.025)
+        add(fx, rng.standard_normal(len(tk)) * np.exp(-tk * 200) * 0.06, T3 + j * 0.09)
+
+    # --- filtered riser into the CTA ---
     a, b = T4 - 1.6, T4
-    tt = np.arange(int((b - a) * SR)) / SR
-    riser = rng.uniform(-1, 1, len(tt)) * (tt / (b - a)) ** 2 * 0.25
-    riser += np.sin(2 * np.pi * (200 + 900 * (tt / (b - a)) ** 2) * tt) * (tt / (b - a)) ** 2 * 0.12
-    add(riser, a)
-    out *= np.minimum(1, (DUR - t) / 0.6)  # fade-out
-    out = np.tanh(out * 1.4) * 0.85
-    pcm = (out * 32767).astype(np.int16)
+    rt = tt_(b - a)
+    rn = rng.standard_normal(len(rt))
+    riser = (rn - _lowpass(rn, 600 + 6000 * (rt[-1] and 0))) * (rt / (b - a)) ** 2 * 0.3
+    add(fx, riser, a)
+
+    fx = _reverb(fx, 2.2, 0.3, seed=5)
+    music = _reverb(music, 2.5, 0.22, seed=9)
+    out = drums * 0.8 + music * 0.75 + fx * 0.9
+    out *= np.minimum(1, (DUR - t) / 1.0)  # fade-out
+    out = np.tanh(out * 1.2) * 0.8
+    pcm = (out / max(1e-9, np.max(np.abs(out))) * 0.92 * 32767).astype(np.int16)
     stereo = np.stack([pcm, pcm], axis=1)
     with wave.open(path, "wb") as w:
         w.setnchannels(2)
