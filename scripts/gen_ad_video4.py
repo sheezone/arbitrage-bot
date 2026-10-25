@@ -506,7 +506,7 @@ def main() -> None:
          # ElevenLabs voice-over on top, music ducked under it
          "-filter_complex", ("[1:a]volume=0.55[s];[3:a]volume=0.22,atrim=0:20,afade=t=out:st=19:d=1[mu];[2:a]volume=1.5,apad[v];"
                             "[s][mu][v]amix=inputs=3:duration=first:normalize=0[a]") if os.path.exists("music.mp3") else
-                           "[1:a]volume=0.32[m];[2:a]volume=1.5,apad[v];[m][v]amix=inputs=2:duration=first:normalize=0[a]",
+                           "[1:a]volume=0.24[m];[2:a]volume=1.5,apad[v];[m][v]amix=inputs=2:duration=first:normalize=0[a]",
          "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
          "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", os.environ.get("OUT", "ad_video4_voice.mp4")],
         stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
