@@ -61,6 +61,8 @@ def _allowed(url: str, domains: list[str] | None) -> bool:
 
 
 SEARCH_MODEL = os.environ.get("WEBSEARCH_MODEL", "gpt-5.6-luna")
+# the gateway search is slow (70-140 s, 2026-10-26): cap each pass so an analysis never hangs
+RESEARCH_TIMEOUT = 90
 
 
 async def _gateway_search(client: httpx.AsyncClient, query: str, domains: list[str] | None) -> str:
@@ -90,6 +92,10 @@ async def _gateway_search(client: httpx.AsyncClient, query: str, domains: list[s
     return "\n".join(texts).strip()
 
 
+def gateway_available() -> bool:
+    return bool(os.environ.get("ANTHROPIC_BASE_URL") and os.environ.get("ANTHROPIC_API_KEY"))
+
+
 async def research(client: httpx.AsyncClient, instructions: str, task: str, domains: list[str] | None = None) -> str:
     """A whole research pass in one call: the gateway's search model gets the pass's
     instructions + the match, searches the web on its own (several queries) and returns
@@ -104,8 +110,9 @@ async def research(client: httpx.AsyncClient, instructions: str, task: str, doma
     try:
         r = await client.post(f"{base}/v1/responses", headers={"Authorization": f"Bearer {key}"},
                               json={"model": SEARCH_MODEL, "tools": [tool], "instructions": instructions,
+                                    "max_tool_calls": 3, "reasoning": {"effort": "low"},
                                     "input": task + "\nНайди это в интернете и выпиши факты по инструкции."},
-                              timeout=150)
+                              timeout=RESEARCH_TIMEOUT)
         r.raise_for_status()
         data = r.json()
     except (httpx.HTTPError, ValueError):

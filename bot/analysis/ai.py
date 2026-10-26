@@ -639,14 +639,16 @@ class Analyzer:
 
         # Fast path (owner 2026-10-26, "как ускорить аналитику"): ONE call to the
         # gateway's search model, which runs several web searches and writes the summary
-        # itself -- ~20 s instead of a Sonnet tool loop of 8-10 sequential steps.
-        try:
-            async with httpx.AsyncClient() as http:
-                fast = await websearch.research(http, system, messages[0]["content"], domains)
-            if fast:
+        # itself, capped at websearch.RESEARCH_TIMEOUT. If it times out the pass is simply
+        # empty -- falling back to the even slower tool loop would make the user wait minutes.
+        if websearch.gateway_available():
+            try:
+                async with httpx.AsyncClient() as http:
+                    fast = await websearch.research(http, system, messages[0]["content"], domains)
                 return fast[:10000]
-        except Exception:
-            logger.warning("fast research failed for %s, falling back to the tool loop", match.id, exc_info=True)
+            except Exception:
+                logger.warning("fast research failed for %s", match.id, exc_info=True)
+                return ""
         # Fallback: our own tools (bot/analysis/websearch.py) in a client-side tool loop.
 
         try:
