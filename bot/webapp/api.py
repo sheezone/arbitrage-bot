@@ -354,8 +354,19 @@ def register_api(
                                 day0.astimezone(timezone.utc).isoformat())
         wins = [r for r in rows if r["stat_hit"] == "win"]
         # «Вчера ИИ угадал» feed on the home screen (owner 2026-10-23): real hits only
+        from bot.analysis.results import predicted_outcome
+
+        def what_won(r) -> dict:
+            # a hit counts if the bet came in OR the predicted winner won -- show WHICH one,
+            # never a losing bet under a green tick (owner 2026-10-26)
+            if r["result"] == "win":
+                return {"label": r["option_label"], "odds": r["odds"], "kind": "bet"}
+            pred = predicted_outcome(r["payload"])
+            who = {"1": r["team_a"], "2": r["team_b"], "X": "ничья"}.get(pred, "")
+            return {"label": f"Угадан победитель: {who}", "odds": None, "kind": "winner"}
+
         feed = [_crests({"team_a": r["team_a"], "team_b": r["team_b"], "sport": r["sport"], "league": r["league"],
-                         "label": r["option_label"], "odds": r["odds"], "score": r["score"]}) for r in wins[:6]]
+                         "score": r["score"], **what_won(r)}) for r in wins[:6]]
         return {"wins": len(wins), "total": len(rows), "feed": feed}
 
     ticker_cache: dict[str, object] = {"at": 0.0, "items": []}

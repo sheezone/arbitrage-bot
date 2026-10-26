@@ -2729,7 +2729,7 @@ an_news: "News (injuries, form, suspensions)",
     if (!y || !y.feed || !y.feed.length) return "";
     return `<div class="yd-feed"><div class="yd-h">✅ Вчера ИИ угадал <span>${y.wins} из ${y.total}</span></div>
       ${y.feed.map((p) => `<div class="yd-row"><span class="yd-teams">${SPORT_EMOJI[p.sport] || "🏆"} ${teamsLine(p)}</span>
-        <span class="yd-sub">${esc(p.label || "")}${p.odds ? ` @ ${Number(p.odds).toFixed(2)}` : ""} · счёт <b>${esc(p.score || "")}</b></span></div>`).join("")}</div>`;
+        <span class="yd-sub">${p.kind === "winner" ? "🏁 " : "🎯 "}${esc(p.label || "")}${p.odds ? ` @ ${Number(p.odds).toFixed(2)}` : ""} · счёт <b>${esc(p.score || "")}</b></span></div>`).join("")}</div>`;
   }
 
   // First launch: 3 short slides "what the app does" (per-viewer, localStorage).

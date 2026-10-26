@@ -244,8 +244,14 @@ async def post_day_results_to_channel(bot, chat_id: int, rows, wins: int) -> Non
     for r in rows:
         if r["stat_hit"] != "win":
             continue
+        if r["result"] == "win":
+            what = f"🎯 {html.escape(r['option_label'] or '')} @ {r['odds']:.2f}"
+        else:  # the bet missed, the predicted winner won -- say exactly that
+            pred = predicted_outcome(r["payload"])
+            who = {"1": r["team_a"], "2": r["team_b"], "X": "ничья"}.get(pred, "")
+            what = f"🏁 Угадан победитель: {html.escape(who)}"
         lines.append(f"✅ <b>{html.escape(r['team_a'])} — {html.escape(r['team_b'])}</b> {html.escape(r['score'] or '')}\n"
-                     f"     {html.escape(r['option_label'] or '')} @ {r['odds']:.2f}")
+                     f"     {what}")
     lines += ["", f"Всего за день: <b>{wins} из {len(rows)}</b> прогнозов зашли.",
               "Разбор любого матча — в приложении Матч Радар 👇"]
     try:
