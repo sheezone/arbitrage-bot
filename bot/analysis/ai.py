@@ -478,7 +478,8 @@ class Analyzer:
             if option is None:
                 logger.warning("AI picked unknown option %s for %s", result["option_id"], match.id)
                 return None
-            if option.odds > 2.5 or result["confidence"] in HIGH_CONFIDENCE:
+            # self-check only on top matches (owner 2026-10-26: speed)
+            if match.is_popular and (option.odds > 2.5 or result["confidence"] in HIGH_CONFIDENCE):
                 result["confidence"] = await self._self_check(match, result, option) or result["confidence"]
             result["option_id"] = option.id
             result["pick"] = {"id": option.id, "label": option.label, "odds": option.odds}
@@ -633,10 +634,20 @@ class Analyzer:
             "страницы и выпиши факты. Не отвечай по памяти.")
         domains = tool.get("allowed_domains")
         budget = int(tool.get("max_uses", 6)) + 3  # searches + page reads
-        # The gateway's server-side web_search is unavailable (2026-10-15), so we run
-        # our own tools (bot/analysis/websearch.py) in a client-side tool loop.
         from bot.analysis import websearch
         from bot.analysis.token_budget import record as _record_token_usage
+
+        # Fast path (owner 2026-10-26, "как ускорить аналитику"): ONE call to the
+        # gateway's search model, which runs several web searches and writes the summary
+        # itself -- ~20 s instead of a Sonnet tool loop of 8-10 sequential steps.
+        try:
+            async with httpx.AsyncClient() as http:
+                fast = await websearch.research(http, system, messages[0]["content"], domains)
+            if fast:
+                return fast[:10000]
+        except Exception:
+            logger.warning("fast research failed for %s, falling back to the tool loop", match.id, exc_info=True)
+        # Fallback: our own tools (bot/analysis/websearch.py) in a client-side tool loop.
 
         try:
             async with httpx.AsyncClient() as http:
@@ -698,7 +709,7 @@ class Analyzer:
             f"Новости за сутки (заголовки): {json.dumps(data['news'], ensure_ascii=False, default=str)}\n"
             f"\nСвежая информация из интернета:\n{data.get('research') or 'нет данных'}\n"
         )
-        return await self._json_call(SYSTEM, content, SCHEMA, effort="high")
+        return await self._json_call(SYSTEM, content, SCHEMA, effort="medium")  # "high" was ~20 s slower (2026-10-26)
 
     async def _json_call(self, system: str, content, schema: dict, effort: str = "low", _retry: bool = True) -> dict | None:
         # The gateway sometimes answers 504 "request timed out" on long prompts (it cost

@@ -90,6 +90,31 @@ async def _gateway_search(client: httpx.AsyncClient, query: str, domains: list[s
     return "\n".join(texts).strip()
 
 
+async def research(client: httpx.AsyncClient, instructions: str, task: str, domains: list[str] | None = None) -> str:
+    """A whole research pass in one call: the gateway's search model gets the pass's
+    instructions + the match, searches the web on its own (several queries) and returns
+    the fact list. "" on any failure."""
+    base = os.environ.get("ANTHROPIC_BASE_URL", "").rstrip("/")
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not base or not key:
+        return ""
+    tool: dict = {"type": "web_search"}
+    if domains:
+        tool["filters"] = {"allowed_domains": domains[:10]}
+    try:
+        r = await client.post(f"{base}/v1/responses", headers={"Authorization": f"Bearer {key}"},
+                              json={"model": SEARCH_MODEL, "tools": [tool], "instructions": instructions,
+                                    "input": task + "\nНайди это в интернете и выпиши факты по инструкции."},
+                              timeout=150)
+        r.raise_for_status()
+        data = r.json()
+    except (httpx.HTTPError, ValueError):
+        return ""
+    texts = [c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
+             for c in o.get("content", []) if c.get("text")]
+    return "\n".join(texts).strip()
+
+
 async def search(client: httpx.AsyncClient, query: str, domains: list[str] | None = None) -> str:
     found = await _gateway_search(client, query, domains)
     if found:
