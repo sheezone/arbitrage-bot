@@ -3416,7 +3416,11 @@ an_news: "News (injuries, form, suspensions)",
 
   function pickCard(p) {
     const r = p.stat_result;  // win pick -> predicted winner; totals pick -> the total itself
-    const res = r === "win" ? `<span class="res win">${tr("won")}</span>` : r === "lose" ? `<span class="res lose">${tr("lost")}</span>` : "";
+    let res = r === "win" ? `<span class="res win">${tr("won")}</span>` : r === "lose" ? `<span class="res lose">${tr("lost")}</span>` : "";
+    if (!res && p.start_utc && new Date(p.start_utc) < Date.now()) {
+      // started but not judged yet (or no results feed for it): say so instead of vanishing
+      res = `<span class="res wait">${p.score ? "без зачёта" : "⏳ ждём результат"}</span>`;
+    }
     const body = p.locked
       ? `<div class="pk-locked">${tr("pick_locked")}</div>`
       : `${predictedLine(p)}<div class="pk-pick">🎯 ${esc(p.label)} <span class="an-odds">@ ${Number(p.odds).toFixed(2)}</span></div>

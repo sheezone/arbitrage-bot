@@ -708,3 +708,4 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .tr-s { font-size: 13.5px; line-height: 1.45; color: #d9cdf0; }
 .tr-btns { display: flex; gap: 8px; margin-top: 12px; }
 .tr-btns button { flex: 1; padding: 11px; }
+.res.wait { background: rgba(178, 107, 255, 0.15); color: #cdbfe8; }

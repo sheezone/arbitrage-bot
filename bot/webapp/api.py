@@ -741,7 +741,12 @@ def register_api(
         # only the matches THIS user analysed (owner 2026-10-23)
         mine = repo.ai_usage_matches(chat_id)
         upcoming = [_crests(p) for p in upcoming_picks(repo, hours=SHOWN_PICKS_HOURS) if p["match_id"] in mine]  # all not-yet-played ones; the 5/day limit resets at 00:00 MSK
-        recent = [_crests(pick_from_row(r)) for r in repo.ai_recent_settled(200) if r["match_id"] in mine][:20]
+        # Every match of theirs that has started (last 14 days), settled or not -- before
+        # this only stat-counted settled ones showed, so a match "vanished" between kick-off
+        # and settlement (and forever for minor leagues / fights). Owner 2026-10-27.
+        now_ = datetime.now(timezone.utc)
+        played = repo.ai_analyses_between((now_ - timedelta(days=14)).isoformat(), now_.isoformat())
+        recent = [_crests(pick_from_row(r)) for r in reversed(played) if r["match_id"] in mine][:30]
         return {"pro": pro, "upcoming": upcoming if pro else [_lock(p) for p in upcoming], "recent": recent}
 
     # «Найти экспресс» (owner 2026-10-03): free -- 1 per 3 days, MAX -- 2 per MSK day,
