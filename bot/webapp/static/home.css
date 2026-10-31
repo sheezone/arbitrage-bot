@@ -709,3 +709,9 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .tr-btns { display: flex; gap: 8px; margin-top: 12px; }
 .tr-btns button { flex: 1; padding: 11px; }
 .res.wait { background: rgba(178, 107, 255, 0.15); color: #cdbfe8; }
+.ch-bonus { margin: 6px 0 12px; padding: 12px 14px; border-radius: 16px; background: #170d2a; border: 1px solid rgba(80, 170, 255, 0.55);
+  box-shadow: 0 6px 18px rgba(60, 140, 255, 0.25); }
+.ch-bonus-t { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.35; }
+.ch-bonus-t b { color: #7fd0ff; }
+.ch-bonus-b { display: flex; gap: 8px; margin-top: 10px; }
+.ch-bonus-b button { flex: 1; }

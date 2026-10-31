@@ -322,6 +322,8 @@ def register_api(
             "referral": {"days": billing.REFERRAL_BONUS_DAYS, "expresses": billing.REFERRAL_BONUS_EXPRESSES},
             "top_pick": _top_pick(picks, billing.has_access(user, now, admin_chat_ids)),
             "yesterday": _yesterday(now),
+            "channel_bonus": {"username": CHANNEL_USERNAME, "days": CHANNEL_BONUS_DAYS,
+                              "claimed": repo.alert_sent(f"chbonus_{chat_id}")} if CHANNEL_ID else None,
         }
 
     def _mini_verdict(p: dict) -> dict | None:
@@ -1148,6 +1150,28 @@ def register_api(
             "daily_limit_hit": daily_limit_hit,
             "daily_limit": billing.FREE_DAILY_VILKI_LIMIT if not billing.has_access(user, now, admin_chat_ids) else None,
         }
+
+    # «Подпишись на канал — +1 день MAX» (owner 2026-10-31). The bot is an admin of the
+    # channel, so membership is verified for real; one bonus per user, ever.
+    CHANNEL_ID = int(os.environ["NEWS_CHAT_ID"]) if os.environ.get("NEWS_CHAT_ID", "").strip() else None
+    CHANNEL_USERNAME = os.environ.get("REQUIRED_CHANNEL_USERNAME", "").lstrip("@")
+    CHANNEL_BONUS_DAYS = 1
+
+    @app.post("/api/channel/bonus")
+    async def post_channel_bonus(authorization: str | None = Header(default=None)):
+        chat_id = _auth(authorization)
+        _get_user(repo, chat_id)
+        if not CHANNEL_ID or bot is None:
+            raise HTTPException(status_code=404, detail="Акция недоступна")
+        key = f"chbonus_{chat_id}"
+        if repo.alert_sent(key):
+            raise HTTPException(status_code=409, detail="Бонус за подписку уже получен 👍")
+        if not await is_subscribed(bot, CHANNEL_ID, chat_id):
+            raise HTTPException(status_code=400, detail="Сначала подпишитесь на канал, потом нажмите «Я подписался»")
+        repo.mark_alert_sent(key)
+        repo.grant_bonus_days(chat_id, CHANNEL_BONUS_DAYS)
+        _log(chat_id, "channel_bonus")
+        return {"ok": True, "days": CHANNEL_BONUS_DAYS}
 
     @app.get("/api/showcase")
     async def get_showcase(authorization: str | None = Header(default=None)):

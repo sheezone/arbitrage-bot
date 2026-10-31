@@ -2708,6 +2708,7 @@ an_news: "News (injuries, form, suspensions)",
           <h2 class="home-welcome">${tr("welcome")}</h2>
         </div>
         ${h.trial_days_left ? `<div class="trial-banner">🎁 ${tr("trial_on", { n: h.trial_days_left })}</div>` : ""}
+        ${channelBonusCard(h.channel_bonus)}
         ${yesterdayFeed(h.yesterday)}
         <div id="win-carousel"></div>
         <div class="tiles tiles-grid ${h.is_admin ? "tiles-2" : "tiles-1"}" id="home-tiles">
@@ -2720,8 +2721,42 @@ an_news: "News (injuries, form, suspensions)",
         <p class="home-note">${tr("note")}</p>
       </section>`;
     content.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go(el.dataset.go)));
+    bindChannelBonus(h.channel_bonus);
     loadTicker();
     loadShowcase();
+  }
+
+  // «Подпишись на канал — +1 день MAX» (owner 2026-10-31): once per user, membership
+  // is checked by the bot server-side.
+  function channelBonusCard(cb) {
+    if (!cb || cb.claimed || !cb.username) return "";
+    return `<div class="ch-bonus"><div class="ch-bonus-t">📣 Подпишись на канал МАТЧ РАДАР — <b>+${cb.days} день MAX</b> бесплатно</div>
+      <div class="ch-bonus-b"><button type="button" class="pro-buy" id="ch-sub">Подписаться</button>
+      <button type="button" class="btn-ghost" id="ch-claim">Я подписался</button></div></div>`;
+  }
+
+  function bindChannelBonus(cb) {
+    const sub = document.getElementById("ch-sub");
+    const claim = document.getElementById("ch-claim");
+    if (!sub || !claim) return;
+    sub.addEventListener("click", () => {
+      haptic("light");
+      const url = `https://t.me/${cb.username}`;
+      if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, "_blank");
+    });
+    claim.addEventListener("click", async () => {
+      claim.disabled = true;
+      try {
+        await api("/api/channel/bonus", { method: "POST" });
+        hapticNotify("success");
+        toast(`🎁 +${cb.days} день MAX начислен!`);
+        homeCache = null;
+        renderHome();
+      } catch (e) {
+        toast(e.message || "Ошибка");
+        claim.disabled = false;
+      }
+    });
   }
 
   // «Вчера ИИ угадал» (owner 2026-10-23): yesterday's real hits -- match, AI bet, score.
