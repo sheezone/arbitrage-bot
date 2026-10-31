@@ -739,7 +739,11 @@ def register_api(
         _log(chat_id, "picks")
         pro = billing.has_access(user, datetime.now(timezone.utc), admin_chat_ids)
         # only the matches THIS user analysed (owner 2026-10-23)
-        mine = repo.ai_usage_matches(chat_id)
+        # admins see every analysed match from all users (owner 2026-10-31)
+        if billing.is_admin(user, admin_chat_ids):
+            mine = {r[0] for r in repo._conn.execute("SELECT match_id FROM ai_analyses")}
+        else:
+            mine = repo.ai_usage_matches(chat_id)
         upcoming = [_crests(p) for p in upcoming_picks(repo, hours=SHOWN_PICKS_HOURS) if p["match_id"] in mine]  # all not-yet-played ones; the 5/day limit resets at 00:00 MSK
         # Every match of theirs that has started (last 14 days), settled or not -- before
         # this only stat-counted settled ones showed, so a match "vanished" between kick-off
