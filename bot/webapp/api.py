@@ -231,9 +231,21 @@ def register_api(
     # ---------------- AI analysis (main section since 2026-10-02) ----------------
     MSK_TZ = timezone(timedelta(hours=3))
 
+    def _is_skip(match_id: str) -> bool:
+        row = repo.get_ai_analysis(match_id)
+        if row is None:
+            return False
+        try:
+            return bool(json.loads(row["payload"]).get("skip"))
+        except ValueError:
+            return False
+
     def _ai_quota(user, now) -> tuple[int | None, set[str]]:
         day = now.astimezone(MSK_TZ).date().isoformat()
         used = repo.ai_usage_today(user.chat_id, day)
+        # an analysis where the AI itself said «лучше пропустить» doesn't use up the daily limit
+        # (owner 2026-10-31) -- it still shows in the user's ready picks
+        used = {m for m in used if not _is_skip(m)}
         if billing.is_admin(user, admin_chat_ids):
             return None, used
         return (AI_PAID_PER_DAY if billing.has_access(user, now, admin_chat_ids) else AI_FREE_PER_DAY), used
@@ -492,9 +504,11 @@ def register_api(
         # Every match a user opens counts toward their daily limit and lands in THEIR
         # «Готовые прогнозы» -- even when another user's analysis is reused instantly
         # (owner 2026-10-23: "не более 5 готовых матчей у каждого человека").
+        bonus_spent = False
         if limit is not None and match.id not in used and len(used) >= limit and repo.bonus_analyses(chat_id) > 0:
             # daily limit used up -- spend a bonus analysis (+3 per approved winning coupon)
             repo.add_bonus_analyses(chat_id, -1)
+            bonus_spent = True
             used = set()
         if limit is not None and match.id not in used and len(used) >= limit:
             raise HTTPException(status_code=429, detail=(
@@ -512,6 +526,8 @@ def register_api(
         if result is None:
             raise HTTPException(status_code=424, detail="Не удалось разобрать этот матч, попробуйте позже")
         repo.record_ai_usage(chat_id, now.astimezone(MSK_TZ).date().isoformat(), match.id)
+        if bonus_spent and result.get("skip"):
+            repo.add_bonus_analyses(chat_id, 1)  # «лучше пропустить» doesn't cost a bonus analysis either
         wins, total = repo.ai_hit_rate()
         in_line = bool(match.options)
         out = _match_out(match) if in_line else {
