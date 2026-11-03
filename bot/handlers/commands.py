@@ -32,6 +32,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     ReplyKeyboardRemove,
     WebAppInfo,
+    MenuButtonWebApp,
     CallbackQuery,
     FSInputFile,
     InlineKeyboardButton,
@@ -1264,6 +1265,14 @@ def register_handlers(
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         is_new_user = repo.get_user(message.chat.id) is None
+        if webapp_url:
+            # Per-chat menu button (2026-11-03): Telegram stopped applying updates to the
+            # bot-wide default one, which kept pointing at a dead quick-tunnel URL.
+            try:
+                await bot.set_chat_menu_button(chat_id=message.chat.id, menu_button=MenuButtonWebApp(
+                    text="📡 Матч Радар", web_app=WebAppInfo(url=f"{webapp_url.rstrip('/')}/?v={int(time.time())}")))
+            except Exception:
+                logger.warning("per-chat menu button failed for %s", message.chat.id)
 
         referred_by = None
         acquisition_source = None
