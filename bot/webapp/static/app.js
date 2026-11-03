@@ -3077,6 +3077,7 @@ an_news: "News (injuries, form, suspensions)",
   let onlySure = false;
   try { onlySure = localStorage.getItem("only_sure") === "1"; } catch (e) { /* convenience only */ }
   let aiInAnalysis = false;  // inside one match's analysis -> header ‹ goes back to the list
+  let analysisSeq = 0;  // the newest analysis request; an older one still polling stops
   let analysisReturnTo = null;  // which screen "‹"/"К списку" returns to (set by the opener)
   // Tournament logos next to the league name (owner 2026-10-17); emoji otherwise.
   const LEAGUE_LOGO = [["Лига Чемпионов УЕФА", "img/leagues/ucl.png"], ["Англия. Премьер-Лига", "img/leagues/epl.png"],
@@ -3332,7 +3333,7 @@ an_news: "News (injuries, form, suspensions)",
     const was = small.textContent;
     small.textContent = "⏳ ИИ готовит подробный разбор…";
     try {
-      await api(`/api/ai/final?match_id=${encodeURIComponent(btn.dataset.id)}`, { method: "POST" });
+      await apiUntilReady(`/api/ai/final?match_id=${encodeURIComponent(btn.dataset.id)}`, { method: "POST" }, () => true);
       renderAiAnalysis(`/api/ai/picks/view?match_id=${encodeURIComponent(btn.dataset.id)}`, analysisReturnTo);
     } catch (e) {
       toast(e.message);
@@ -3360,6 +3361,31 @@ an_news: "News (injuries, form, suspensions)",
     return `<div class="an-block ks-block"><div class="an-h">📊 Ключевые цифры</div>${form}${tiles ? `<div class="ks-grid">${tiles}</div>` : ""}</div>`;
   }
 
+  // A fresh analysis runs longer than the tunnel's request limit (2026-11-03): the server
+  // keeps it going in the background and answers {pending: true}; ask again until the
+  // result is in. Dropped connections (HTTP 524 / network) are retried too.
+  async function apiUntilReady(url, options, stillWanted) {
+    const wanted = stillWanted || (() => aiInAnalysis);
+    const deadline = Date.now() + 8 * 60 * 1000;
+    let netErrors = 0;
+    for (;;) {
+      let data;
+      try {
+        data = await api(url, options);
+        netErrors = 0;
+      } catch (e) {
+        const transient = !e.status || e.status === 524 || e.status === 522 || e.status === 502 || e.status === 504;
+        if (!transient || ++netErrors > 4 || Date.now() > deadline) throw e;
+        await new Promise((r) => setTimeout(r, 3000));
+        continue;
+      }
+      if (!data || !data.pending) return data;
+      if (!wanted()) return null;
+      if (Date.now() > deadline) throw new Error("Разбор занимает больше обычного — откройте матч ещё раз через минуту");
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
   async function renderAiAnalysis(url, returnTo) {
     aiInAnalysis = true;
     analysisReturnTo = returnTo || renderAiMatches;
@@ -3385,8 +3411,10 @@ an_news: "News (injuries, form, suspensions)",
     const stepTimer = setInterval(tick, 9000);
     let data;
     try {
-      data = await api(url);
+      const mySeq = ++analysisSeq;
+      data = await apiUntilReady(url, undefined, () => aiInAnalysis && mySeq === analysisSeq);
       clearInterval(stepTimer);
+      if (!data || mySeq !== analysisSeq) return;  // the user left the analysis screen while it was running
     } catch (e) {
       clearInterval(stepTimer);
       toast(e.message);

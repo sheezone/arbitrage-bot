@@ -56,6 +56,7 @@ from bot.webapp.team_flags import get_team_flag
 from bot.webapp.team_logos import get_nba_logo_url
 
 logger = logging.getLogger(__name__)
+_PENDING = object()  # _analyze_bg: the analysis is still running in the background
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -495,6 +496,33 @@ def register_api(
                 "games": [{"name": g, "count": n, "flag": national_flag(g) if sport == "football" else None}
                           for g, n in games]}
 
+    # An analysis takes 1.5-4 min, longer than Cloudflare's ~100 s request limit: the
+    # tunnel dropped the request and Starlette cancelled the analysis halfway (owner
+    # 2026-11-03: "идёт разбор-разбор, всё, он вылетает"). It now runs as a background
+    # task keyed by match; a request waits up to ANALYSIS_WAIT s and otherwise answers
+    # {"pending": true} -- the app asks again and picks up the same task.
+    ANALYSIS_WAIT = 60
+    inflight: dict[str, tuple[asyncio.Task, float]] = {}
+
+    async def _analyze_bg(match, final: bool = False):
+        """The analyzer's result, or None while it is still running in the background.
+        Exceptions of the task are re-raised to the caller that collects it."""
+        key = f"{match.id}|{int(final)}"
+        now_ts = time.monotonic()
+        for k, (t, at) in list(inflight.items()):
+            if t.done() and now_ts - at > 600:
+                inflight.pop(k, None)
+        entry = inflight.get(key)
+        if entry is None or (entry[0].done() and now_ts - entry[1] > 600):
+            task = asyncio.create_task(analyzer.analyze(match, final=True) if final else analyzer.analyze(match))
+            inflight[key] = entry = (task, now_ts)
+        task = entry[0]
+        done, _ = await asyncio.wait({task}, timeout=ANALYSIS_WAIT)
+        if not done:
+            return _PENDING
+        inflight.pop(key, None)
+        return task.result()
+
     async def _run_analysis(chat_id: int, user, match) -> dict:
         if analyzer is None:
             raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
@@ -519,7 +547,11 @@ def register_api(
         # 424, not 502/503: Cloudflare's tunnel swaps 502/503/504 bodies for its own error
         # page, so the user would only ever see "HTTP 502" instead of the reason.
         try:
-            result = await analyzer.analyze(match)
+            result = await _analyze_bg(match)
+            if result is _PENDING:
+                if bonus_spent:
+                    repo.add_bonus_analyses(chat_id, 1)  # charged once, when the result is delivered
+                return {"pending": True}
         except Exception as e:
             logger.exception("AI analysis failed for %s", match.id)
             if getattr(e, "status_code", None) in (402, 403) or "quota" in str(e).lower() or "balance" in str(e).lower():
@@ -613,7 +645,10 @@ def register_api(
             if analyzer is None:
                 raise HTTPException(status_code=424, detail="ИИ-анализ временно недоступен")
             try:
-                if await analyzer.analyze(match, final=True) is None:
+                res = await _analyze_bg(match, final=True)
+                if res is _PENDING:
+                    return {"pending": True}
+                if res is None:
                     raise HTTPException(status_code=424, detail="Не удалось сделать разбор, попробуйте позже")
             except HTTPException:
                 raise
