@@ -87,7 +87,14 @@ def _auth(authorization: str | None) -> int:
     user = validate_init_data(authorization[4:], _bot_token())
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid or expired init data")
+    for hook in _AUTH_HOOKS:
+        hook(user)
     return int(user["id"])
+
+
+# create_app() puts its "remember the caller's @username / name" hook here, so the
+# admin panel can show nicknames instead of bare chat ids (owner 2026-11-06).
+_AUTH_HOOKS: list = []
 
 
 def _get_user(repo: Repository, chat_id: int) -> UserSettings:
@@ -196,6 +203,22 @@ def register_api(
     # route, not Origin, so this stays permissive rather than fighting webview quirks for
     # no security benefit.
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+    seen_names: dict[int, tuple] = {}
+
+    def _remember_name(tg_user: dict) -> None:
+        cid = int(tg_user["id"])
+        name = " ".join(p for p in (tg_user.get("first_name"), tg_user.get("last_name")) if p)
+        val = (tg_user.get("username"), name)
+        if seen_names.get(cid) == val:
+            return
+        seen_names[cid] = val
+        try:
+            repo.save_user_name(cid, *val)
+        except Exception:
+            logger.warning("save_user_name failed for %s", cid)
+
+    _AUTH_HOOKS[:] = [_remember_name]
 
     news_cache: dict = {"at": 0.0, "payload": None}
     fixtures_cache: dict = {"at": 0.0, "payload": None}
@@ -1331,10 +1354,8 @@ def register_api(
     @app.get("/api/admin/user_picks")
     async def get_admin_user_picks(authorization: str | None = Header(default=None)):
         """Admin-only (owner 2026-10-23): which matches each user analysed and whether
-        those forecasts came in -- anonymised (stable alias, never the chat id/name),
-        admins excluded."""
-        import hashlib
-
+        those forecasts came in, admins excluded. Shows the user's Telegram @username /
+        name (owner 2026-11-06: "хочу посмотреть кто что делал"), chat id if unknown."""
         chat_id = _auth(authorization)
         if not billing.is_admin(_get_user(repo, chat_id), admin_chat_ids):
             raise HTTPException(status_code=403, detail="Только для администраторов")
@@ -1344,12 +1365,13 @@ def register_api(
             f"a.odds, a.score, {hit} AS stat_hit FROM ai_usage u JOIN ai_analyses a ON a.match_id = u.match_id "
             f"ORDER BY u.day DESC, a.start_utc DESC"
         ).fetchall()
+        names = repo.user_names()
         users: dict[int, dict] = {}
         for r in rows:
             if r["chat_id"] in admin_chat_ids:
                 continue
             u = users.setdefault(r["chat_id"], {
-                "alias": "Пользователь " + hashlib.sha256(f"mr-{r['chat_id']}".encode()).hexdigest()[:4].upper(),
+                "alias": names.get(r["chat_id"]) or f"ID {r['chat_id']}", "chat_id": r["chat_id"],
                 "picks": [], "win": 0, "lose": 0})
             u["picks"].append({"day": r["day"], "team_a": r["team_a"], "team_b": r["team_b"], "league": r["league"],
                                "sport": r["sport"], "start_label": format_match_start(r["start_utc"]),
@@ -1372,11 +1394,12 @@ def register_api(
         day_start = now.astimezone(MSK_TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
         summary = repo.activity_summary(day_start.isoformat(), admin_chat_ids)
         recent = repo.recent_active_users(day_start.isoformat(), admin_chat_ids, limit=30)
+        names = repo.user_names()
         return {
             "active_users": summary["active_users"],
             "total_actions": summary["total_actions"],
             "actions": [{**a, "label": ACTION_LABELS.get(a["action"], a["action"])} for a in summary["actions"]],
-            "users": [{"chat_id": r["chat_id"], "count": r["n"], "last_at": r["last_at"],
+            "users": [{"chat_id": r["chat_id"], "name": names.get(r["chat_id"], ""), "count": r["n"], "last_at": r["last_at"],
                       "actions": r["actions"].split(",") if r["actions"] else []} for r in recent],
         }
 
@@ -1394,6 +1417,7 @@ def register_api(
         now = datetime.now(timezone.utc)
         all_users = repo.get_all_users()
         has_access_count = sum(1 for u in all_users if billing.has_access(u, now, admin_chat_ids))
+        names = repo.user_names()
 
         return {
             "total_users": len(all_users),
@@ -1412,6 +1436,7 @@ def register_api(
             "recent_users": [
                 {
                     "chat_id": u.chat_id,
+                    "name": names.get(u.chat_id, ""),
                     "trial_started_at": u.trial_started_at,
                     "has_access": billing.has_access(u, now, admin_chat_ids),
                     "acquisition_source": u.acquisition_source,

@@ -2191,7 +2191,7 @@ an_news: "News (injuries, form, suspensions)",
           .map(
             (u) => `<div class="admin-user-row">
               <div class="admin-user-top">
-                <span>${u.chat_id}${u.acquisition_source ? ` <span class="admin-tag">${esc(u.acquisition_source)}</span>` : ""}</span>
+                <span>${whoName(u)}${u.acquisition_source ? ` <span class="admin-tag">${esc(u.acquisition_source)}</span>` : ""}</span>
                 <span>${u.has_access ? "✅" : "⛔"}</span>
               </div>
               <div class="admin-user-period">${fmtDate(u.access_start)} — ${fmtDate(u.access_end)}</div>
@@ -2757,6 +2757,11 @@ an_news: "News (injuries, form, suspensions)",
         claim.disabled = false;
       }
     });
+  }
+
+  // Admin panel: Telegram @username / name instead of a bare chat id (owner 2026-11-06).
+  function whoName(u) {
+    return u.name ? `<b>${esc(u.name)}</b> <span class="admin-id">${u.chat_id}</span>` : String(u.chat_id);
   }
 
   // «Вчера ИИ угадал» (owner 2026-10-23): yesterday's real hits -- match, AI bet, score.
@@ -3685,7 +3690,7 @@ an_news: "News (injuries, form, suspensions)",
     const mark = (h) => (h === "win" ? "✅" : h === "lose" ? "❌" : "⏳");
     const cards = d.users.length ? d.users.map((u) => {
       const done = u.win + u.lose;
-      const head = `<b>${esc(u.alias)}</b> · разборов: ${u.picks.length}${done ? ` · зашло <b>${u.win} из ${done}</b> (${Math.round(u.win / done * 100)}%)` : ""}`;
+      const head = `<b>${esc(u.alias)}</b>${u.alias.startsWith("ID ") ? "" : ` <span class="admin-id">${u.chat_id}</span>`} · разборов: ${u.picks.length}${done ? ` · зашло <b>${u.win} из ${done}</b> (${Math.round(u.win / done * 100)}%)` : ""}`;
       const rows = u.picks.map((p) => `<div class="up-row"><span class="up-mark">${mark(p.hit)}</span>
         <span class="up-main">${SPORT_EMOJI[p.sport] || "🏆"} ${esc(p.team_a)} — ${esc(p.team_b)}${p.score ? ` <b>${esc(p.score)}</b>` : ""}
         <small>${esc(p.label || "")}${p.odds ? ` @ ${Number(p.odds).toFixed(2)}` : ""} · ${esc(p.start_label || "")} · открыл ${esc(p.day)}</small></span></div>`).join("");
@@ -3710,7 +3715,7 @@ an_news: "News (injuries, form, suspensions)",
       ? s.users.map((u) => {
           const time = u.last_at ? new Date(u.last_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
           const acts = u.actions.map((a) => ACTION_LABELS_RU[a] || a).join(", ");
-          return `<div class="admin-user-row"><div class="admin-user-top"><span>${u.chat_id}</span><span>${time}</span></div>
+          return `<div class="admin-user-row"><div class="admin-user-top"><span>${whoName(u)}</span><span>${time}</span></div>
             <div class="admin-user-period">${u.count}× · ${esc(acts)}</div></div>`;
         }).join("")
       : `<div class="news-empty">Никто ещё не заходил сегодня</div>`;

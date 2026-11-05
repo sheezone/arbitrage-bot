@@ -1265,6 +1265,8 @@ def register_handlers(
     async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.clear()
         is_new_user = repo.get_user(message.chat.id) is None
+        if message.from_user:
+            repo.save_user_name(message.chat.id, message.from_user.username, message.from_user.full_name)
         if webapp_url:
             # Per-chat menu button (2026-11-03): Telegram stopped applying updates to the
             # bot-wide default one, which kept pointing at a dead quick-tunnel URL.

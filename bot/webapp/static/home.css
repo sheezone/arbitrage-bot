@@ -761,3 +761,4 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .ld-check { width: 20px; height: 20px; border-radius: 50%; background: #2bd48a; color: #08170f; font-weight: 900; font-size: 13px;
   display: flex; align-items: center; justify-content: center; animation: ldPop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); box-shadow: 0 0 10px rgba(43, 212, 138, 0.7); }
 @keyframes ldPop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+.admin-id { font-size: 11px; opacity: 0.55; font-weight: 400; }

@@ -476,6 +476,24 @@ class Repository:
             (since_iso,),
         ).fetchall()
 
+    # --- Telegram names (admin panel) --------------------------------------------
+    def save_user_name(self, chat_id: int, username: str | None, full_name: str | None) -> None:
+        self._conn.execute(
+            "INSERT INTO user_names (chat_id, username, full_name, updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(chat_id) DO UPDATE SET username = excluded.username, full_name = excluded.full_name, "
+            "updated_at = excluded.updated_at",
+            (chat_id, username or None, full_name or None, datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def user_names(self) -> dict[int, str]:
+        """chat_id -> "@username · Имя" (or just the name / just the @username)."""
+        out = {}
+        for r in self._conn.execute("SELECT chat_id, username, full_name FROM user_names"):
+            parts = [f"@{r['username']}" if r["username"] else "", r["full_name"] or ""]
+            out[r["chat_id"]] = " · ".join(p for p in parts if p)
+        return out
+
     def alert_sent(self, key: str) -> bool:
         return self._conn.execute("SELECT 1 FROM ai_budget_alerts WHERE key = ?", (key,)).fetchone() is not None
 

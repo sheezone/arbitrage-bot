@@ -193,3 +193,11 @@ CREATE TABLE IF NOT EXISTS user_wins (
     status TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
     created_at TEXT NOT NULL
 );
+
+-- Telegram @username / name per user, for the admin panel (owner 2026-11-06: "не цифры, а ники").
+CREATE TABLE IF NOT EXISTS user_names (
+    chat_id INTEGER PRIMARY KEY,
+    username TEXT,
+    full_name TEXT,
+    updated_at TEXT NOT NULL
+);
