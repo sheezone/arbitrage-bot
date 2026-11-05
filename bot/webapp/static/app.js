@@ -3400,7 +3400,7 @@ an_news: "News (injuries, form, suspensions)",
       <div class="ld-radar"><span class="ld-ring r1"></span><span class="ld-ring r2"></span><span class="ld-ring r3"></span>
         <span class="ld-sweep"></span><span class="ld-blip b1"></span><span class="ld-blip b2"></span><span class="ld-blip b3"></span>
         <span class="ld-core">🧠</span></div>
-      <div class="ld-title">${tr("loading")}<span class="ld-dots"><i>.</i><i>.</i><i>.</i></span></div>
+      <div class="ld-title">${tr("loading").replace(/[.…]+$/, "")}<span class="ld-dots"><i>.</i><i>.</i><i>.</i></span></div>
       <div class="ld-bar"><div class="ld-fill" id="ld-fill"></div></div>
       <div class="ld-meta"><span>Прошло: <b id="ld-time">0:00</b></span><span id="ld-pct">0%</span></div>
       <div class="ld-note">⏱ Анализ занимает в среднем <b>2–3 минуты</b> — ИИ ищет свежие данные по матчу в интернете. Не закрывайте экран, разбор придёт сам.</div>
