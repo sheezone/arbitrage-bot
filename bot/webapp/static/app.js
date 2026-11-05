@@ -3395,9 +3395,16 @@ an_news: "News (injuries, form, suspensions)",
     // before the first tick, so it just flashes past.
     const steps = ["🔎 Ищу форму и результаты команд", "📊 Собираю статистику и таблицу", "🩹 Проверяю травмы и составы",
       "🧩 Ищу скрытые факторы: погода, усталость, тренер", "⚖️ Сравниваю с линией букмекера", "🧠 ИИ делает вывод"];
-    content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div>
-      <div class="ld-note">⏱ Анализ занимает в среднем <b>2–3 минуты</b> — ИИ ищет свежие данные по матчу в интернете. Не закрывайте экран, разбор придёт сам.<div class="ld-elapsed">Прошло: <span id="ld-time">0:00</span></div></div>
-      <div class="ld-steps">${steps.map((t, i) => `<div class="ld-step" data-i="${i}"><span class="ld-ico">⏳</span>${t}</div>`).join("")}</div></div>`;
+    // Animated radar + progress bar + live steps (owner 2026-11-06: "более анимировано").
+    content.innerHTML = `<div class="ai-loading">
+      <div class="ld-radar"><span class="ld-ring r1"></span><span class="ld-ring r2"></span><span class="ld-ring r3"></span>
+        <span class="ld-sweep"></span><span class="ld-blip b1"></span><span class="ld-blip b2"></span><span class="ld-blip b3"></span>
+        <span class="ld-core">🧠</span></div>
+      <div class="ld-title">${tr("loading")}<span class="ld-dots"><i>.</i><i>.</i><i>.</i></span></div>
+      <div class="ld-bar"><div class="ld-fill" id="ld-fill"></div></div>
+      <div class="ld-meta"><span>Прошло: <b id="ld-time">0:00</b></span><span id="ld-pct">0%</span></div>
+      <div class="ld-note">⏱ Анализ занимает в среднем <b>2–3 минуты</b> — ИИ ищет свежие данные по матчу в интернете. Не закрывайте экран, разбор придёт сам.</div>
+      <div class="ld-steps">${steps.map((t, i) => `<div class="ld-step" data-i="${i}" style="animation-delay:${i * 0.08}s"><span class="ld-ico"><span class="ld-wait"></span></span><span class="ld-txt">${t}</span></div>`).join("")}</div></div>`;
     window.scrollTo(0, 0);
     const t0 = Date.now();
     const clock = setInterval(() => {
@@ -3405,14 +3412,24 @@ an_news: "News (injuries, form, suspensions)",
       if (!el) return clearInterval(clock);
       const s = Math.floor((Date.now() - t0) / 1000);
       el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      // eases toward 95% (~88% at 2.5 min) -- never claims "done" before the result is in
+      const pct = Math.min(95, Math.round(100 * (1 - Math.exp(-s / 70))));
+      document.getElementById("ld-fill").style.width = pct + "%";
+      document.getElementById("ld-pct").textContent = pct + "%";
     }, 1000);
     let stepI = 0;
     const tick = () => {
       const el = content.querySelector(`.ld-step[data-i="${stepI}"]`);
       if (!el) return;
+      const prev = content.querySelector(`.ld-step[data-i="${stepI - 1}"]`);
+      if (prev && !prev.classList.contains("done")) {
+        prev.classList.remove("on");
+        prev.classList.add("done");
+        prev.querySelector(".ld-ico").innerHTML = `<span class="ld-check">✓</span>`;
+        haptic("light");
+      }
       el.classList.add("on");
-      const prev = content.querySelector(`.ld-step[data-i="${stepI - 1}"] .ld-ico`);
-      if (prev) prev.textContent = "✅";
+      el.querySelector(".ld-ico").innerHTML = `<span class="ld-spin"></span>`;
       if (stepI < steps.length - 1) stepI++;
     };
     tick();
