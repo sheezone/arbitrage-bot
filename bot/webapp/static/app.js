@@ -3396,8 +3396,16 @@ an_news: "News (injuries, form, suspensions)",
     const steps = ["🔎 Ищу форму и результаты команд", "📊 Собираю статистику и таблицу", "🩹 Проверяю травмы и составы",
       "🧩 Ищу скрытые факторы: погода, усталость, тренер", "⚖️ Сравниваю с линией букмекера", "🧠 ИИ делает вывод"];
     content.innerHTML = `<div class="ai-loading"><div class="ai-brain">🧠</div><div>${tr("loading")}</div>
+      <div class="ld-note">⏱ Анализ занимает в среднем <b>2–3 минуты</b> — ИИ ищет свежие данные по матчу в интернете. Не закрывайте экран, разбор придёт сам.<div class="ld-elapsed">Прошло: <span id="ld-time">0:00</span></div></div>
       <div class="ld-steps">${steps.map((t, i) => `<div class="ld-step" data-i="${i}"><span class="ld-ico">⏳</span>${t}</div>`).join("")}</div></div>`;
     window.scrollTo(0, 0);
+    const t0 = Date.now();
+    const clock = setInterval(() => {
+      const el = document.getElementById("ld-time");
+      if (!el) return clearInterval(clock);
+      const s = Math.floor((Date.now() - t0) / 1000);
+      el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    }, 1000);
     let stepI = 0;
     const tick = () => {
       const el = content.querySelector(`.ld-step[data-i="${stepI}"]`);
@@ -3408,15 +3416,17 @@ an_news: "News (injuries, form, suspensions)",
       if (stepI < steps.length - 1) stepI++;
     };
     tick();
-    const stepTimer = setInterval(tick, 9000);
+    const stepTimer = setInterval(tick, 25000);  // steps spread over the ~2.5 min an analysis takes
     let data;
     try {
       const mySeq = ++analysisSeq;
       data = await apiUntilReady(url, undefined, () => aiInAnalysis && mySeq === analysisSeq);
       clearInterval(stepTimer);
+      clearInterval(clock);
       if (!data || mySeq !== analysisSeq) return;  // the user left the analysis screen while it was running
     } catch (e) {
       clearInterval(stepTimer);
+      clearInterval(clock);
       toast(e.message);
       if (e.status === 429 && homeCache && !homeCache.has_access) return switchTab("sub");
       return analysisReturnTo();

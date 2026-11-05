@@ -715,3 +715,7 @@ main#content, .topbar, .screen-head { max-width: 520px; margin-left: auto; margi
 .ch-bonus-t b { color: #7fd0ff; }
 .ch-bonus-b { display: flex; gap: 8px; margin-top: 10px; }
 .ch-bonus-b button { flex: 1; }
+.ld-note { margin: 14px auto 0; max-width: 340px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 200, 60, 0.1);
+  border: 1px solid rgba(255, 200, 60, 0.45); font-size: 13px; line-height: 1.4; text-align: left; }
+.ld-note b { color: #ffd166; }
+.ld-elapsed { margin-top: 6px; font-weight: 700; opacity: 0.85; }
