@@ -15,7 +15,7 @@ from itertools import combinations
 
 from bot.analysis.ai import Analyzer
 from bot.analysis.catalog import SPORTS, get_full_line
-from bot.analysis.results import predicted_outcome
+from bot.analysis.results import predicted_outcome, score_text
 from bot.db.repository import Repository
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def pick_from_row(row) -> dict:
         # predicted winner won OR the pick itself (e.g. a total) hit, matching
         # Repository._STAT_HIT_SQL so the app shows the same verdict it's counted by.
         "stat_result": _stat_hit(row["winner_result"] if "winner_result" in row.keys() else None, row["result"]),
-        "score": row["score"],
+        "score": score_text(row),
         "skip": bool(payload.get("skip")),
         "skip_reason": payload.get("skip_reason", ""),
         "popular": bool(row["popular"]) if "popular" in row.keys() else False,

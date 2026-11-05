@@ -109,6 +109,15 @@ def find_score(team_a: str, team_b: str, start: datetime, results) -> tuple[int,
     return best
 
 
+def score_text(row) -> str:
+    """Regulation score, plus the final one when overtime/shootout changed it -- "1:1 (ОТ 2:1)".
+    Hockey bets settle on regulation time, but showing only "1:1" made a won Авангард +1.5
+    look wrong next to the real 2:1 result (owner 2026-11-06)."""
+    score = row["score"] or ""
+    fin = row["final_score"] if "final_score" in row.keys() else None
+    return f"{score} (ОТ {fin})" if fin and score and fin != score else score
+
+
 def predicted_outcome(payload: str) -> str | None:
     """'1' / 'X' / '2': the outcome the AI rated most likely in its own probabilities."""
     try:

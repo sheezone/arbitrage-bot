@@ -11,6 +11,7 @@ import io
 import time
 from datetime import datetime, timedelta, timezone
 
+from bot.analysis.results import score_text
 from bot.db.repository import Repository
 
 SPORT_TAG = {"football": "⚽", "hockey": "🏒", "basketball": "🏀", "tennis": "🎾", "esports": "🎮"}
@@ -20,12 +21,12 @@ LOOKBACK_DAYS = 14
 def recent_wins(repo: Repository, n: int = 6, min_odds: float = 1.4) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).isoformat()
     rows = repo._conn.execute(
-        "SELECT match_id, sport, league, team_a, team_b, option_label, odds, score, start_utc FROM ai_analyses "
+        "SELECT match_id, sport, league, team_a, team_b, option_label, odds, score, final_score, start_utc FROM ai_analyses "
         "WHERE popular = 1 AND sport != 'esports' AND result = 'win' AND odds >= ? AND start_utc >= ? ORDER BY odds DESC LIMIT ?",
         (min_odds, since, n)).fetchall()
     msk = timezone(timedelta(hours=3))
     return [{"sport": r["sport"], "league": (r["league"] or "").split(".")[0], "team_a": r["team_a"],
-             "team_b": r["team_b"], "label": r["option_label"], "odds": r["odds"], "score": r["score"],
+             "team_b": r["team_b"], "label": r["option_label"], "odds": r["odds"], "score": score_text(r),
              "date": datetime.fromisoformat(r["start_utc"]).astimezone(msk).strftime("%d.%m")} for r in rows]
 
 

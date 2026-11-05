@@ -392,7 +392,7 @@ def register_api(
                                 day0.astimezone(timezone.utc).isoformat())
         wins = [r for r in rows if r["stat_hit"] == "win"]
         # «Вчера ИИ угадал» feed on the home screen (owner 2026-10-23): real hits only
-        from bot.analysis.results import predicted_outcome
+        from bot.analysis.results import predicted_outcome, score_text
 
         def what_won(r) -> dict:
             # a hit counts if the bet came in OR the predicted winner won -- show WHICH one,
@@ -404,7 +404,7 @@ def register_api(
             return {"label": f"Угадан победитель: {who}", "odds": None, "kind": "winner"}
 
         feed = [_crests({"team_a": r["team_a"], "team_b": r["team_b"], "sport": r["sport"], "league": r["league"],
-                         "score": r["score"], **what_won(r)}) for r in wins[:6]]
+                         "score": score_text(r), **what_won(r)}) for r in wins[:6]]
         return {"wins": len(wins), "total": len(rows), "feed": feed}
 
     ticker_cache: dict[str, object] = {"at": 0.0, "items": []}
@@ -1362,7 +1362,7 @@ def register_api(
         hit = repo._STAT_HIT_SQL
         rows = repo._conn.execute(
             f"SELECT u.chat_id, u.day, a.team_a, a.team_b, a.league, a.sport, a.start_utc, a.option_label, "
-            f"a.odds, a.score, {hit} AS stat_hit FROM ai_usage u JOIN ai_analyses a ON a.match_id = u.match_id "
+            f"a.odds, a.score, a.final_score, {hit} AS stat_hit FROM ai_usage u JOIN ai_analyses a ON a.match_id = u.match_id "
             f"ORDER BY u.day DESC, a.start_utc DESC"
         ).fetchall()
         names = repo.user_names()
@@ -1375,7 +1375,7 @@ def register_api(
                 "picks": [], "win": 0, "lose": 0})
             u["picks"].append({"day": r["day"], "team_a": r["team_a"], "team_b": r["team_b"], "league": r["league"],
                                "sport": r["sport"], "start_label": format_match_start(r["start_utc"]),
-                               "label": r["option_label"], "odds": r["odds"], "score": r["score"], "hit": r["stat_hit"]})
+                               "label": r["option_label"], "odds": r["odds"], "score": score_text(r), "hit": r["stat_hit"]})
             if r["stat_hit"] in ("win", "lose"):
                 u[r["stat_hit"]] += 1
         out = sorted(users.values(), key=lambda u: -len(u["picks"]))
