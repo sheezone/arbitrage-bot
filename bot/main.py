@@ -141,6 +141,10 @@ async def main() -> None:
             bot=bot, admin_chat_ids=config.admin_chat_ids,
         )
         settle_task = asyncio.create_task(run_settler(repo, bot, config.admin_chat_ids))
+        from bot.core.reminders import run_reminders
+
+        # trial-ending + "match in an hour" reminders (owner 2026-11-07)
+        reminders_task = asyncio.create_task(run_reminders(repo, bot, config.admin_chat_ids, config.webapp_url))  # noqa: F841 (lives with the process)
         from bot.analysis.logos import run_logo_filler
 
         logos_task = asyncio.create_task(run_logo_filler(None if AI_ON_DEMAND_ONLY else analyzer, repo, config.api_football_key))  # noqa: F841 (lives with the process)
