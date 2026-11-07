@@ -563,9 +563,9 @@ def register_api(
             repo.add_bonus_analyses(chat_id, -1)
             bonus_spent = True
             used = set()
-        if limit is not None and match.id not in used and len(used) >= limit:
+        if not bonus_spent and limit is not None and match.id not in used and len(used) >= limit:
             raise HTTPException(status_code=429, detail=(
-                f"Лимит на сегодня: {limit}. Оформите MAX — до {AI_PAID_PER_DAY} анализов в день."
+                f"Разборы матчей доступны в MAX — до {AI_PAID_PER_DAY} разборов в день. Оформите подписку."
                 if limit == AI_FREE_PER_DAY else f"Лимит на сегодня: {limit}. Возвращайтесь завтра."))
         # 424, not 502/503: Cloudflare's tunnel swaps 502/503/504 bodies for its own error
         # page, so the user would only ever see "HTTP 502" instead of the reason.

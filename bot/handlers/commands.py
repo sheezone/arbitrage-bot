@@ -546,7 +546,7 @@ def _help_view() -> View:
         "вилка. Кнопка «🔍 Поиск вилок» мгновенно "
         "показывает последний найденный результат без нового опроса "
         "источников.\n\n"
-        f"Первые {billing.TRIAL_DAYS} дн. бесплатно (пробный период), дальше — "
+        f"Первые {billing.NEW_TRIAL_DAYS} дн. бесплатно (пробный период), дальше — "
         "платная подписка, раздел «👤 Мой профиль» → «💳 Подписка».\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"{vi('warn_color')} <b>18+.</b> Сервис не организует и не проводит азартные игры, не "
@@ -1329,7 +1329,7 @@ def register_handlers(
         )
 
         if send_welcome:
-            trial_days = billing.REFERRED_TRIAL_DAYS if user.referred_by is not None else billing.TRIAL_DAYS
+            trial_days = billing.NEW_REFERRED_TRIAL_DAYS if user.referred_by is not None else billing.NEW_TRIAL_DAYS
             trial_note = " (по реферальной ссылке — дольше обычного)" if user.referred_by is not None else ""
             await bot.send_message(
                 chat_id,

@@ -41,7 +41,7 @@ CONFIDENCE = ("очень низкая", "низкая", "средняя", "вы
 SURE_CONFIDENCE = ("средняя", "высокая", "очень высокая")
 HIGH_CONFIDENCE = ("высокая", "очень высокая")
 # Distinct matches a user may open per MSK day (re-opening one already opened is free).
-AI_FREE_PER_DAY = 1
+AI_FREE_PER_DAY = 0  # owner 2026-11-07: no free analyses -- MAX only (bonus analyses still work)
 AI_PAID_PER_DAY = 5
 
 SCHEMA = {
