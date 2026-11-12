@@ -83,9 +83,24 @@ def parse_results(raw: dict, sport_id: str = FOOTBALL, regulation: bool = True) 
 
 
 def _prefix(ours: str, theirs: str) -> bool:
-    """Our name equals the leading word(s) of theirs ("авангард" vs "авангард омск")."""
+    """Our name is the leading word(s) of theirs ("авангард" vs "авангард омск"), an exact
+    match, or uses initials for some of their words ("торпедо нн" vs "торпедо нижний
+    новгород"). Short names like "ска" count only as whole words (KHL, 2026-11-12:
+    СКА / Динамо Москва / Торпедо НН never settled)."""
     o, t = ours.split(), theirs.split()
-    return bool(o) and len(o) < len(t) and t[:len(o)] == o and len(ours) >= 4
+    if not o or len(ours) < 3:
+        return False
+    i = 0
+    for w in o:
+        if i < len(t) and t[i] == w:
+            i += 1
+            continue
+        k = len(w)
+        if 2 <= k <= len(t) - i and "".join(x[0] for x in t[i:i + k]) == w:
+            i += k
+            continue
+        return False
+    return True
 
 
 def find_score(team_a: str, team_b: str, start: datetime, results) -> tuple[int, int] | None:
