@@ -2891,18 +2891,22 @@ an_news: "News (injuries, form, suspensions)",
     draw();
   }
 
+  // «Выигрыши пользователей» -- approved winning coupons (shown on the statistics screen).
+  function userWinsBlock(d) {
+    const users = (d.users || []).map((u) => `<div class="wc wc-mini wc-user"><div class="wc-top"><span>👤 Выигрыш пользователя</span><span class="wc-ok">✅</span></div>
+        ${u.legs.map((l) => `<div class="wc-leg">${esc(l.team_a)} — ${esc(l.team_b)}<br><b>${esc(l.bet)}</b> @ ${l.odds}</div>`).join("")}
+        <div class="wc-row"><span class="wc-score">кэф ${Number(u.total_odds).toFixed(2)}</span><span class="wc-money"><i>${Math.round(u.stake)} →</i> <span>${Math.round(u.payout).toLocaleString("ru-RU")} ₽</span></span></div>
+        ${u.matched ? `<div class="wc-match">🤖 совпало с прогнозами бота: ${u.matched} из ${u.n}</div>` : ""}</div>`).join("");
+    return users ? `<div class="wc-h">👥 Выигрыши пользователей</div><div class="wc-scroll">${users}</div>` : "";
+  }
+
   async function loadShowcase() {
     let d;
     try { d = await api("/api/showcase"); } catch (e) { return startTour(false); }
     const box = document.getElementById("win-carousel");
     const pct = d.hit && d.hit.total ? Math.round(d.hit.wins / d.hit.total * 100) : null;
-    // AI wins carousel lives on the statistics screen now (owner 2026-10-24)
+    // AI wins (2026-10-24) and user wins (2026-11-12) carousels live on the statistics screen now
     if (box) {
-      const users = (d.users || []).map((u) => `<div class="wc wc-mini wc-user"><div class="wc-top"><span>👤 Выигрыш пользователя</span><span class="wc-ok">✅</span></div>
-        ${u.legs.map((l) => `<div class="wc-leg">${esc(l.team_a)} — ${esc(l.team_b)}<br><b>${esc(l.bet)}</b> @ ${l.odds}</div>`).join("")}
-        <div class="wc-row"><span class="wc-score">кэф ${Number(u.total_odds).toFixed(2)}</span><span class="wc-money"><i>${Math.round(u.stake)} →</i> <span>${Math.round(u.payout).toLocaleString("ru-RU")} ₽</span></span></div>
-        ${u.matched ? `<div class="wc-match">🤖 совпало с прогнозами бота: ${u.matched} из ${u.n}</div>` : ""}</div>`).join("");
-      if (users) box.insertAdjacentHTML("beforeend", `<div class="wc-h">👥 Выигрыши пользователей</div><div class="wc-scroll">${users}</div>`);
       box.insertAdjacentHTML("beforeend", `<button type="button" class="share-win" id="share-win">📸 Поделиться выигрышем — <b>+3 разбора</b></button>`);
       document.getElementById("share-win").addEventListener("click", openShareWin);
     }
@@ -3036,7 +3040,8 @@ an_news: "News (injuries, form, suspensions)",
     try {
       api("/api/showcase").then((sc) => {
         const el = document.getElementById("st-wins");
-        if (el && sc.wins.length) el.innerHTML = `<div class="wc-h">🔥 Прогнозы ИИ, которые зашли</div><div class="wc-scroll">${sc.wins.map((w) => winCoupon(w, true)).join("")}</div>`;
+        if (el) el.innerHTML = (sc.wins.length ? `<div class="wc-h">🔥 Прогнозы ИИ, которые зашли</div><div class="wc-scroll">${sc.wins.map((w) => winCoupon(w, true)).join("")}</div>` : "")
+          + userWinsBlock(sc);
       }).catch(() => {});
       const ser = await api("/api/ai/stats_series");
       const ds = ser.days || [], lab = ds.map((x) => x.d.slice(8, 10) + "." + x.d.slice(5, 7));
