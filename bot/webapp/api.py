@@ -843,9 +843,9 @@ def register_api(
             left = max(0, PAID_EXPRESS_PER_DAY - used)
             return {"limit": PAID_EXPRESS_PER_DAY, "left": left, "period": "day",
                     "next_at": None if left else (day_start + timedelta(days=1)).isoformat()}
-        found = repo.user_expresses_since(user.chat_id, (now - FREE_EXPRESS_EVERY).isoformat())
-        return {"limit": 1, "left": 0 if found else 1, "period": "3days",
-                "next_at": (datetime.fromisoformat(found[-1]["found_at"]) + FREE_EXPRESS_EVERY).isoformat() if found else None}
+        # owner 2026-11-12: no search without a subscription -- MAX only
+        # (referral bonus expresses still work, see post_find_express).
+        return {"limit": 0, "left": 0, "period": "max", "next_at": None}
 
     def _my_expresses(chat_id: int, now) -> list[dict]:
         out = []
@@ -871,8 +871,8 @@ def register_api(
         use_bonus = quota["left"] == 0 and repo.bonus_expresses(chat_id) > 0
         if quota["left"] == 0 and not use_bonus:
             raise HTTPException(status_code=429, detail=(
-                "Бесплатно — 1 экспресс раз в 3 дня. С MAX — 2 экспресса каждый день."
-                if quota["period"] == "3days" else "Лимит: 2 экспресса в день. Возвращайтесь завтра."))
+                "Поиск доступен только с подпиской. Купите MAX — 2 экспресса каждый день."
+                if quota["period"] == "max" else "Лимит: 2 экспресса в день. Возвращайтесь завтра."))
         seen = frozenset(r["express_key"] for r in repo.user_expresses_since(chat_id, (now - timedelta(days=2)).isoformat()))
         found = build_expresses(upcoming_picks(repo, now, hours=24), count=1, exclude=seen)
         if not found and analyzer is not None:

@@ -2398,7 +2398,7 @@ an_news: "News (injuries, form, suspensions)",
   // itself stays in Russian (one shared cached analysis per match).
   const HL = {
     ru: {
-      brand_sub: "AI ПРОГНОЗЫ", trial_on: "MAX бесплатно — осталось {n} дн. Пользуйтесь всем!", exf_bonus: "Бонусных экспрессов за друзей: {n}", inv_h: "👥 Пригласите друга", inv_t: "За каждого друга: <b>+{d} дня MAX</b> и <b>+{e} экспресс</b> сразу.", inv_btn: "📨 Пригласить друга", inv_share: "Матч Радар — ИИ-прогнозы и экспрессы на спорт. Заходи:", exf_btn: "🔍 Найти экспресс", exf_busy: "⏳ ИИ собирает экспресс…", exf_mine: "Мои экспрессы", exf_one: "Ваш экспресс", exf_all: "Экспрессы дня", exf_unlim: "Админ: без ограничений", exf_free: "Бесплатно: 1 экспресс раз в 3 дня", exf_left: "Осталось сегодня: {n} из {l}", exf_next: "Следующий экспресс: {t}", exf_more: "⚡ MAX — 2 экспресса каждый день", ws_title: "🏁 Угадан победитель", ws_sub: "{w} из {n} матчей", ws_pred: "ИИ: победит", vd_title: "🏁 Итог ИИ", vd_win: "Победит <b>{t}</b> — <b>{p}%</b>", vd_draw: "Ничья — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Ничья — {p}%", vd_pick: "Уверенная ставка ИИ", vd_pick_risky: "Ставка ИИ (рискованная)", vd_note: "⚠️ Это только наш анализ ИИ, а не гарантия результата. Решение о ставке вы принимаете сами. 18+", all_sports: "Все", all_countries: "Все страны",
+      brand_sub: "AI ПРОГНОЗЫ", trial_on: "MAX бесплатно — осталось {n} дн. Пользуйтесь всем!", exf_bonus: "Бонусных экспрессов за друзей: {n}", inv_h: "👥 Пригласите друга", inv_t: "За каждого друга: <b>+{d} дня MAX</b> и <b>+{e} экспресс</b> сразу.", inv_btn: "📨 Пригласить друга", inv_share: "Матч Радар — ИИ-прогнозы и экспрессы на спорт. Заходи:", exf_btn: "🔍 Найти экспресс", exf_busy: "⏳ ИИ собирает экспресс…", exf_mine: "Мои экспрессы", exf_one: "Ваш экспресс", exf_all: "Экспрессы дня", exf_max_only: "🔒 Поиск — только с подпиской MAX", exf_buy: "💎 Купите подписку MAX, чтобы искать экспрессы", exf_unlim: "Админ: без ограничений", exf_free: "Бесплатно: 1 экспресс раз в 3 дня", exf_left: "Осталось сегодня: {n} из {l}", exf_next: "Следующий экспресс: {t}", exf_more: "⚡ MAX — 2 экспресса каждый день", ws_title: "🏁 Угадан победитель", ws_sub: "{w} из {n} матчей", ws_pred: "ИИ: победит", vd_title: "🏁 Итог ИИ", vd_win: "Победит <b>{t}</b> — <b>{p}%</b>", vd_draw: "Ничья — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Ничья — {p}%", vd_pick: "Уверенная ставка ИИ", vd_pick_risky: "Ставка ИИ (рискованная)", vd_note: "⚠️ Это только наш анализ ИИ, а не гарантия результата. Решение о ставке вы принимаете сами. 18+", all_sports: "Все", all_countries: "Все страны",
       vk_on: "Поиск вилок запущен", vk_stop: "Стоп", vk_stopped: "Поиск вилок остановлен", vk_until: "до {d}", vk_off: "Поиск вилок выключен", vk_start: "Запустить на {n} дня", vk_started: "Поиск вилок запущен на {n} дня",
       t_ai: "ИИ-Прогнозы", t_picks: "Готовые прогнозы", t_express: "Экспрессы", t_vilki: "Вилки",
       t_settings: "Настройки вилок", t_sub: "MAX-доступ", t_admin: "Админ-панель", t_help: "Помощь", t_aistats: "Статистика ИИ",
@@ -2443,7 +2443,7 @@ an_news: "News (injuries, form, suspensions)",
       h_note: "Сервис — аналитика: он не принимает ставки и не гарантирует выигрыш. 18+",
     },
     en: {
-      brand_sub: "AI FORECASTS", trial_on: "MAX for free — {n} days left. Use everything!", exf_bonus: "Bonus accumulators from friends: {n}", inv_h: "👥 Invite a friend", inv_t: "For every friend: <b>+{d} days of MAX</b> and <b>+{e} accumulator</b> right away.", inv_btn: "📨 Invite a friend", inv_share: "Match Radar — AI sports forecasts and accumulators. Join:", exf_btn: "🔍 Find an accumulator", exf_busy: "⏳ AI is building it…", exf_mine: "My accumulators", exf_one: "Your accumulator", exf_all: "Accumulators of the day", exf_unlim: "Admin: unlimited", exf_free: "Free: 1 accumulator every 3 days", exf_left: "Left today: {n} of {l}", exf_next: "Next accumulator: {t}", exf_more: "⚡ MAX — 2 accumulators every day", ws_title: "🏁 Winner predicted", ws_sub: "{w} of {n} matches", ws_pred: "AI: winner", vd_title: "🏁 AI verdict", vd_win: "<b>{t}</b> wins — <b>{p}%</b>", vd_draw: "Draw — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Draw — {p}%", vd_pick: "AI confident bet", vd_pick_risky: "AI bet (risky)", vd_note: "⚠️ This is purely our AI analysis, not a guarantee of the result. The betting decision is yours. 18+", all_sports: "All", all_countries: "All countries",
+      brand_sub: "AI FORECASTS", trial_on: "MAX for free — {n} days left. Use everything!", exf_bonus: "Bonus accumulators from friends: {n}", inv_h: "👥 Invite a friend", inv_t: "For every friend: <b>+{d} days of MAX</b> and <b>+{e} accumulator</b> right away.", inv_btn: "📨 Invite a friend", inv_share: "Match Radar — AI sports forecasts and accumulators. Join:", exf_btn: "🔍 Find an accumulator", exf_busy: "⏳ AI is building it…", exf_mine: "My accumulators", exf_one: "Your accumulator", exf_all: "Accumulators of the day", exf_max_only: "🔒 Search is MAX only", exf_buy: "💎 Get MAX to search for accumulators", exf_unlim: "Admin: unlimited", exf_free: "Free: 1 accumulator every 3 days", exf_left: "Left today: {n} of {l}", exf_next: "Next accumulator: {t}", exf_more: "⚡ MAX — 2 accumulators every day", ws_title: "🏁 Winner predicted", ws_sub: "{w} of {n} matches", ws_pred: "AI: winner", vd_title: "🏁 AI verdict", vd_win: "<b>{t}</b> wins — <b>{p}%</b>", vd_draw: "Draw — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Draw — {p}%", vd_pick: "AI confident bet", vd_pick_risky: "AI bet (risky)", vd_note: "⚠️ This is purely our AI analysis, not a guarantee of the result. The betting decision is yours. 18+", all_sports: "All", all_countries: "All countries",
       vk_on: "Arb search is on", vk_stop: "Stop", vk_stopped: "Arb search stopped", vk_until: "until {d}", vk_off: "Arb search is off", vk_start: "Start for {n} days", vk_started: "Arb search started for {n} days",
       t_ai: "AI Forecasts", t_picks: "Ready picks", t_express: "Accumulators", t_vilki: "Arbs",
       t_settings: "Arb settings", t_sub: "MAX access", t_admin: "Admin panel", t_help: "Help", t_aistats: "AI statistics",
@@ -2488,7 +2488,7 @@ an_news: "News (injuries, form, suspensions)",
       h_note: "The service is analytics: it does not accept bets and does not guarantee winnings. 18+",
     },
     tg: {
-      brand_sub: "ПЕШГӮИҲОИ AI", trial_on: "MAX ройгон — {n} рӯз монд. Аз ҳама истифода баред!", exf_bonus: "Экспрессҳои бонусӣ барои дӯстон: {n}", inv_h: "👥 Дӯстро даъват кунед", inv_t: "Барои ҳар дӯст: <b>+{d} рӯз MAX</b> ва <b>+{e} экспресс</b>.", inv_btn: "📨 Даъвати дӯст", inv_share: "Матч Радар — пешгӯиҳои ИИ барои варзиш. Биё:", exf_btn: "🔍 Ёфтани экспресс", exf_busy: "⏳ ИИ экспресс ҷамъ мекунад…", exf_mine: "Экспрессҳои ман", exf_one: "Экспресси шумо", exf_all: "Экспрессҳои рӯз", exf_unlim: "Админ: бе маҳдудият", exf_free: "Ройгон: 1 экспресс дар 3 рӯз", exf_left: "Имрӯз монд: {n} аз {l}", exf_next: "Экспресси навбатӣ: {t}", exf_more: "⚡ MAX — 2 экспресс ҳар рӯз", ws_title: "🏁 Ғолиб дуруст", ws_sub: "{w} аз {n} бозӣ", ws_pred: "ИИ: ғолиб", vd_title: "🏁 Хулосаи ИИ", vd_win: "<b>{t}</b> мебарад — <b>{p}%</b>", vd_draw: "Мусовӣ — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Мусовӣ — {p}%", vd_pick: "Ставкаи боэътимоди ИИ", vd_pick_risky: "Ставкаи ИИ (хатарнок)", vd_note: "⚠️ Ин танҳо таҳлили ИИ аст, на кафолати натиҷа. Қарорро худатон мебароред. 18+", all_sports: "Ҳама", all_countries: "Ҳамаи кишварҳо",
+      brand_sub: "ПЕШГӮИҲОИ AI", trial_on: "MAX ройгон — {n} рӯз монд. Аз ҳама истифода баред!", exf_bonus: "Экспрессҳои бонусӣ барои дӯстон: {n}", inv_h: "👥 Дӯстро даъват кунед", inv_t: "Барои ҳар дӯст: <b>+{d} рӯз MAX</b> ва <b>+{e} экспресс</b>.", inv_btn: "📨 Даъвати дӯст", inv_share: "Матч Радар — пешгӯиҳои ИИ барои варзиш. Биё:", exf_btn: "🔍 Ёфтани экспресс", exf_busy: "⏳ ИИ экспресс ҷамъ мекунад…", exf_mine: "Экспрессҳои ман", exf_one: "Экспресси шумо", exf_all: "Экспрессҳои рӯз", exf_max_only: "🔒 Ҷустуҷӯ — танҳо бо MAX", exf_buy: "💎 Барои ҷустуҷӯи экспресс MAX харед", exf_unlim: "Админ: бе маҳдудият", exf_free: "Ройгон: 1 экспресс дар 3 рӯз", exf_left: "Имрӯз монд: {n} аз {l}", exf_next: "Экспресси навбатӣ: {t}", exf_more: "⚡ MAX — 2 экспресс ҳар рӯз", ws_title: "🏁 Ғолиб дуруст", ws_sub: "{w} аз {n} бозӣ", ws_pred: "ИИ: ғолиб", vd_title: "🏁 Хулосаи ИИ", vd_win: "<b>{t}</b> мебарад — <b>{p}%</b>", vd_draw: "Мусовӣ — <b>{p}%</b>", vd_other: "{t} — {p}%", vd_other_draw: "Мусовӣ — {p}%", vd_pick: "Ставкаи боэътимоди ИИ", vd_pick_risky: "Ставкаи ИИ (хатарнок)", vd_note: "⚠️ Ин танҳо таҳлили ИИ аст, на кафолати натиҷа. Қарорро худатон мебароред. 18+", all_sports: "Ҳама", all_countries: "Ҳамаи кишварҳо",
       vk_on: "Ҷустуҷӯи вилка фаъол аст", vk_stop: "Қатъ", vk_stopped: "Ҷустуҷӯи вилка қатъ шуд", vk_until: "то {d}", vk_off: "Ҷустуҷӯи вилка хомӯш аст", vk_start: "Барои {n} рӯз оғоз", vk_started: "Ҷустуҷӯи вилка барои {n} рӯз оғоз шуд",
       t_ai: "Пешгӯиҳои ИИ", t_picks: "Пешгӯиҳои тайёр", t_express: "Экспрессҳо", t_vilki: "Вилкаҳо",
       t_settings: "Танзимоти вилка", t_sub: "Дастрасии MAX", t_admin: "Панели админ", t_help: "Кумак", t_aistats: "Омори ИИ",
@@ -3558,7 +3558,8 @@ an_news: "News (injuries, form, suspensions)",
   function exQuotaText(q) {
     if (!q || q.limit == null) return tr("exf_unlim");
     if (q.bonus) return tr("exf_bonus", { n: q.left });
-    if (q.left) return q.period === "3days" ? tr("exf_free") : tr("exf_left", { n: q.left, l: q.limit });
+    if (q.period === "max") return tr("exf_max_only");
+    if (q.left) return tr("exf_left", { n: q.left, l: q.limit });
     const when = q.next_at ? new Date(q.next_at).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
     return tr("exf_next", { t: when });
   }
@@ -3590,13 +3591,13 @@ an_news: "News (injuries, form, suspensions)",
     if (q && q.left === 0 && data.bonus > 0) q.left = data.bonus, q.bonus = true;
     let html = `<div class="ai-intro">${tr("ex_intro")}</div>
       <div class="exf-box">
-        <button type="button" class="pro-buy wide exf-btn" id="exf-btn"${q && q.left === 0 ? " disabled" : ""}>${tr("exf_btn")}</button>
+        <button type="button" class="pro-buy wide exf-btn" id="exf-btn"${q && q.left === 0 && q.period !== "max" ? " disabled" : ""}>${tr("exf_btn")}</button>
         <div class="ai-sub">${exQuotaText(q)}</div>
       </div>`;
     if (data.mine && data.mine.length) {
       html += `<h3 class="sec-h">${tr("exf_mine")}</h3>` + data.mine.map((e) => exCard(e, "🔥 " + tr("exf_one"), true)).join("");
     }
-    if (q && q.left === 0 && q.period === "3days") html += `<button type="button" class="btn-ghost wide" data-go="sub">${tr("exf_more")}</button>`;
+    if (q && q.left === 0 && q.period === "max") html += `<button type="button" class="btn-ghost wide" data-go="sub">${tr("exf_more")}</button>`;
     html += inviteBlock();
     html += `<h3 class="sec-h">${tr("exf_all")}</h3>`;
     if (!data.pro) html += `<button type="button" class="pro-buy wide" data-go="sub">${tr("open_ex")}</button>`;
@@ -3608,6 +3609,7 @@ an_news: "News (injuries, form, suspensions)",
     const btn = document.getElementById("exf-btn");
     btn.addEventListener("click", async () => {
       haptic("medium");
+      if (q && q.left === 0 && q.period === "max") { toast(tr("exf_buy")); go("sub"); return; }  // no MAX: sell it
       btn.disabled = true;
       btn.textContent = tr("exf_busy");
       try {
