@@ -367,7 +367,41 @@ def _favourite_alternative(match: FootballMatch, favourite: str) -> Option | Non
     return min(hcps, key=lambda o: o.line) if hcps else dc
 
 
+# Hockey bet rules (owner 2026-11-12, from 129 settled hockey picks): regulation-time
+# 1X2 went 3/12 (draws after 60 min), odds >= 1.9 went 8/22, overs 58% vs unders 70%.
+HOCKEY_MAX_ODDS = 1.9
+
+
+def _hockey_ok(o: Option) -> bool:
+    return o.kind not in ("1x2", "winner") and o.odds < HOCKEY_MAX_ODDS
+
+
+def _hockey_option(match: FootballMatch, result: dict, option: Option | None) -> Option | None:
+    """No regulation-time win bets, no odds >= 1.9, and an over only with high confidence.
+    A rejected pick falls back to a plus handicap on the AI's favourite, else the
+    likeliest-looking under (lowest odds), else whatever passes."""
+    if option is not None and _hockey_ok(option) and not (
+            option.kind == "total_over" and result.get("confidence") not in HIGH_CONFIDENCE):
+        return option
+    p = result.get("probabilities") or {}
+    side = "1" if p.get("p1", 0) >= p.get("p2", 0) else "2"
+    plus = [o for o in match.options if o.kind == f"handicap{side}" and o.line > 0 and o.odds >= 1.25 and _hockey_ok(o)]
+    if plus:
+        return min(plus, key=lambda o: o.line)
+    unders = [o for o in match.options if o.kind == "total_under" and o.odds >= 1.3 and _hockey_ok(o)]
+    if unders:
+        return min(unders, key=lambda o: o.odds)
+    ok = [o for o in match.options if _hockey_ok(o) and o.kind != "total_over"]
+    return min(ok, key=lambda o: o.odds) if ok else option
+
+
 def _consistent_option(match: FootballMatch, result: dict, option: Option | None) -> Option | None:
+    if match.sport == "hockey" and match.options:
+        return _hockey_option(match, result, _consistent_option_base(match, result, option))
+    return _consistent_option_base(match, result, option)
+
+
+def _consistent_option_base(match: FootballMatch, result: dict, option: Option | None) -> Option | None:
     """The pick must agree with the AI's own verdict: no betting on an outcome it rates
     below the favourite, and no long shots (> 3.00) without high confidence. Otherwise
     fall back to the favourite's own win/1X2 option (owner's complaint 2026-10-03: the
@@ -684,7 +718,14 @@ class Analyzer:
     async def _ask(self, match: FootballMatch, data: dict) -> dict | None:
         # the winner is shown separately -- offer win bets only when nothing else exists
         bets = [o for o in match.options if o.kind not in ("1x2", "winner")] or match.options
-        options = "\n".join(f"- id={o.id}: {o.label} @ {o.odds:.2f}" for o in bets)
+        hockey_rule = ""
+        if match.sport == "hockey":
+            bets = [o for o in bets if _hockey_ok(o)] or bets
+            hockey_rule = ("Правила для хоккея (по статистике твоих прошлых ставок): тотал меньше заходит "
+                           "заметно чаще, чем тотал больше -- выбирай «больше» только при уверенности "
+                           "«высокая» или «очень высокая». На победу в основное время не ставь: ничьи "
+                           "после 60 минут часто срезают такие ставки, фора +1.5 на фаворита надёжнее.\n\n")
+        options ="\n".join(f"- id={o.id}: {o.label} @ {o.odds:.2f}" for o in bets)
         line = (f"Доступные ставки (выбери одну по id):\n{options}\n\n" if options
                 else "Матча нет в линии букмекеров: коэффициентов нет, option_id оставь пустым.\n\n")
         market = market_probabilities(match)
@@ -704,7 +745,7 @@ class Analyzer:
         content = (
             f"Вид спорта: {sport_name}\n"
             f"Матч: {match.team_a} — {match.team_b}\nТурнир: {match.league or 'неизвестен'}\n"
-            f"{when}\n{line}{market_line}{accuracy_line}"
+            f"{when}\n{line}{hockey_rule}{market_line}{accuracy_line}"
             f"Форма и таблица {match.team_a}: {json.dumps(data['form_a'], ensure_ascii=False, default=str)}\n"
             f"Форма и таблица {match.team_b}: {json.dumps(data['form_b'], ensure_ascii=False, default=str)}\n"
             f"Личные встречи: {json.dumps(data['h2h'], ensure_ascii=False, default=str)}\n"

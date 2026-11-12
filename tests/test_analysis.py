@@ -147,3 +147,22 @@ def test_pick_must_agree_with_verdict():
     fav1 = {"probabilities": {"p1": 55, "x": 25, "p2": 20}, "confidence": "средняя"}
     assert _consistent_option(m3, fav1, m3.option("1")).id == "DC1X"     # no plain win when other markets exist
     assert _consistent_option(m3, fav1, m3.option("TO2.5")).id == "TO2.5"
+
+
+def test_hockey_bet_rules():
+    # owner 2026-11-12: no regulation-time win, no odds >= 1.9, over only with high confidence
+    from bot.analysis.ai import _consistent_option
+    from bot.analysis.catalog import FootballMatch
+
+    m = FootballMatch("h", "СКА", "Динамо Москва", NOW, "КХЛ", [
+        Option("1", "П1", 1.9, "1x2"), Option("X", "Ничья", 4.2, "1x2"), Option("2", "П2", 3.6, "1x2"),
+        Option("TO5.5", "ТБ 5.5", 1.75, "total_over", 5.5), Option("TU5.5", "ТМ 5.5", 1.95, "total_under", 5.5),
+        Option("TU6.5", "ТМ 6.5", 1.45, "total_under", 6.5), Option("H1+1.5", "Фора СКА (+1.5)", 1.3, "handicap1", 1.5),
+        Option("H2-1.5", "Фора Динамо (-1.5)", 4.5, "handicap2", -1.5)], sport="hockey")
+    mid = {"probabilities": {"p1": 55, "x": 20, "p2": 25}, "confidence": "средняя"}
+    high = {**mid, "confidence": "высокая"}
+    assert _consistent_option(m, mid, m.option("1")).id == "H1+1.5"      # no regulation win
+    assert _consistent_option(m, mid, m.option("TU5.5")).id == "H1+1.5"  # odds 1.95 >= 1.9
+    assert _consistent_option(m, mid, m.option("TO5.5")).id == "H1+1.5"  # over needs high confidence
+    assert _consistent_option(m, high, m.option("TO5.5")).id == "TO5.5"
+    assert _consistent_option(m, mid, m.option("TU6.5")).id == "TU6.5"
