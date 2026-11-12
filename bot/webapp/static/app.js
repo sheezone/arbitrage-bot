@@ -3790,7 +3790,13 @@ an_news: "News (injuries, form, suspensions)",
     const u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
     const name = esc(u.username || u.first_name || "");
     const ava = u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : `<span>${esc((u.first_name || "?")[0])}</span>`;
-    el.innerHTML = `<span class="uc-ava">${ava}</span><span class="uc-text"><b>${name}</b><small>ID: ${u.id || ""}</small></span>`;
+    // purple plasma-lightning ring around the avatar (owner 2026-11-12): two dashed rings
+    // run through a jittering turbulence filter so they crackle like electricity
+    const plasma = `<svg class="uc-plasma" viewBox="0 0 48 48" aria-hidden="true"><defs><filter id="ucZap" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="2" seed="1" result="n"><animate attributeName="seed" values="1;7;3;9;5;2;8;4" dur="0.6s" repeatCount="indefinite"/></feTurbulence>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter></defs>
+      <circle class="uc-z2" cx="24" cy="24" r="19" filter="url(#ucZap)"/><circle class="uc-z1" cx="24" cy="24" r="19" filter="url(#ucZap)"/></svg>`;
+    el.innerHTML = `<span class="uc-orb">${plasma}<span class="uc-ava">${ava}</span></span><span class="uc-text"><b>${name}</b><small>ID: ${u.id || ""}</small></span>`;
   }
 
   document.querySelectorAll(".bn-item").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));

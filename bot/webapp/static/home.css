@@ -32,6 +32,20 @@ html, body { background: #0b0614; color: #f3eefc; }
 .user-chip { display: flex; align-items: center; gap: 8px; }
 .uc-ava { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #b26bff; overflow: hidden; display: grid; place-items: center; background: #1e1233; color: #b26bff; font-weight: 800; box-shadow: 0 0 10px rgba(178, 107, 255, 0.35); }
 .uc-ava img { width: 100%; height: 100%; object-fit: cover; }
+/* plasma-lightning ring around the avatar (owner 2026-11-12) */
+.uc-orb { position: relative; width: 44px; height: 44px; margin: -5px; display: grid; place-items: center; flex: none; }
+.uc-orb::before { content: ""; position: absolute; inset: 3px; border-radius: 50%;
+  background: conic-gradient(from 0deg, #b26bff, #ff5ce1, #6b3dff, #e6c4ff, #b26bff);
+  filter: blur(6px); opacity: 0.7; animation: ucSpin 3s linear infinite, ucPulse 1.4s ease-in-out infinite; }
+.uc-orb .uc-ava { position: relative; z-index: 1; border-color: #d9a8ff; box-shadow: 0 0 6px #b26bff, inset 0 0 6px rgba(178, 107, 255, 0.5); }
+.uc-plasma { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+.uc-plasma circle { fill: none; stroke-linecap: round; }
+.uc-z1 { stroke: #f1e2ff; stroke-width: 1.3; stroke-dasharray: 13 8 5 12 9 6; animation: ucDash 1.1s linear infinite; }
+.uc-z2 { stroke: #b26bff; stroke-width: 2.4; opacity: 0.85; stroke-dasharray: 7 13 17 6; animation: ucDash 1.8s linear infinite reverse; }
+@keyframes ucSpin { to { transform: rotate(360deg); } }
+@keyframes ucPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.95; } }
+@keyframes ucDash { to { stroke-dashoffset: -119; } }
+@media (prefers-reduced-motion: reduce) { .uc-orb::before, .uc-z1, .uc-z2 { animation: none; } }
 .uc-text { display: flex; flex-direction: column; line-height: 1.15; }
 .uc-text b { color: #b26bff; font-size: 11px; }
 .uc-text small { color: #f3eefc; font-size: 10px; font-weight: 700; }
