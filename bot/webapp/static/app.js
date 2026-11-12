@@ -3806,7 +3806,82 @@ an_news: "News (injuries, form, suspensions)",
   renderUserChip();
   applyNavLabels();
 
-  // Background lightning + falling money removed (owner 2026-11-12: "оставь только снег") -- snow lives in winter.js.
+  // Falling money removed (owner 2026-11-12); lightning stays ("молнии оставь"), snow lives in winter.js.
+  // Purple lightning strikes in the background every few seconds (owner's request,
+  // 2026-10-03). Draws only while a bolt is fading out; idle otherwise.
+  (function lightning() {
+    if (REDUCE_MOTION) return;
+    const canvas = document.createElement("canvas");
+    canvas.id = "lightning";
+    document.body.prepend(canvas);
+    const flash = document.createElement("div");
+    flash.id = "lightning-flash";
+    document.body.prepend(flash);
+    const ctx = canvas.getContext("2d");
+    let w = 0, h = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    function boltPath(x, y, len, angle, depth) {
+      const pts = [[x, y]];
+      const steps = 10 + ((Math.random() * 8) | 0);
+      const branches = [];
+      for (let i = 0; i < steps; i++) {
+        angle += (Math.random() - 0.5) * 0.9;
+        x += Math.sin(angle) * (len / steps);
+        y += Math.cos(angle) * (len / steps);
+        pts.push([x, y]);
+        if (depth < 2 && Math.random() < 0.22) branches.push(boltPath(x, y, len * 0.45, angle + (Math.random() - 0.5) * 1.6, depth + 1));
+      }
+      return { pts, branches, width: depth === 0 ? 3 : 1.6 };
+    }
+    function drawBolt(b, alpha) {
+      ctx.beginPath();
+      b.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.strokeStyle = `rgba(214, 170, 255, ${alpha})`;
+      ctx.lineWidth = b.width;
+      ctx.shadowColor = "rgba(178, 107, 255, 0.95)";
+      ctx.shadowBlur = 22;
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+      ctx.lineWidth = b.width * 0.4;
+      ctx.stroke();
+      b.branches.forEach((br) => drawBolt(br, alpha * 0.8));
+    }
+    function strike() {
+      if (document.hidden) return schedule();
+      const bolt = boltPath(w * (0.1 + Math.random() * 0.8), -10, h * (0.45 + Math.random() * 0.35), (Math.random() - 0.5) * 0.4, 0);
+      flash.classList.remove("on");
+      void flash.offsetWidth;
+      flash.classList.add("on");
+      const start = performance.now();
+      (function fade(now) {
+        const t = (now - start) / 650;
+        ctx.clearRect(0, 0, w, h);
+        if (t < 1) {
+          // a couple of quick flickers, then fade
+          const flicker = t < 0.25 ? (Math.random() < 0.5 ? 1 : 0.35) : 1 - t;
+          drawBolt(bolt, Math.max(0, flicker));
+          requestAnimationFrame(fade);
+        } else {
+          schedule();
+        }
+      })(start);
+    }
+    function schedule() {
+      setTimeout(strike, 2500 + Math.random() * 4500);
+    }
+    schedule();
+  })();
+
 
   boot();
 })();
