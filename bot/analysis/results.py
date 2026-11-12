@@ -90,6 +90,9 @@ def _prefix(ours: str, theirs: str) -> bool:
     o, t = ours.split(), theirs.split()
     if not o or len(ours) < 3:
         return False
+    # NHL: the feed puts the city first -- "рейнджерс" vs "нью йорк рейнджерс"
+    if len(o) < len(t) and t[-len(o):] == o and len(ours) >= 4:
+        return True
     i = 0
     for w in o:
         if i < len(t) and t[i] == w:
@@ -99,8 +102,17 @@ def _prefix(ours: str, theirs: str) -> bool:
         if 2 <= k <= len(t) - i and "".join(x[0] for x in t[i:i + k]) == w:
             i += k
             continue
+        # short city tag of ONE word: "металлург мг" vs "металлург магнитогорск"
+        if 2 <= k <= 3 and i < len(t) and t[i][0] == w[0] and _subseq(w, t[i]):
+            i += 1
+            continue
         return False
     return True
+
+
+def _subseq(short: str, word: str) -> bool:
+    it = iter(word)
+    return all(ch in it for ch in short)
 
 
 def find_score(team_a: str, team_b: str, start: datetime, results) -> tuple[int, int] | None:
